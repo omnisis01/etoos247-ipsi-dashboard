@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이투스247학원 | 2027 수시지원 대시보드</title>
+<meta name="description" content="이투스247학원 — 2027학년도 수시지원 대시보드. 2026 vs 2025 입결·경쟁률 비교와 올해 입시 유불리 예상.">
+
+<!-- ▼▼ Google Analytics (GA4): 아래 GA_MEASUREMENT_ID 한 곳만 본인 측정 ID(G-XXXXXXXXXX)로 교체 ▼▼ -->
+<script>
+  window.GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';   /* ← 여기만 교체하면 자동 연동됩니다 */
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  (function () {
+    var id = window.GA_MEASUREMENT_ID;
+    if (!id || /XXXX/.test(id)) return;            /* 플레이스홀더면 로드하지 않음 */
+    var s = document.createElement('script'); s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+    document.head.appendChild(s);
+    gtag('js', new Date());
+    gtag('config', id);
+  })();
+</script>
+<!-- ▲▲ Google Analytics 끝 ▲▲ -->
+
+<link rel="icon" href="logo.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="brand">
+      <h1 class="sr-only">이투스247학원 2027 수시지원 대시보드</h1>
+      <img src="logo.svg" alt="이투스247학원" class="brand-logo">
+      <p class="brand-sub">2027 수시지원 대시보드<span>2026 vs 2025 비교 · 올해 유불리 예상</span></p>
+    </div>
+
+    <div class="side-section">
+      <div class="side-label">계열 카테고리</div>
+      <div id="catList" class="cat-list"></div>
+    </div>
+
+    <div class="side-section">
+      <div class="side-label">필터</div>
+      <div id="filters" class="filters"></div>
+    </div>
+
+    <div class="side-foot">
+      <button id="resetBtn" class="reset-btn">필터 초기화</button>
+      <div class="source" id="sourceNote"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+    <header id="topbar">
+      <button id="menuToggle" class="menu-toggle" aria-label="메뉴">☰</button>
+      <div class="search-wrap">
+        <span class="search-ico">🔎</span>
+        <input id="search" type="search" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
+      </div>
+      <div class="top-actions">
+        <button id="favBtn" class="ghost-btn fav-btn">🗂️ 지원카드 <span id="favCount" class="badge">0</span><span class="fav-max">/9</span></button>
+        <button id="compareBtn" class="ghost-btn">⇄ 비교함 <span id="compareCount" class="badge">0</span></button>
+        <button id="themeBtn" class="icon-btn" title="테마">🌙</button>
+      </div>
+    </header>
+
+    <div id="content">
+      <div id="catHeader" class="cat-header"></div>
+      <section id="kpis" class="kpis"></section>
+      <section id="highlights" class="panel hero">
+        <div class="panel-head">
+          <h2>🎯 올해 입시 유불리 예상 <span class="muted" id="hlSub"></span></h2>
+          <div class="seg" id="hlFilter"></div>
+        </div>
+        <p class="hero-desc">2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 추정</b>입니다. 카드를 누르면 근거를 볼 수 있어요.</p>
+        <div id="highlightCards" class="hl-cards"></div>
+      </section>
+
+      <section id="charts" class="panel">
+        <div class="panel-head">
+          <h2>📊 대학군 비교 <span class="muted">선택 카테고리 · 필터 기준</span></h2>
+          <div class="seg" id="chartMetric"></div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-box"><div class="chart-title" id="chartTitleA"></div><div id="chartA"></div></div>
+          <div class="chart-box"><div class="chart-title">전체 추이 (2024→2026)</div><div id="chartB"></div></div>
+        </div>
+      </section>
+
+      <section id="tableSec" class="panel">
+        <div class="panel-head">
+          <h2>📋 전형 목록 <span class="muted" id="tableCount"></span></h2>
+          <div class="seg" id="sortSeg"></div>
+        </div>
+        <div class="table-scroll">
+          <table id="grid">
+            <thead id="gridHead"></thead>
+            <tbody id="gridBody"></tbody>
+          </table>
+        </div>
+        <div id="pager" class="pager"></div>
+      </section>
+
+      <footer class="foot-note" id="footNote"></footer>
+    </div>
+  </main>
+
+  <!-- Detail modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card" id="modalCard"></div>
+  </div>
+
+  <!-- Compare drawer -->
+  <div id="compareDrawer" class="drawer hidden">
+    <div class="drawer-inner" id="compareInner"></div>
+  </div>
+
+  <!-- Favorites (지원카드) drawer -->
+  <div id="favDrawer" class="drawer hidden">
+    <div class="drawer-inner" id="favInner"></div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
