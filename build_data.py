@@ -116,6 +116,22 @@ def categorize(uni, gye, dept, jhname, jagyeok):
                or ('보안' in d and any(x in d for x in ['경호', '산업보안']) and '공학' not in d))
     if any(k in d for k in ENG) and not eng_exc:
         tags.add('engineering')
+        # 공학 세부 분류 (우선순위 순서대로 1개 배정)
+        if any(k in d for k in ['컴퓨터', '소프트웨어', '소프트웨', '인공지능', '데이터사이언스', '데이터과학', '빅데이터',
+                                '정보보안', '사이버보안', '정보보호', '게임', 'ICT', '임베디드', '정보시스템', '클라우드',
+                                '블록체인', '응용소프트', 'SW']):
+            tags.add('eng_cs')
+        elif any(k in d for k in ['전자', '전기', '통신', '정보통신', '광공학', '제어', '계측', '반도체', '디스플레이', '전파']):
+            tags.add('eng_ee')
+        elif any(k in d for k in ['기계', '자동차', '항공', '우주', '조선', '로봇', '메카트로', '자동화', '모빌리티', '드론', '정밀기계']):
+            tags.add('eng_mech')
+        elif any(k in d for k in ['토목', '건축', '도시', '환경공학', '조경', '교통', '건설', '방재', '지반', '수자원']):
+            tags.add('eng_civil')
+        elif any(k in d for k in ['화공', '화학공학', '신소재', '재료공', '고분자', '에너지', '나노', '배터리', '이차전지',
+                                  '섬유', '생명공학', '바이오공학', '식품공학', '유전공학', '제약공학', '응용화학']):
+            tags.add('eng_chem')
+        else:
+            tags.add('eng_etc')
 
     # --- natural science (anchored; many excludes) ---
     NAT_EXC = ['공학', '공과', '교육', '의예', '의학', '약학', '간호', '보건', '물리치료', '디자인', '게임', '미디어',
@@ -342,7 +358,13 @@ CATS = [
     ('med_vet','수의예','수의예·수의학','#fb923c',True),
     ('med_pharm','약학','약학·한약학','#f43f5e',True),
     ('nursing_health','간호·보건','간호 및 보건의료','#f5719b',False),
-    ('engineering','공학','공학계열','#2563eb',False),
+    ('engineering','공학','공학계열 전체','#2563eb',False),
+    ('eng_cs','컴퓨터·SW·AI','컴퓨터·소프트웨어·인공지능','#3b82f6',True),
+    ('eng_ee','전기·전자·반도체','전기·전자·통신·반도체','#1d4ed8',True),
+    ('eng_mech','기계·자동차·항공','기계·자동차·항공·로봇','#0ea5e9',True),
+    ('eng_chem','화공·소재·바이오','화공·신소재·에너지·바이오','#2563eb',True),
+    ('eng_civil','건설·건축·환경','토목·건축·도시·환경','#0284c7',True),
+    ('eng_etc','산업·기타공학','산업공학 등 그 외 공학','#60a5fa',True),
     ('natural','자연','자연계열','#0891b2',False),
     ('business','상경','경영·경제·상경','#d97706',False),
     ('language','어문','어학·문학','#7c3aed',False),

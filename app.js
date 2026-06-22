@@ -22,8 +22,10 @@ const ROWS = D.rows.map((r, i) => ({
 }));
 
 const CAT_ICON = {
-  all: '🎓', medical: '⚕️', med_med: '🩺', med_dent: '🦷', med_oriental: '🌿', med_vet: '🐾', med_pharm: '💊',
-  nursing_health: '🏥', engineering: '⚙️', natural: '🔬', business: '💼',
+  all: '🎓', medical: '⚕️', med_med: '🩺', med_dent: '🦷', med_oriental: '🪡', med_vet: '🐾', med_pharm: '💊',
+  nursing_health: '🏥', engineering: '⚙️',
+  eng_cs: '💻', eng_ee: '⚡', eng_mech: '🔧', eng_chem: '⚗️', eng_civil: '🏗️', eng_etc: '🏭',
+  natural: '🔬', business: '💼',
   language: '🗣️', humanities_core: '📜', non_business_humanities: '🏛️', social_science: '🌐',
   statistics: '📈', semiconductor: '💾', semiconductor_contract: '🔗', contract_other: '🤝',
   military: '🎖️', teaching: '🍎', primary_ed: '✏️', ist: '🧪', free_major: '🧭',
@@ -770,7 +772,12 @@ $('#resetBtn').onclick = () => {
   S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.gradeMax = 9; S.search = ''; $('#search').value = '';
   renderFilters(); renderAll();
 };
-function applyTheme(t) { document.documentElement.dataset.theme = t; $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙'; save('theme', t); }
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+  const logo = $('.brand-logo'); if (logo) logo.src = t === 'dark' ? 'logo-dark.svg' : 'logo.svg';
+  save('theme', t);
+}
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); $('#compareDrawer').classList.add('hidden'); $('#favDrawer').classList.add('hidden'); closeSidebar(); } });
 
@@ -783,7 +790,7 @@ $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? clos
 /* ----- init ----- */
 $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.nRows.toLocaleString()}건 · 대학 ${D.meta.nUni}곳`;
 $('#footNote').innerHTML = `<b>이투스247학원</b> · 본 대시보드는 <b>${esc(D.meta.source)}</b> 자료를 가공한 참고용입니다. '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
-applyTheme(load('theme', 'light'));
+applyTheme(load('theme', 'dark'));
 updateCompareBtn(); updateFavBtn();
 renderCatList(); renderFilters(); renderAll();
 })();

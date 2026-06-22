@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 322 74" role="img" aria-label="이투스247 학원">
+  <defs>
+    <linearGradient id="r247d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f8a73"/>
+      <stop offset="48%" stop-color="#8fd45a"/>
+      <stop offset="100%" stop-color="#45bfdd"/>
+    </linearGradient>
+  </defs>
+  <text x="0" y="53" font-family="Arial, Helvetica, sans-serif" font-size="47" font-weight="800" fill="#eef1f8" letter-spacing="-1.5">ETOOS</text>
+  <g transform="translate(200,37)">
+    <circle r="25" fill="none" stroke="url(#r247d)" stroke-width="9.5" stroke-linecap="round" stroke-dasharray="138 22" transform="rotate(-55)"/>
+    <text x="0" y="7" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="800" fill="#54d6bd">247</text>
+  </g>
+  <text x="238" y="53" font-family="'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="41" font-weight="800" fill="#52cdb5">학원</text>
+</svg>
