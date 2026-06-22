@@ -38,9 +38,14 @@ const S = {
   changes: new Set(), gradeMax: 9.0, sort: 'impact', sortDir: -1,
   page: 1, perPage: 60, hlFilter: 'all', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
-  fav: (load('fav', []) || []).slice(0, 9),
+  fav: migrateFav(load('fav', null)),
 };
-const FAV_MAX = 9, FAV_HOPE = 6;
+const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
+function migrateFav(v) {
+  if (Array.isArray(v)) return { hope: v.slice(0, 6), reach: v.slice(6, 9) };       // 구버전(단일 배열) 호환
+  if (v && Array.isArray(v.hope) && Array.isArray(v.reach)) return { hope: v.hope.slice(0, 6), reach: v.reach.slice(0, 3) };
+  return { hope: [], reach: [] };
+}
 function load(k, def) { try { return JSON.parse(localStorage.getItem('ipsi_' + k)) ?? def; } catch (e) { return def; } }
 function save(k, v) { try { localStorage.setItem('ipsi_' + k, JSON.stringify(v)); } catch (e) {} }
 
@@ -489,7 +494,7 @@ function renderTable() {
       ? `<span class="jh-pill" style="background:var(--primary-soft);color:var(--primary-ink);border:none" title="${esc(r.choejeo)}">${esc(r.choejeo.slice(0, 16))}${r.choejeo.length > 16 ? '…' : ''}</span>${r.chKind ? `<span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}" style="margin-left:4px">${r.chKind}</span>` : ''}`
       : '<span class="no-data">없음</span>';
     const inCmp = S.compare.has(r._i);
-    const inFav = S.fav.includes(r._i);
+    const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
       <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><div class="td-dept">${esc(r.dept)}</div></td>
       <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div></td>
@@ -498,14 +503,14 @@ function renderTable() {
       <td><div class="cell-top"><span class="grade-val">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
       <td><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
       <td><span class="impact-chip ${v.cls}">${v.label}</span></td>
-      <td><div class="row-btns"><button class="row-fav ${inFav ? 'in' : ''}" data-fav="${r._i}" title="지원카드에 담기">${inFav ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
+      <td><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
     </tr>`;
   }).join('');
   $('#gridBody').querySelectorAll('tr').forEach(tr => {
     tr.onclick = e => { if (e.target.closest('[data-add],[data-fav]')) return; openModal(+tr.dataset.i); };
   });
   $('#gridBody').querySelectorAll('[data-add]').forEach(b => b.onclick = e => { e.stopPropagation(); toggleCompare(+b.dataset.add); });
-  $('#gridBody').querySelectorAll('[data-fav]').forEach(b => b.onclick = e => { e.stopPropagation(); toggleFav(+b.dataset.fav); });
+  $('#gridBody').querySelectorAll('[data-fav]').forEach(b => b.onclick = e => { e.stopPropagation(); openFavMenu(+b.dataset.fav, b); });
   renderPager(pages, total);
 }
 function renderPager(pages, total) {
@@ -550,7 +555,7 @@ function openModal(i) {
   };
   const cats = r.cats.map(k => CAT_BY[k] ? `<span class="tag" style="background:${CAT_BY[k].color}22;color:${CAT_BY[k].color}">${esc(CAT_BY[k].label)}</span>` : '').join(' ');
   const inCmp = S.compare.has(i);
-  const inFav = S.fav.includes(i);
+  const bk = favBucket(i);
   $('#modalCard').innerHTML = `
     <div class="modal-head"><div class="mh-top"><div>
       <div class="mh-uni">${esc(r.uni)} · ${esc(r.region)} ${esc(r.sigun)}</div>
@@ -591,15 +596,19 @@ function openModal(i) {
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
       ${r.note ? `<div class="msec"><h4>💡 지원 시 유의사항</h4><div class="change-box" style="background:var(--surface-2);color:var(--text-soft);border-color:var(--line)">${esc(r.note)}</div></div>` : ''}
-      <div class="msec modal-actions">
-        <button class="ghost-btn ${inFav ? 'on' : ''}" id="modalFav">${inFav ? '★ 지원카드에 담김' : '☆ 지원카드에 담기'}</button>
-        <button class="ghost-btn" id="modalAdd">${inCmp ? '✓ 비교함에서 보기' : '⇄ 비교함에 담기'}</button>
+      <div class="msec"><h4>🗂️ 지원카드에 담기 <span class="muted">지원희망 또는 상향을 선택</span></h4>
+        <div class="modal-actions">
+          <button class="ghost-btn fav-pick ${bk === 'hope' ? 'on' : ''}" id="modalFavHope">${bk === 'hope' ? '✓ 지원희망에 담김' : '🎯 지원희망으로'} <span class="muted">${S.fav.hope.length}/6</span></button>
+          <button class="ghost-btn fav-pick reach ${bk === 'reach' ? 'on' : ''}" id="modalFavReach">${bk === 'reach' ? '✓ 상향에 담김' : '🚀 상향·도전으로'} <span class="muted">${S.fav.reach.length}/3</span></button>
+        </div>
+        <button class="ghost-btn" id="modalAdd" style="width:100%;justify-content:center;margin-top:8px">${inCmp ? '✓ 비교함에서 보기' : '⇄ 비교함에 담기'}</button>
       </div>
     </div>`;
   $('#modal').classList.remove('hidden');
   $('#modalClose').onclick = closeModal;
   $('#modalAdd').onclick = () => { if (S.compare.has(i)) { openCompare(); } else { toggleCompare(i); openModal(i); } };
-  const mf = $('#modalFav'); if (mf) mf.onclick = () => { toggleFav(i); openModal(i); };
+  $('#modalFavHope').onclick = () => { addFav(i, 'hope'); openModal(i); };
+  $('#modalFavReach').onclick = () => { addFav(i, 'reach'); openModal(i); };
 }
 function closeModal() { $('#modal').classList.add('hidden'); }
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
@@ -643,24 +652,62 @@ function openCompare() {
 $('#compareDrawer').onclick = e => { if (e.target.id === 'compareDrawer') $('#compareDrawer').classList.add('hidden'); };
 $('#compareBtn').onclick = openCompare;
 
-/* ----- favorites (지원카드: 지원희망 1~6 + 도전 1~3) ----- */
-function updateFavBtn() { $('#favCount').textContent = S.fav.length; }
-function toggleFav(i) {
-  const idx = S.fav.indexOf(i);
-  if (idx >= 0) S.fav.splice(idx, 1);
-  else { if (S.fav.length >= FAV_MAX) { alert(`지원카드는 최대 ${FAV_MAX}장(지원희망 6 + 도전 3)까지 담을 수 있습니다.`); return; } S.fav.push(i); track('add_favorite', { uni: ROWS[i].uni, dept: ROWS[i].dept }); }
-  save('fav', S.fav); updateFavBtn(); renderTable();
-  if (!$('#favDrawer').classList.contains('hidden')) openFav();
+/* ----- favorites (지원카드: 지원희망 6 + 상향·도전 3, 버킷 선택) ----- */
+const BUCKET_MAX = { hope: FAV_HOPE_MAX, reach: FAV_REACH_MAX };
+const BUCKET_NAME = { hope: '지원희망', reach: '상향·도전' };
+function favBucket(i) { return S.fav.hope.includes(i) ? 'hope' : S.fav.reach.includes(i) ? 'reach' : null; }
+function isFav(i) { return !!favBucket(i); }
+function favCount() { return S.fav.hope.length + S.fav.reach.length; }
+function saveFav() { save('fav', S.fav); updateFavBtn(); }
+function updateFavBtn() { $('#favCount').textContent = favCount(); }
+function addFav(i, bucket) {
+  const cur = favBucket(i);
+  if (cur === bucket) { removeFav(i); return; }                 // 같은 버킷 다시 누르면 토글 해제
+  if (S.fav[bucket].length >= BUCKET_MAX[bucket]) { alert(`${BUCKET_NAME[bucket]}은(는) 최대 ${BUCKET_MAX[bucket]}장까지 담을 수 있습니다.`); return; }
+  if (cur) S.fav[cur].splice(S.fav[cur].indexOf(i), 1);         // 다른 버킷이면 이동
+  S.fav[bucket].push(i);
+  track('add_favorite', { uni: ROWS[i].uni, dept: ROWS[i].dept, bucket });
+  saveFav(); renderTable(); if (!$('#favDrawer').classList.contains('hidden')) openFav();
 }
-function moveFav(pos, dir) {
-  const j = pos + dir; if (j < 0 || j >= S.fav.length) return;
-  [S.fav[pos], S.fav[j]] = [S.fav[j], S.fav[pos]];
-  save('fav', S.fav); openFav(); renderTable();
+function removeFav(i) {
+  const b = favBucket(i); if (!b) return;
+  S.fav[b].splice(S.fav[b].indexOf(i), 1);
+  saveFav(); renderTable(); if (!$('#favDrawer').classList.contains('hidden')) openFav();
 }
-function favSlotCard(i, pos) {
-  if (i == null) return `<div class="fav-slot empty"><span class="rank-badge">${pos + 1}</span><span class="fav-empty-t">비어 있음</span></div>`;
+function switchBucket(i) {
+  const cur = favBucket(i); if (!cur) return;
+  const other = cur === 'hope' ? 'reach' : 'hope';
+  if (S.fav[other].length >= BUCKET_MAX[other]) { alert(`${BUCKET_NAME[other]}은(는) 최대 ${BUCKET_MAX[other]}장입니다.`); return; }
+  S.fav[cur].splice(S.fav[cur].indexOf(i), 1); S.fav[other].push(i);
+  saveFav(); renderTable(); openFav();
+}
+function moveFav(bucket, pos, dir) {
+  const arr = S.fav[bucket], j = pos + dir; if (j < 0 || j >= arr.length) return;
+  [arr[pos], arr[j]] = [arr[j], arr[pos]]; saveFav(); openFav(); renderTable();
+}
+/* add-time bucket chooser popover */
+function closeFavMenu() { const m = document.querySelector('.fav-menu'); if (m) m.remove(); }
+function openFavMenu(i, anchor) {
+  closeFavMenu();
+  const cur = favBucket(i);
+  const m = el('div', 'fav-menu');
+  m.innerHTML = `<div class="fm-title">지원카드에 담기</div>
+    <button data-b="hope" class="${cur === 'hope' ? 'on' : ''}"><span>🎯 지원희망</span><span class="fm-n">${S.fav.hope.length}/6</span></button>
+    <button data-b="reach" class="${cur === 'reach' ? 'on reach' : 'reach'}"><span>🚀 상향·도전</span><span class="fm-n">${S.fav.reach.length}/3</span></button>
+    ${cur ? `<button data-b="remove" class="fm-rm">✕ 지원카드에서 빼기</button>` : ''}`;
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  let left = r.right - 184; if (left < 8) left = 8;
+  m.style.left = left + 'px';
+  m.style.top = (r.bottom + 6 + m.offsetHeight > window.innerHeight ? r.top - 6 - m.offsetHeight : r.bottom + 6) + 'px';
+  m.querySelectorAll('button').forEach(b => b.onclick = ev => { ev.stopPropagation(); const bk = b.dataset.b; if (bk === 'remove') removeFav(i); else addFav(i, bk); closeFavMenu(); });
+  setTimeout(() => document.addEventListener('click', function h() { closeFavMenu(); document.removeEventListener('click', h); }), 0);
+}
+function favSlotCard(i, bucket, pos, lastIdx) {
+  const label = bucket === 'hope' ? (pos + 1) : '상' + (pos + 1);
+  if (i == null) return `<div class="fav-slot empty"><span class="rank-badge ${bucket}">${label}</span><span class="fav-empty-t">비어 있음 — ${bucket === 'hope' ? '표의 ☆에서 지원희망으로 담기' : '상향으로 담기'}</span></div>`;
   const r = ROWS[i], v = V(r), d = deltaInfo(r);
-  return `<div class="fav-slot" data-open="${i}"><span class="rank-badge ${pos < FAV_HOPE ? 'hope' : 'reach'}">${pos < FAV_HOPE ? pos + 1 : '도' + (pos - FAV_HOPE + 1)}</span>
+  return `<div class="fav-slot" data-open="${i}"><span class="rank-badge ${bucket}">${label}</span>
     <div class="fav-body">
       <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div>
       <div class="fav-dept">${esc(r.dept)}</div>
@@ -668,28 +715,29 @@ function favSlotCard(i, pos) {
         · 입결 <b>${fmt(r.g[0])}</b> · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
       ${yoyHTML(r)}
     </div>
-    <div class="fav-ctrl"><button data-up="${pos}" ${pos === 0 ? 'disabled' : ''}>▲</button><button data-dn="${pos}" ${pos === S.fav.length - 1 ? 'disabled' : ''}>▼</button><button class="fav-rm" data-rm="${i}">✕</button></div>
+    <div class="fav-ctrl"><button data-up="${bucket}:${pos}" ${pos === 0 ? 'disabled' : ''} title="위로">▲</button><button data-dn="${bucket}:${pos}" ${pos === lastIdx ? 'disabled' : ''} title="아래로">▼</button>
+      <button class="fav-sw" data-sw="${i}" title="${bucket === 'hope' ? '상향으로 이동' : '지원희망으로 이동'}">⇄</button><button class="fav-rm" data-rm="${i}" title="빼기">✕</button></div>
   </div>`;
 }
 function openFav() {
   const inner = $('#favInner');
-  const slots = [];
-  for (let k = 0; k < FAV_MAX; k++) slots.push(favSlotCard(S.fav[k] ?? null, k));
-  inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${S.fav.length}/${FAV_MAX}</span></h3>
-      <div class="muted" style="font-size:11.5px">지원희망 1~6순위 + 도전 1~3순위. ▲▼로 순위를 바꾸세요.</div></div>
-    <div style="display:flex;gap:8px">${S.fav.length ? '<button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
+  const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
+  inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/9</span></h3>
+      <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
+    <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
     <div class="fav-wrap">
-      <div class="fav-group-label hope">🎯 지원희망 (수시 6장)</div>
-      ${slots.slice(0, FAV_HOPE).join('')}
-      <div class="fav-group-label reach">🚀 도전 (상향 3장)</div>
-      ${slots.slice(FAV_HOPE).join('')}
+      <div class="fav-group-label hope">🎯 지원희망 (수시 6장) <span class="muted">${S.fav.hope.length}/6</span></div>
+      ${mk('hope', FAV_HOPE_MAX)}
+      <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
+      ${mk('reach', FAV_REACH_MAX)}
     </div>`;
   $('#favDrawer').classList.remove('hidden');
   $('#favClose').onclick = () => $('#favDrawer').classList.add('hidden');
-  const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = []; save('fav', S.fav); updateFavBtn(); renderTable(); openFav(); } };
-  inner.querySelectorAll('[data-up]').forEach(b => b.onclick = e => { e.stopPropagation(); moveFav(+b.dataset.up, -1); });
-  inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); moveFav(+b.dataset.dn, 1); });
-  inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); toggleFav(+b.dataset.rm); });
+  const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = { hope: [], reach: [] }; saveFav(); renderTable(); openFav(); } };
+  inner.querySelectorAll('[data-up]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.up.split(':'); moveFav(bk, +p, -1); });
+  inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.dn.split(':'); moveFav(bk, +p, 1); });
+  inner.querySelectorAll('[data-sw]').forEach(b => b.onclick = e => { e.stopPropagation(); switchBucket(+b.dataset.sw); });
+  inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); removeFav(+b.dataset.rm); });
   inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => { if (e.target.closest('button')) return; $('#favDrawer').classList.add('hidden'); openModal(+c.dataset.open); });
 }
 $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') $('#favDrawer').classList.add('hidden'); };
@@ -704,7 +752,7 @@ $('#resetBtn').onclick = () => {
 };
 function applyTheme(t) { document.documentElement.dataset.theme = t; $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙'; save('theme', t); }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); $('#compareDrawer').classList.add('hidden'); $('#favDrawer').classList.add('hidden'); closeSidebar(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); $('#compareDrawer').classList.add('hidden'); $('#favDrawer').classList.add('hidden'); closeSidebar(); } });
 
 const scrim = el('div', 'scrim'); document.body.appendChild(scrim);
 scrim.onclick = closeSidebar;
