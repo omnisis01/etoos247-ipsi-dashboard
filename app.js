@@ -82,6 +82,7 @@ function verdict(r) {
   if (r.dkind === 'up') { sig.push({ dir: 'good', t: `모집인원 ${r.dn}명 증원`, m: '인원' }); score += 2; }
   else if (r.dkind === 'down') { sig.push({ dir: 'bad', t: `모집인원 ${Math.abs(r.dn)}명 감원`, m: '인원' }); score -= 2; }
   else if (r.dkind === 'new') sig.push({ dir: 'warn', t: '신설 — 첫해 입결 미형성(기회·변동)', m: '신설' });
+  else if (r.dkind === 'closed') { sig.push({ dir: 'bad', t: '모집 폐지', m: '폐지' }); score -= 2; }
   else if (r.dkind === 'split') sig.push({ dir: 'warn', t: '모집단위 분리(인원·경쟁 재편)', m: '변동' });
   else if (r.dkind === 'merge') sig.push({ dir: 'warn', t: '모집단위 통합(인원·경쟁 재편)', m: '변동' });
   // 2027 구조 변화 (수능최저)
@@ -343,8 +344,22 @@ function renderHighlights() {
     if (S.hlFilter === 'new') return r.dkind === 'new';
     return true;
   });
-  pool.sort((a, b) => hlRelevance(b) - hlRelevance(a));
-  const top = pool.slice(0, 12);
+  let top;
+  if (S.hlFilter === 'all') {                       // 유리·불리·신설 교차 배치(편향 방지)
+    const g = [], b = [], n = [];
+    pool.forEach(r => { const c = V(r).cls; (c === 'good' ? g : c === 'bad' ? b : n).push(r); });
+    [g, b, n].forEach(a => a.sort((x, y) => hlRelevance(y) - hlRelevance(x)));
+    top = []; let gi = 0, bi = 0, ni = 0;
+    while (top.length < 12 && (gi < g.length || bi < b.length || ni < n.length)) {
+      if (gi < g.length) top.push(g[gi++]);
+      if (top.length < 12 && bi < b.length) top.push(b[bi++]);
+      if (top.length < 12 && ni < n.length && top.length % 4 === 3) top.push(n[ni++]);
+    }
+    [...g.slice(gi), ...b.slice(bi), ...n.slice(ni)].sort((x, y) => hlRelevance(y) - hlRelevance(x)).forEach(r => { if (top.length < 12) top.push(r); });
+  } else {
+    pool.sort((a, b) => hlRelevance(b) - hlRelevance(a));
+    top = pool.slice(0, 12);
+  }
   $('#hlSub').textContent = `· ${pool.length.toLocaleString()}건 중 주요 ${top.length}건`;
   const box = $('#highlightCards');
   if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건에서 유불리 신호가 감지된 전형이 없습니다.</div>`; return; }
@@ -455,8 +470,8 @@ const COLS = [
   { k: 'add', label: '담기', sort: null },
 ];
 function yoyBadge(r, kind) {
-  if (kind === 'grade') { const g = yoyGrade(r); if (!g || g.dir === 'flat') return ''; const cls = g.dir === 'easier' ? 'good' : 'bad'; const ar = g.y26 > g.y25 ? '▲' : '▼';
-    return `<span class="ybadge ${cls}" title="2025 ${g.y25.toFixed(2)} → 2026 ${g.y26.toFixed(2)}등급 (${g.dir === 'easier' ? '입결 하락·유리' : '입결 상승·불리'})">${ar}${Math.abs(g.d).toFixed(2)}</span>`; }
+  if (kind === 'grade') { const g = yoyGrade(r); if (!g || g.dir === 'flat') return ''; const cls = g.dir === 'easier' ? 'good' : 'bad'; const ar = g.dir === 'harder' ? '▲' : '▼';
+    return `<span class="ybadge ${cls}" title="입결 ${g.y25.toFixed(2)} → ${g.y26.toFixed(2)}등급 · ${g.dir === 'easier' ? '입결 하락(쉬워짐)·유리' : '입결 상승(어려워짐)·불리'}">${ar}${Math.abs(g.d).toFixed(2)}</span>`; }
   if (kind === 'comp') { const c = yoyComp(r); if (!c || c.dir === 'flat') return ''; const cls = c.dir === 'down' ? 'good' : 'bad'; const ar = c.y26 > c.y25 ? '▲' : '▼';
     return `<span class="ybadge ${cls}" title="2025 ${c.y25.toFixed(1)} → 2026 ${c.y26.toFixed(1)}:1 (${c.dir === 'down' ? '경쟁 완화·유리' : '경쟁 심화·불리'})">${ar}${Math.abs(c.d).toFixed(1)}</span>`; }
   return '';
@@ -538,7 +553,8 @@ function openModal(i) {
   const r = ROWS[i];
   const d = deltaInfo(r), v = V(r);
   track('view_program', { uni: r.uni, dept: r.dept, verdict: v.label });
-  const trendRow = (lab, vals, f, color) => `<tr><td class="metric">${lab}</td>${vals.map(x => `<td>${x == null ? '–' : f(x)}</td>`).join('')}<td>${sparkline(vals, { color, invert: color === 'var(--primary)' })}</td></tr>`;
+  // vals are chronological [2024,2025,2026]; sparkline expects newest-first → reverse
+  const trendRow = (lab, vals, f, color) => `<tr><td class="metric">${lab}</td>${vals.map(x => `<td>${x == null ? '–' : f(x)}</td>`).join('')}<td>${sparkline([vals[2], vals[1], vals[0]], { color, invert: color === 'var(--primary)' })}</td></tr>`;
   const reasons = v.sig.length ? v.sig.map(s => {
     const ico = s.dir === 'good' ? '🟢' : s.dir === 'bad' ? '🔴' : '🟠';
     return `<div class="imp-line"><span class="imp-ico">${ico}</span><span><b>[${esc(s.m)}]</b> ${esc(s.t)}</span></div>`;
@@ -549,7 +565,10 @@ function openModal(i) {
     const good = goodWhen(info.dir);
     const cls = info.dir === 'flat' ? 'neu' : good ? 'good' : 'bad';
     const word = info.dir === 'flat' ? '변화 미미' : good ? '유리' : '불리';
-    const ar = info.y26 > info.y25 ? '▲' : info.y26 < info.y25 ? '▼' : '–';
+    // 입결은 난이도 기준 화살표(상승=▲), 그 외는 값 기준
+    const ar = lab.includes('입결')
+      ? (info.dir === 'harder' ? '▲' : info.dir === 'easier' ? '▼' : '–')
+      : (info.y26 > info.y25 ? '▲' : info.y26 < info.y25 ? '▼' : '–');
     const dec = lab.includes('입결') ? 2 : lab.includes('추합') ? 0 : 1;
     return `<tr><td class="metric">${lab}</td><td>${fmtf(info.y25)}</td><td><b>${fmtf(info.y26)}</b></td><td class="ycell ${cls}">${ar} ${Math.abs(info.d).toFixed(dec)}</td><td><span class="impact-chip ${cls}">${word}</span></td></tr>`;
   };
