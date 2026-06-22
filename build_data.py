@@ -135,6 +135,12 @@ def categorize(uni, gye, dept, jhname, jagyeok):
         if '약학' in head or any(t in head for t in ['의예', '의학과', '의학부', '의학전공', '의학계열',
                                                      '치의예', '치의학', '한의예', '한의학', '수의예', '수의학']):
             tags.add('medical')
+            # 세부 분류 (의·치·한·수·약) — 우선순위: 치 > 한 > 수 > 약 > 의
+            if '치의' in head: tags.add('med_dent')
+            elif '한의' in head: tags.add('med_oriental')
+            elif '수의' in head: tags.add('med_vet')
+            elif '약학' in head: tags.add('med_pharm')
+            else: tags.add('med_med')
 
     # --- nursing & allied health (human) ---
     NH = ['간호', '방사선', '물리치료', '작업치료', '임상병리', '치위생', '응급구조', '재활', '언어치료', '언어청각',
@@ -329,24 +335,29 @@ SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enrol
           'cats','score','reasons','gtrend','ctrend']
 
 CATS = [
-    ('medical','메디컬','의·치·한·수·약','#e11d48'),
-    ('nursing_health','간호·보건','간호 및 보건의료','#f43f5e'),
-    ('engineering','공학','공학계열','#2563eb'),
-    ('natural','자연','자연계열','#0891b2'),
-    ('business','상경','경영·경제·상경','#d97706'),
-    ('language','어문','어학·문학','#7c3aed'),
-    ('humanities_core','문사철','문학·사학·철학','#9333ea'),
-    ('non_business_humanities','비상경','인문 전체(상경 제외)','#a855f7'),
-    ('social_science','사회과학','정치·행정·언론·사회','#c026d3'),
-    ('statistics','통계','통계·데이터','#0d9488'),
-    ('semiconductor','반도체','반도체학과 전체','#1d4ed8'),
-    ('semiconductor_contract','반도체 계약','채용조건형 반도체','#1e40af'),
-    ('contract_other','계약학과','그 외 계약학과','#0369a1'),
-    ('military','군 계약','군사·국방 계약학과','#475569'),
-    ('teaching','사범','사범계열','#16a34a'),
-    ('primary_ed','교대','교육대·초등교육','#15803d'),
-    ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777'),
-    ('free_major','자유전공','자율·무전공','#ea580c'),
+    ('medical','메디컬','의·치·한·수·약 전체','#e11d48',False),
+    ('med_med','의예','의예·의학','#dc2626',True),
+    ('med_dent','치의예','치의예·치의학','#ec4899',True),
+    ('med_oriental','한의예','한의예·한의학','#9f1239',True),
+    ('med_vet','수의예','수의예·수의학','#fb923c',True),
+    ('med_pharm','약학','약학·한약학','#f43f5e',True),
+    ('nursing_health','간호·보건','간호 및 보건의료','#f5719b',False),
+    ('engineering','공학','공학계열','#2563eb',False),
+    ('natural','자연','자연계열','#0891b2',False),
+    ('business','상경','경영·경제·상경','#d97706',False),
+    ('language','어문','어학·문학','#7c3aed',False),
+    ('humanities_core','문사철','문학·사학·철학','#9333ea',False),
+    ('non_business_humanities','비상경','인문 전체(상경 제외)','#a855f7',False),
+    ('social_science','사회과학','정치·행정·언론·사회','#c026d3',False),
+    ('statistics','통계','통계·데이터','#0d9488',False),
+    ('semiconductor','반도체','반도체학과 전체','#1d4ed8',False),
+    ('semiconductor_contract','반도체 계약','채용조건형 반도체','#1e40af',False),
+    ('contract_other','계약학과','그 외 계약학과','#0369a1',False),
+    ('military','군 계약','군사·국방 계약학과','#475569',False),
+    ('teaching','사범','사범계열','#16a34a',False),
+    ('primary_ed','교대','교육대·초등교육','#15803d',False),
+    ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777',False),
+    ('free_major','자유전공','자율·무전공','#ea580c',False),
 ]
 
 payload = {
@@ -359,7 +370,7 @@ payload = {
     },
     'schema': SCHEMA,
     'dicts': {k: order[k] for k in order},
-    'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'count': cat_counter.get(k, 0)} for k, l, d, c in CATS],
+    'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'sub': sub, 'count': cat_counter.get(k, 0)} for k, l, d, c, sub in CATS],
     'rows': rows,
 }
 
@@ -379,5 +390,5 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
 print('category counts:')
-for k, l, d, c in CATS:
-    print(f'  {cat_counter.get(k,0):6d}  {k:24s} {l}')
+for k, l, d, c, sub in CATS:
+    print(f'  {cat_counter.get(k,0):6d}  {("  └ " if sub else "")}{k:24s} {l}')

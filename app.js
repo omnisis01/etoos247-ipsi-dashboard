@@ -22,7 +22,8 @@ const ROWS = D.rows.map((r, i) => ({
 }));
 
 const CAT_ICON = {
-  all: '🎓', medical: '🩺', nursing_health: '🏥', engineering: '⚙️', natural: '🔬', business: '💼',
+  all: '🎓', medical: '⚕️', med_med: '🩺', med_dent: '🦷', med_oriental: '🌿', med_vet: '🐾', med_pharm: '💊',
+  nursing_health: '🏥', engineering: '⚙️', natural: '🔬', business: '💼',
   language: '🗣️', humanities_core: '📜', non_business_humanities: '🏛️', social_science: '🌐',
   statistics: '📈', semiconductor: '💾', semiconductor_contract: '🔗', contract_other: '🤝',
   military: '🎖️', teaching: '🍎', primary_ed: '✏️', ist: '🧪', free_major: '🧭',
@@ -207,7 +208,7 @@ function renderCatList() {
   allBtn.onclick = () => { S.cat = 'all'; renderCatList(); renderAll(); };
   box.appendChild(allBtn);
   CATS.forEach(c => {
-    const b = el('button', 'cat-item' + (S.cat === c.key ? ' active' : ''));
+    const b = el('button', 'cat-item' + (c.sub ? ' sub' : '') + (S.cat === c.key ? ' active' : ''));
     b.innerHTML = `<span class="cat-dot" style="background:${c.color}"></span><span>${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>`;
     b.title = c.desc;
     b.onclick = () => { S.cat = c.key; track('select_category', { category: c.key, label: c.label }); renderCatList(); renderAll(); closeSidebar(); };

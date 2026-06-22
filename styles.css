@@ -64,6 +64,11 @@ input{font-family:inherit}
   background:var(--surface-2);padding:1px 7px;border-radius:20px}
 .cat-item.active .cat-n{background:var(--surface);color:var(--primary-ink)}
 .cat-item.all .cat-dot{background:conic-gradient(from 0deg,#3a5bd9,#0891b2,#16a34a,#d97706,#e11d48,#3a5bd9)}
+.cat-item.sub{padding-left:24px;font-size:12.5px;font-weight:600;position:relative}
+.cat-item.sub .cat-dot{width:6px;height:6px}
+.cat-item.sub::before{content:"";position:absolute;left:13px;top:0;bottom:0;width:1.5px;background:var(--line)}
+.cat-item.sub:last-of-type::before{bottom:50%}
+.cat-item.sub.active::before{background:var(--primary)}
 
 .filters{display:flex;flex-direction:column;gap:14px;padding:4px 6px}
 .f-group .f-title{font-size:11.5px;font-weight:700;color:var(--text-soft);margin-bottom:7px;display:flex;justify-content:space-between}
