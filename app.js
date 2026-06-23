@@ -25,7 +25,9 @@ const CAT_ICON = {
   all: '🎓', medical: '⚕️', med_med: '🩺', med_dent: '🦷', med_oriental: '🪡', med_vet: '🐾', med_pharm: '💊',
   nursing_health: '🏥', engineering: '⚙️',
   eng_cs: '💻', eng_ee: '⚡', eng_mech: '🔧', eng_chem: '⚗️', eng_civil: '🏗️', eng_etc: '🏭',
-  natural: '🔬', business: '💼',
+  natural: '🔬', nat_math: '📐', nat_phys: '⚛️', nat_bio: '🧬', nat_earth: '🌏', nat_agri: '🌾',
+  business: '💼', biz_mgmt: '🏢', biz_econ: '📈', biz_tour: '🏨', biz_etc: '🏘️',
+  language: '🗣️', lang_kor: '📖', lang_eng: '🔤', lang_asia: '🏯', lang_etc: '🌐',
   language: '🗣️', humanities_core: '📜', non_business_humanities: '🏛️', social_science: '🌐',
   statistics: '📈', semiconductor: '💾', semiconductor_contract: '🔗', contract_other: '🤝',
   military: '🎖️', teaching: '🍎', primary_ed: '✏️', ist: '🧪', free_major: '🧭',
@@ -42,6 +44,7 @@ const S = {
   page: 1, perPage: 60, hlFilter: 'all', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
+  expanded: new Set(load('expanded', [])),
 };
 const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
 function migrateFav(v) {
@@ -209,12 +212,33 @@ function renderCatList() {
   allBtn.innerHTML = `<span class="cat-dot"></span><span>전체 보기</span><span class="cat-n">${ROWS.length.toLocaleString()}</span>`;
   allBtn.onclick = () => { S.cat = 'all'; renderCatList(); renderAll(); };
   box.appendChild(allBtn);
-  CATS.forEach(c => {
-    const b = el('button', 'cat-item' + (c.sub ? ' sub' : '') + (S.cat === c.key ? ' active' : ''));
-    b.innerHTML = `<span class="cat-dot" style="background:${c.color}"></span><span>${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>`;
+  const subsByParent = {};
+  CATS.forEach(c => { if (c.sub) (subsByParent[c.parent] = subsByParent[c.parent] || []).push(c); });
+  const active = CAT_BY[S.cat];
+  if (active && active.sub) S.expanded.add(active.parent);   // 선택된 세부의 상위는 자동 펼침
+  const select = key => { S.cat = key; track('select_category', { category: key, label: CAT_BY[key] ? CAT_BY[key].label : key }); renderCatList(); renderAll(); closeSidebar(); };
+  CATS.filter(c => !c.sub).forEach(c => {
+    const subs = subsByParent[c.key];
+    const open = subs && S.expanded.has(c.key);
+    const b = el('button', 'cat-item' + (subs ? ' has-sub' : '') + (S.cat === c.key ? ' active' : ''));
+    b.innerHTML = `<span class="cat-dot" style="background:${c.color}"></span><span class="cat-name">${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>` +
+      (subs ? `<span class="cat-toggle${open ? ' open' : ''}" data-toggle="${c.key}" role="button" tabindex="0" aria-label="${esc(c.label)} 세부 ${open ? '접기' : '펼치기'}" aria-expanded="${open}">▸</span>` : '');
     b.title = c.desc;
-    b.onclick = () => { S.cat = c.key; track('select_category', { category: c.key, label: c.label }); renderCatList(); renderAll(); closeSidebar(); };
+    b.onclick = e => { if (e.target.closest('[data-toggle]')) return; select(c.key); };
     box.appendChild(b);
+    if (subs) {
+      const tog = b.querySelector('[data-toggle]');
+      const toggleFn = e => { e.stopPropagation(); S.expanded.has(c.key) ? S.expanded.delete(c.key) : S.expanded.add(c.key); save('expanded', [...S.expanded]); renderCatList(); };
+      tog.onclick = toggleFn;
+      tog.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFn(e); } };
+      if (open) subs.forEach(sc => {
+        const sb = el('button', 'cat-item sub' + (S.cat === sc.key ? ' active' : ''));
+        sb.innerHTML = `<span class="cat-dot" style="background:${sc.color}"></span><span class="cat-name">${esc(sc.label)}</span><span class="cat-n">${sc.count.toLocaleString()}</span>`;
+        sb.title = sc.desc;
+        sb.onclick = () => select(sc.key);
+        box.appendChild(sb);
+      });
+    }
   });
 }
 

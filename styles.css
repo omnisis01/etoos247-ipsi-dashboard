@@ -60,8 +60,15 @@ input{font-family:inherit}
 .cat-item:hover{background:var(--surface-2);color:var(--text)}
 .cat-item.active{background:var(--primary-soft);color:var(--primary-ink)}
 .cat-dot{width:9px;height:9px;border-radius:50%;flex:none}
-.cat-item .cat-n{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--text-mute);
+.cat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-item .cat-n{flex:none;margin-left:auto;font-size:11.5px;font-weight:700;color:var(--text-mute);
   background:var(--surface-2);padding:2px 8px;border-radius:20px}
+.cat-item.has-sub .cat-n{margin-left:auto}
+.cat-toggle{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;
+  color:var(--text-mute);font-size:11px;font-weight:900;margin-left:4px;transition:transform .16s,background .12s,color .12s}
+.cat-toggle:hover{background:var(--surface-2);color:var(--text)}
+.cat-toggle.open{transform:rotate(90deg);color:var(--text-soft)}
+.cat-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
 .cat-item.active .cat-n{background:var(--surface);color:var(--primary-ink)}
 .cat-item.all .cat-dot{background:conic-gradient(from 0deg,#3a5bd9,#0891b2,#16a34a,#d97706,#e11d48,#3a5bd9)}
 .cat-item.sub{padding-left:24px;font-size:12.5px;font-weight:600;position:relative}

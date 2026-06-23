@@ -143,6 +143,11 @@ def categorize(uni, gye, dept, jhname, jagyeok):
                '바이오', '생명자원', '응용생물', '환경과학']
     if any(k in d for k in NAT_POS) and not any(x in d for x in NAT_EXC):
         tags.add('natural')
+        if any(k in d for k in ['수학', '통계', '수리과학']): tags.add('nat_math')
+        elif any(k in d for k in ['생명', '생물', '생화학', '미생물', '분자', '유전', '바이오']): tags.add('nat_bio')
+        elif any(k in d for k in ['물리', '화학과', '화학부', '화학전공', '응용화학']): tags.add('nat_phys')
+        elif any(k in d for k in ['지구', '지질', '천문', '대기', '해양', '우주과학']): tags.add('nat_earth')
+        else: tags.add('nat_agri')
 
     # --- medical core (의·치·한·수·약), head-anchored with blockers ---
     MED_BLOCK = ['스포츠', '식물', '수산', '데이터', '과학수사', '재활', '한방', '제약', '신약', '의약', '창의',
@@ -172,6 +177,10 @@ def categorize(uni, gye, dept, jhname, jagyeok):
            '상경', '국제통상', '글로벌경영', '자산', '재무', '조세', '마케팅', '이커머스', '무역학']
     if any(k in d for k in BIZ) and not any(x in d for x in ['공학', '공과', '교육', '항공서비스', '승무']):
         tags.add('business')
+        if any(k in d for k in ['관광', '호텔', '외식', '카지노', '컨벤션', '레저']): tags.add('biz_tour')
+        elif any(k in d for k in ['부동산', '보험', '계리', '소비자', '마케팅', '물류', '유통', '핀테크', '광고']): tags.add('biz_etc')
+        elif any(k in d for k in ['경제', '무역', '통상', '금융', '세무', '회계']): tags.add('biz_econ')
+        else: tags.add('biz_mgmt')
 
     # --- language / 어문 ---
     LANG = ['국어국문', '한국어문', '한국어학', '한국언어문화', '영어영문', '영어과', '영어학', '영어전공', '영미',
@@ -181,6 +190,10 @@ def categorize(uni, gye, dept, jhname, jagyeok):
             '문예창작', '통번역', '한문학', '외국어', '글로벌언어', '실용영어', '동양어', '서양어', '언어학', '언어문화', '아시아언어']
     if any(k in d for k in LANG) and not is_edu:
         tags.add('language')
+        if any(k in d for k in ['국어국문', '한국어', '국문학', '문예창작', '한문']): tags.add('lang_kor')
+        elif any(k in d for k in ['영어', '영문', '영미']): tags.add('lang_eng')
+        elif any(k in d for k in ['중어', '중국', '일어', '일본', '동아시아', '아시아언어']): tags.add('lang_asia')
+        else: tags.add('lang_etc')
 
     # --- 문사철 (literature/history/philosophy), anti-greedy ---
     HUM = ['국어국문', '국문학', '한문학', '문예창작', '문학과', '사학과', '한국사', '국사학', '동양사', '서양사',
@@ -350,36 +363,50 @@ SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enrol
           'chung26','chung25','chung24','method','note','date','gradeRatio','subjects','careerSubj',
           'cats','score','reasons','gtrend','ctrend']
 
+# (key, label, desc, color, sub, parent)
 CATS = [
-    ('medical','메디컬','의·치·한·수·약 전체','#e11d48',False),
-    ('med_med','의예','의예·의학','#dc2626',True),
-    ('med_dent','치의예','치의예·치의학','#ec4899',True),
-    ('med_oriental','한의예','한의예·한의학','#9f1239',True),
-    ('med_vet','수의예','수의예·수의학','#fb923c',True),
-    ('med_pharm','약학','약학·한약학','#f43f5e',True),
-    ('nursing_health','간호·보건','간호 및 보건의료','#f5719b',False),
-    ('engineering','공학','공학계열 전체','#2563eb',False),
-    ('eng_cs','컴퓨터·SW·AI','컴퓨터·소프트웨어·인공지능','#3b82f6',True),
-    ('eng_ee','전기·전자·반도체','전기·전자·통신·반도체','#1d4ed8',True),
-    ('eng_mech','기계·자동차·항공','기계·자동차·항공·로봇','#0ea5e9',True),
-    ('eng_chem','화공·소재·바이오','화공·신소재·에너지·바이오','#2563eb',True),
-    ('eng_civil','건설·건축·환경','토목·건축·도시·환경','#0284c7',True),
-    ('eng_etc','산업·기타공학','산업공학 등 그 외 공학','#60a5fa',True),
-    ('natural','자연','자연계열','#0891b2',False),
-    ('business','상경','경영·경제·상경','#d97706',False),
-    ('language','어문','어학·문학','#7c3aed',False),
-    ('humanities_core','문사철','문학·사학·철학','#9333ea',False),
-    ('non_business_humanities','비상경','인문 전체(상경 제외)','#a855f7',False),
-    ('social_science','사회과학','정치·행정·언론·사회','#c026d3',False),
-    ('statistics','통계','통계·데이터','#0d9488',False),
-    ('semiconductor','반도체','반도체학과 전체','#1d4ed8',False),
-    ('semiconductor_contract','반도체 계약','채용조건형 반도체','#1e40af',False),
-    ('contract_other','계약학과','그 외 계약학과','#0369a1',False),
-    ('military','군 계약','군사·국방 계약학과','#475569',False),
-    ('teaching','사범','사범계열','#16a34a',False),
-    ('primary_ed','교대','교육대·초등교육','#15803d',False),
-    ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777',False),
-    ('free_major','자유전공','자율·무전공','#ea580c',False),
+    ('medical','메디컬','의·치·한·수·약 전체','#e11d48',False,''),
+    ('med_med','의예','의예·의학','#dc2626',True,'medical'),
+    ('med_dent','치의예','치의예·치의학','#ec4899',True,'medical'),
+    ('med_oriental','한의예','한의예·한의학','#9f1239',True,'medical'),
+    ('med_vet','수의예','수의예·수의학','#fb923c',True,'medical'),
+    ('med_pharm','약학','약학·한약학','#f43f5e',True,'medical'),
+    ('nursing_health','간호·보건','간호 및 보건의료','#f5719b',False,''),
+    ('engineering','공학','공학계열 전체','#2563eb',False,''),
+    ('eng_cs','컴퓨터·SW·AI','컴퓨터·소프트웨어·인공지능','#3b82f6',True,'engineering'),
+    ('eng_ee','전기·전자·반도체','전기·전자·통신·반도체','#1d4ed8',True,'engineering'),
+    ('eng_mech','기계·자동차·항공','기계·자동차·항공·로봇','#0ea5e9',True,'engineering'),
+    ('eng_chem','화공·소재·바이오','화공·신소재·에너지·바이오','#2563eb',True,'engineering'),
+    ('eng_civil','건설·건축·환경','토목·건축·도시·환경','#0284c7',True,'engineering'),
+    ('eng_etc','산업·기타공학','산업공학 등 그 외 공학','#60a5fa',True,'engineering'),
+    ('natural','자연','자연계열 전체','#0891b2',False,''),
+    ('nat_math','수학·통계','수학·통계·수리과학','#0e7490',True,'natural'),
+    ('nat_phys','물리·화학','물리·화학','#0891b2',True,'natural'),
+    ('nat_bio','생명·생물','생명과학·생물·바이오','#14b8a6',True,'natural'),
+    ('nat_earth','지구·천문·해양','지구·천문·대기·해양','#0284c7',True,'natural'),
+    ('nat_agri','농림·식품·동물','농림·식품영양·동물·수산','#22d3ee',True,'natural'),
+    ('business','상경','경영·경제·상경 전체','#d97706',False,''),
+    ('biz_mgmt','경영','경영·경영정보','#d97706',True,'business'),
+    ('biz_econ','경제·무역·금융','경제·무역·금융·회계·세무','#ea8204',True,'business'),
+    ('biz_tour','관광·호텔·외식','관광·호텔·외식경영','#f59e0b',True,'business'),
+    ('biz_etc','부동산·소비자·기타','부동산·소비자·물류·보험계리','#fbbf24',True,'business'),
+    ('language','어문','어학·문학 전체','#7c3aed',False,''),
+    ('lang_kor','국어·한국어','국어국문·한국어·문예창작','#7c3aed',True,'language'),
+    ('lang_eng','영어','영어영문·영미','#8b5cf6',True,'language'),
+    ('lang_asia','중국어·일본어','중어중문·일어일문·동아시아','#a78bfa',True,'language'),
+    ('lang_etc','유럽·기타외국어','불·독·노·서·아랍·베트남 등','#6d28d9',True,'language'),
+    ('humanities_core','문사철','문학·사학·철학','#9333ea',False,''),
+    ('non_business_humanities','비상경','인문 전체(상경 제외)','#a855f7',False,''),
+    ('social_science','사회과학','정치·행정·언론·사회','#c026d3',False,''),
+    ('statistics','통계','통계·데이터','#0d9488',False,''),
+    ('semiconductor','반도체','반도체학과 전체','#1d4ed8',False,''),
+    ('semiconductor_contract','반도체 계약','채용조건형 반도체','#1e40af',False,''),
+    ('contract_other','계약학과','그 외 계약학과','#0369a1',False,''),
+    ('military','군 계약','군사·국방 계약학과','#475569',False,''),
+    ('teaching','사범','사범계열','#16a34a',False,''),
+    ('primary_ed','교대','교육대·초등교육','#15803d',False,''),
+    ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777',False,''),
+    ('free_major','자유전공','자율·무전공','#ea580c',False,''),
 ]
 
 payload = {
@@ -392,7 +419,7 @@ payload = {
     },
     'schema': SCHEMA,
     'dicts': {k: order[k] for k in order},
-    'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'sub': sub, 'count': cat_counter.get(k, 0)} for k, l, d, c, sub in CATS],
+    'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'sub': sub, 'parent': par, 'count': cat_counter.get(k, 0)} for k, l, d, c, sub, par in CATS],
     'rows': rows,
 }
 
@@ -412,5 +439,5 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
 print('category counts:')
-for k, l, d, c, sub in CATS:
+for k, l, d, c, sub, par in CATS:
     print(f'  {cat_counter.get(k,0):6d}  {("  └ " if sub else "")}{k:24s} {l}')
