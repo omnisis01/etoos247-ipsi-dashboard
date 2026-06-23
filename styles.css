@@ -1,15 +1,15 @@
 /* ===================== Design tokens ===================== */
 :root{
-  --bg:#f4f6fb; --bg-soft:#eef1f8; --surface:#ffffff; --surface-2:#f7f9fc;
-  --line:#e4e8f0; --line-strong:#d3d9e6;
-  --text:#1a2233; --text-soft:#5a6478; --text-mute:#8a93a6;
-  --primary:#3a5bd9; --primary-soft:#eaeefb; --primary-ink:#2a44a8;
-  --good:#0f9d58; --good-soft:#e6f6ec; --bad:#e23b54; --bad-soft:#fdebee;
-  --new:#e8820c; --new-soft:#fdf1e1; --neutral:#7a8395; --neutral-soft:#eef0f5;
-  --warn:#c9911a;
-  --shadow-sm:0 1px 2px rgba(20,30,60,.06),0 1px 3px rgba(20,30,60,.05);
-  --shadow:0 4px 16px rgba(25,38,75,.08),0 1px 4px rgba(25,38,75,.05);
-  --shadow-lg:0 18px 50px rgba(20,32,70,.18);
+  --bg:#eff2f8; --bg-soft:#e9edf5; --surface:#ffffff; --surface-2:#f4f7fc;
+  --line:#e6eaf3; --line-strong:#d4dae8;
+  --text:#141b29; --text-soft:#515c72; --text-mute:#8b95a9;
+  --primary:#3a5bd9; --primary-soft:#eaeefb; --primary-ink:#2840a4;
+  --good:#0e9b56; --good-soft:#e5f6eb; --bad:#e0364f; --bad-soft:#fdeaed;
+  --new:#e07e09; --new-soft:#fdf2e2; --neutral:#76808f; --neutral-soft:#eceff5;
+  --warn:#c2891a;
+  --shadow-sm:0 1px 2px rgba(20,30,60,.05),0 1px 3px rgba(20,30,60,.04);
+  --shadow:0 6px 22px rgba(26,40,80,.08),0 2px 7px rgba(26,40,80,.05);
+  --shadow-lg:0 22px 56px rgba(20,32,70,.17),0 6px 16px rgba(20,32,70,.08);
   --radius:16px; --radius-sm:11px; --radius-xs:8px;
   --font:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
   --side-w:288px;
