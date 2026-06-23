@@ -129,7 +129,7 @@ function sparkline(valsNewestFirst, opt = {}) {
   const vals = [valsNewestFirst[2], valsNewestFirst[1], valsNewestFirst[0]]; // chrono
   const pts = vals.map((v, i) => ({ v, i })).filter(p => p.v != null && !isNaN(p.v));
   const w = opt.w || 60, h = opt.h || 22, pad = 3;
-  if (pts.length < 2) return `<svg class="spark" width="${w}" height="${h}"></svg>`;
+  if (pts.length < 2) return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"></svg>`;
   const xs = pts.map(p => p.i), ys = pts.map(p => p.v);
   const minX = 0, maxX = 2; let minY = Math.min(...ys), maxY = Math.max(...ys);
   if (minY === maxY) { minY -= 1; maxY += 1; }
@@ -140,7 +140,7 @@ function sparkline(valsNewestFirst, opt = {}) {
   const last = pts[pts.length - 1];
   const col = opt.color || 'var(--primary)';
   let dots = pts.map(p => `<circle cx="${sx(p.i).toFixed(1)}" cy="${sy(p.v).toFixed(1)}" r="1.5" fill="${col}"/>`).join('');
-  return `<svg class="spark" width="${w}" height="${h}"><path d="${path}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>${dots}<circle cx="${sx(last.i).toFixed(1)}" cy="${sy(last.v).toFixed(1)}" r="2.6" fill="${col}"/></svg>`;
+  return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true" focusable="false"><path d="${path}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>${dots}<circle cx="${sx(last.i).toFixed(1)}" cy="${sy(last.v).toFixed(1)}" r="2.6" fill="${col}"/></svg>`;
 }
 
 /* ---------- filtering ---------- */
@@ -209,7 +209,8 @@ function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderH
 function renderCatList() {
   const box = $('#catList'); box.innerHTML = '';
   const allBtn = el('button', 'cat-item all' + (S.cat === 'all' ? ' active' : ''));
-  allBtn.innerHTML = `<span class="cat-dot"></span><span>전체 보기</span><span class="cat-n">${ROWS.length.toLocaleString()}</span>`;
+  if (S.cat === 'all') allBtn.setAttribute('aria-current', 'true');
+  allBtn.innerHTML = `<span class="cat-dot" aria-hidden="true"></span><span>전체 보기</span><span class="cat-n">${ROWS.length.toLocaleString()}</span>`;
   allBtn.onclick = () => { S.cat = 'all'; renderCatList(); renderAll(); };
   box.appendChild(allBtn);
   const subsByParent = {};
@@ -221,7 +222,8 @@ function renderCatList() {
     const subs = subsByParent[c.key];
     const open = subs && S.expanded.has(c.key);
     const b = el('button', 'cat-item' + (subs ? ' has-sub' : '') + (S.cat === c.key ? ' active' : ''));
-    b.innerHTML = `<span class="cat-dot" style="background:${c.color}"></span><span class="cat-name">${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>` +
+    if (S.cat === c.key) b.setAttribute('aria-current', 'true');
+    b.innerHTML = `<span class="cat-dot" style="background:${c.color}" aria-hidden="true"></span><span class="cat-name">${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>` +
       (subs ? `<span class="cat-toggle${open ? ' open' : ''}" data-toggle="${c.key}" role="button" tabindex="0" aria-label="${esc(c.label)} 세부 ${open ? '접기' : '펼치기'}" aria-expanded="${open}">▸</span>` : '');
     b.title = c.desc;
     b.onclick = e => { if (e.target.closest('[data-toggle]')) return; select(c.key); };
@@ -233,7 +235,8 @@ function renderCatList() {
       tog.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFn(e); } };
       if (open) subs.forEach(sc => {
         const sb = el('button', 'cat-item sub' + (S.cat === sc.key ? ' active' : ''));
-        sb.innerHTML = `<span class="cat-dot" style="background:${sc.color}"></span><span class="cat-name">${esc(sc.label)}</span><span class="cat-n">${sc.count.toLocaleString()}</span>`;
+        if (S.cat === sc.key) sb.setAttribute('aria-current', 'true');
+        sb.innerHTML = `<span class="cat-dot" style="background:${sc.color}" aria-hidden="true"></span><span class="cat-name">${esc(sc.label)}</span><span class="cat-n">${sc.count.toLocaleString()}</span>`;
         sb.title = sc.desc;
         sb.onclick = () => select(sc.key);
         box.appendChild(sb);
@@ -403,7 +406,7 @@ function renderHighlights() {
       const ico = s.dir === 'good' ? '<span class="dot-good">▲</span>' : s.dir === 'bad' ? '<span class="dot-bad">▼</span>' : '<span class="dot-new">✦</span>';
       return `<div class="imp-line">${ico}<span>${esc(s.t)}</span></div>`;
     }).join('');
-    return `<div class="hl-card" data-i="${r._i}">
+    return `<div class="hl-card" data-i="${r._i}" tabindex="0" role="button" aria-label="${esc(r.uni)} ${esc(r.dept)}, 올해 ${v.label} — 상세 보기">
       <div class="hl-top"><span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
       <div class="hl-dept">${esc(r.dept)}</div>
       <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
@@ -412,7 +415,10 @@ function renderHighlights() {
       <div class="hl-impact">${reasons || '<span class="muted">상세 보기</span>'}</div>
     </div>`;
   }).join('');
-  box.querySelectorAll('.hl-card').forEach(c => c.onclick = () => openModal(+c.dataset.i));
+  box.querySelectorAll('.hl-card').forEach(c => {
+    c.onclick = () => openModal(+c.dataset.i);
+    c.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(+c.dataset.i); } };
+  });
 }
 
 /* ----- charts ----- */
@@ -505,11 +511,13 @@ function yoyBadge(r, kind) {
 }
 function renderTable() {
   $('#gridHead').innerHTML = '<tr>' + COLS.map(c =>
-    `<th data-sort="${c.sort || ''}" class="${c.sort === S.sort ? 'sorted' : ''}">${c.label}${c.sort ? `<span class="sort-ar">${c.sort === S.sort ? (S.sortDir < 0 ? '▼' : '▲') : '▽'}</span>` : ''}</th>`
+    `<th scope="col" data-sort="${c.sort || ''}" class="${c.sort === S.sort ? 'sorted' : ''}"${c.sort ? ` role="button" tabindex="0" aria-sort="${c.sort === S.sort ? (S.sortDir < 0 ? 'descending' : 'ascending') : 'none'}"` : ''}>${c.label}${c.sort ? `<span class="sort-ar" aria-hidden="true">${c.sort === S.sort ? (S.sortDir < 0 ? '▼' : '▲') : '▽'}</span>` : ''}</th>`
   ).join('') + '</tr>';
   $('#gridHead').querySelectorAll('th').forEach(th => {
     const sk = th.dataset.sort; if (!sk) return;
-    th.onclick = () => { if (S.sort === sk) S.sortDir *= -1; else { S.sort = sk; S.sortDir = (sk === 'grade' || sk === 'uni') ? 1 : -1; } sortFiltered(); S.page = 1; renderTable(); };
+    const doSort = () => { if (S.sort === sk) S.sortDir *= -1; else { S.sort = sk; S.sortDir = (sk === 'grade' || sk === 'uni') ? 1 : -1; } sortFiltered(); S.page = 1; renderTable(); };
+    th.onclick = doSort;
+    th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doSort(); } };
   });
   // sort segment quick
   const ss = $('#sortSeg');
@@ -526,6 +534,7 @@ function renderTable() {
   const start = (S.page - 1) * S.perPage;
   const slice = FILTERED.slice(start, start + S.perPage);
   $('#tableCount').textContent = `· 총 ${total.toLocaleString()}개`;
+  const statusEl = $('#a11yStatus'); if (statusEl) statusEl.textContent = `${(CAT_BY[S.cat] ? CAT_BY[S.cat].label : '전체')} 검색결과 ${total.toLocaleString()}개 전형`;
 
   $('#gridBody').innerHTML = slice.map(r => {
     const d = deltaInfo(r);
@@ -538,7 +547,7 @@ function renderTable() {
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
-      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><div class="td-dept">${esc(r.dept)}</div></td>
+      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(r.dept)} 상세 보기">${esc(r.dept)}</button></td>
       <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div></td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>
@@ -573,6 +582,32 @@ function renderPager(pages, total) {
   btns.push(`<span class="pg-info">${cur} / ${pages}</span>`);
   p.innerHTML = btns.join('');
   p.querySelectorAll('button[data-p]').forEach(b => b.onclick = () => { S.page = +b.dataset.p; renderTable(); window.scrollTo({ top: $('#tableSec').offsetTop - 70, behavior: 'smooth' }); });
+}
+
+/* ----- dialog focus management (trap + return) ----- */
+let _focusReturn = null, _trapCleanup = null;
+function openDialog(container, label) {
+  if (_trapCleanup) _trapCleanup();
+  _focusReturn = document.activeElement;
+  container.setAttribute('role', 'dialog');
+  container.setAttribute('aria-modal', 'true');
+  if (label) container.setAttribute('aria-label', label);
+  const foc = () => [...container.querySelectorAll('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(n => n.offsetParent !== null);
+  const first = foc()[0]; if (first) setTimeout(() => first.focus(), 30);
+  const onKey = e => {
+    if (e.key !== 'Tab') return;
+    const f = foc(); if (!f.length) return;
+    const a = f[0], b = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); b.focus(); }
+    else if (!e.shiftKey && document.activeElement === b) { e.preventDefault(); a.focus(); }
+  };
+  container.addEventListener('keydown', onKey);
+  _trapCleanup = () => { container.removeEventListener('keydown', onKey); _trapCleanup = null; };
+}
+function closeDialog() {
+  if (_trapCleanup) _trapCleanup();
+  if (_focusReturn && _focusReturn.focus) { try { _focusReturn.focus(); } catch (e) {} }
+  _focusReturn = null;
 }
 
 /* ----- detail modal ----- */
@@ -650,13 +685,16 @@ function openModal(i) {
         <button class="ghost-btn" id="modalAdd" style="width:100%;justify-content:center;margin-top:8px">${inCmp ? '✓ 비교함에서 보기' : '⇄ 비교함에 담기'}</button>
       </div>
     </div>`;
+  const wasOpen = !$('#modal').classList.contains('hidden');
   $('#modal').classList.remove('hidden');
+  $('#modalClose').setAttribute('aria-label', '상세 닫기');
+  if (!wasOpen) openDialog($('#modalCard'), `${r.uni} ${r.dept} 상세 정보`);
   $('#modalClose').onclick = closeModal;
   $('#modalAdd').onclick = () => { if (S.compare.has(i)) { openCompare(); } else { toggleCompare(i); openModal(i); } };
   $('#modalFavHope').onclick = () => { addFav(i, 'hope'); openModal(i); };
   $('#modalFavReach').onclick = () => { addFav(i, 'reach'); openModal(i); };
 }
-function closeModal() { $('#modal').classList.add('hidden'); }
+function closeModal() { if ($('#modal').classList.contains('hidden')) return; $('#modal').classList.add('hidden'); closeDialog(); }
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 
 /* ----- compare ----- */
@@ -690,12 +728,16 @@ function openCompare() {
         ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
       </tbody></table></div>`;
   }
+  const wasOpen = !$('#compareDrawer').classList.contains('hidden');
   $('#compareDrawer').classList.remove('hidden');
-  $('#cmpClose').onclick = () => $('#compareDrawer').classList.add('hidden');
+  if (!wasOpen) openDialog($('#compareInner'), '전형 비교함');
+  $('#cmpClose').setAttribute('aria-label', '비교함 닫기');
+  $('#cmpClose').onclick = closeCompareDrawer;
   const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); save('cmp', []); updateCompareBtn(); renderTable(); openCompare(); };
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); save('cmp', [...S.compare]); updateCompareBtn(); renderTable(); openCompare(); });
 }
-$('#compareDrawer').onclick = e => { if (e.target.id === 'compareDrawer') $('#compareDrawer').classList.add('hidden'); };
+function closeCompareDrawer() { if ($('#compareDrawer').classList.contains('hidden')) return; $('#compareDrawer').classList.add('hidden'); closeDialog(); }
+$('#compareDrawer').onclick = e => { if (e.target.id === 'compareDrawer') closeCompareDrawer(); };
 $('#compareBtn').onclick = openCompare;
 
 /* ----- favorites (지원카드: 지원희망 6 + 상향·도전 3, 버킷 선택) ----- */
@@ -777,8 +819,11 @@ function openFav() {
       <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
       ${mk('reach', FAV_REACH_MAX)}
     </div>`;
+  const wasOpen = !$('#favDrawer').classList.contains('hidden');
   $('#favDrawer').classList.remove('hidden');
-  $('#favClose').onclick = () => $('#favDrawer').classList.add('hidden');
+  if (!wasOpen) openDialog($('#favInner'), '내 지원카드');
+  $('#favClose').setAttribute('aria-label', '지원카드 닫기');
+  $('#favClose').onclick = closeFavDrawer;
   const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = { hope: [], reach: [] }; saveFav(); renderTable(); openFav(); } };
   inner.querySelectorAll('[data-up]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.up.split(':'); moveFav(bk, +p, -1); });
   inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.dn.split(':'); moveFav(bk, +p, 1); });
@@ -786,7 +831,8 @@ function openFav() {
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); removeFav(+b.dataset.rm); });
   inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => { if (e.target.closest('button')) return; $('#favDrawer').classList.add('hidden'); openModal(+c.dataset.open); });
 }
-$('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') $('#favDrawer').classList.add('hidden'); };
+function closeFavDrawer() { if ($('#favDrawer').classList.contains('hidden')) return; $('#favDrawer').classList.add('hidden'); closeDialog(); }
+$('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer(); };
 $('#favBtn').onclick = openFav;
 
 /* ----- topbar / theme / search / mobile ----- */
@@ -803,12 +849,12 @@ function applyTheme(t) {
   save('theme', t);
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); $('#compareDrawer').classList.add('hidden'); $('#favDrawer').classList.add('hidden'); closeSidebar(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeSidebar(); } });
 
 const scrim = el('div', 'scrim'); document.body.appendChild(scrim);
 scrim.onclick = closeSidebar;
-function openSidebar() { $('#sidebar').classList.add('open'); scrim.classList.add('show'); }
-function closeSidebar() { $('#sidebar').classList.remove('open'); scrim.classList.remove('show'); }
+function openSidebar() { $('#sidebar').classList.add('open'); scrim.classList.add('show'); $('#menuToggle').setAttribute('aria-expanded', 'true'); }
+function closeSidebar() { $('#sidebar').classList.remove('open'); scrim.classList.remove('show'); $('#menuToggle').setAttribute('aria-expanded', 'false'); }
 $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
 
 /* ----- init ----- */

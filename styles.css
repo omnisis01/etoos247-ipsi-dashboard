@@ -35,6 +35,13 @@ input{font-family:inherit}
 .hidden{display:none!important}
 .muted{color:var(--text-mute);font-weight:500;font-size:.78em}
 
+/* ---- keyboard accessibility ---- */
+:focus-visible{outline:2.5px solid var(--primary);outline-offset:2px;border-radius:7px}
+:focus:not(:focus-visible){outline:none}
+.skip-link{position:fixed;left:12px;top:-60px;z-index:200;background:var(--primary);color:#fff;
+  padding:10px 16px;border-radius:10px;font-weight:800;font-size:13px;box-shadow:var(--shadow-lg);transition:top .15s}
+.skip-link:focus{top:12px}
+
 /* scrollbars */
 *::-webkit-scrollbar{width:10px;height:10px}
 *::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
@@ -206,7 +213,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 #grid tbody tr:last-child td{border-bottom:none}
 .td-uni{font-weight:700;color:var(--text-soft);white-space:nowrap}
 .td-dept{font-weight:800;letter-spacing:-.01em}
-.td-dept small{display:block;font-weight:600;color:var(--text-mute);font-size:10.5px;margin-top:1px}
+.dept-btn{display:block;text-align:left;font:inherit;font-weight:800;letter-spacing:-.01em;color:inherit;padding:0;cursor:pointer;line-height:1.35}
+.dept-btn:hover{color:var(--primary-ink)}
 .jh-pill{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:var(--surface-2);
   border:1px solid var(--line);color:var(--text-soft);white-space:nowrap}
 .enroll-cell{font-weight:800;white-space:nowrap}

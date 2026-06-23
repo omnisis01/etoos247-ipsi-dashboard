@@ -29,19 +29,20 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<a href="#content" class="skip-link">본문으로 건너뛰기</a>
 <div id="app">
   <!-- Sidebar -->
-  <aside id="sidebar">
+  <aside id="sidebar" aria-label="계열 카테고리 및 필터">
     <div class="brand">
       <h1 class="sr-only">이투스247학원 2027 수시지원 대시보드</h1>
       <img src="logo-dark.svg" alt="이투스247학원" class="brand-logo">
       <p class="brand-sub">2027 수시지원 대시보드<span>2026 vs 2025 비교 · 올해 유불리 예상</span></p>
     </div>
 
-    <div class="side-section">
-      <div class="side-label">계열 카테고리</div>
+    <nav class="side-section" aria-label="계열 카테고리">
+      <div class="side-label" id="catListLabel">계열 카테고리</div>
       <div id="catList" class="cat-list"></div>
-    </div>
+    </nav>
 
     <div class="side-section">
       <div class="side-label">필터</div>
@@ -57,19 +58,20 @@
   <!-- Main -->
   <main id="main">
     <header id="topbar">
-      <button id="menuToggle" class="menu-toggle" aria-label="메뉴">☰</button>
+      <button id="menuToggle" class="menu-toggle" aria-label="사이드바 메뉴 열기" aria-expanded="false">☰</button>
       <div class="search-wrap">
-        <span class="search-ico">🔎</span>
-        <input id="search" type="search" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
+        <span class="search-ico" aria-hidden="true">🔎</span>
+        <input id="search" type="search" aria-label="대학·학과 검색" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
       </div>
       <div class="top-actions">
-        <button id="favBtn" class="ghost-btn fav-btn">🗂️ <span class="btn-label">지원카드</span> <span id="favCount" class="badge">0</span><span class="fav-max">/9</span></button>
-        <button id="compareBtn" class="ghost-btn">⇄ <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
-        <button id="themeBtn" class="icon-btn" title="테마">☀️</button>
+        <button id="favBtn" class="ghost-btn fav-btn" aria-label="지원카드 열기"><span aria-hidden="true">🗂️</span> <span class="btn-label">지원카드</span> <span id="favCount" class="badge">0</span><span class="fav-max">/9</span></button>
+        <button id="compareBtn" class="ghost-btn" aria-label="비교함 열기"><span aria-hidden="true">⇄</span> <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
+        <button id="themeBtn" class="icon-btn" aria-label="다크/라이트 테마 전환">☀️</button>
       </div>
     </header>
 
-    <div id="content">
+    <div id="content" tabindex="-1">
+      <div id="a11yStatus" class="sr-only" role="status" aria-live="polite"></div>
       <div id="catHeader" class="cat-header"></div>
       <section id="kpis" class="kpis"></section>
       <section id="highlights" class="panel hero">
