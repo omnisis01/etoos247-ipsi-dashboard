@@ -478,10 +478,11 @@ function renderTrendChart() {
   const compY = [avg(f.map(r => r.c[2])), avg(f.map(r => r.c[1])), avg(f.map(r => r.c[0]))];
   const W = 320, H = 190, padL = 38, padR = 38, padT = 18, padB = 26;
   const x = i => padL + i / 2 * (W - padL - padR);
-  function series(vals, lo, hi, color, fmtf, below) {
+  function series(vals, lo, hi, color, fmtf, below, flip) {
     const ok = vals.map((v, i) => ({ v, i })).filter(p => p.v != null);
     if (ok.length < 2) return '';
-    const y = v => padT + (1 - (v - lo) / ((hi - lo) || 1)) * (H - padT - padB);
+    // flip=true(입결): 등급 숫자가 작을수록(=입결 우수) 위로. flip=false(경쟁률): 값이 클수록 위로
+    const y = v => { const t = (v - lo) / ((hi - lo) || 1); return padT + (flip ? t : (1 - t)) * (H - padT - padB); };
     const path = ok.map((p, k) => (k ? 'L' : 'M') + x(p.i) + ' ' + y(p.v).toFixed(1)).join(' ');
     const dots = ok.map(p => `<circle cx="${x(p.i)}" cy="${y(p.v).toFixed(1)}" r="3.4" fill="${color}"/>
       <text x="${x(p.i)}" y="${(y(p.v) + (below ? 16 : -8)).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="800" fill="${color}">${fmtf(p.v)}</text>`).join('');
@@ -491,10 +492,10 @@ function renderTrendChart() {
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
   svg += `<line class="axis" x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}"/>`;
   yearsLab.forEach((l, i) => { svg += `<text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle" font-size="10.5" font-weight="700">${l}</text>`; });
-  if (gOk.length) { const lo = Math.min(...gOk) - .3, hi = Math.max(...gOk) + .3; svg += series(gradeY, lo, hi, 'var(--primary)', v => v.toFixed(2), true); }
-  if (cOk.length) { const lo = Math.min(...cOk) * .8, hi = Math.max(...cOk) * 1.15; svg += series(compY, lo, hi, 'var(--new)', v => v.toFixed(1), false); }
+  if (gOk.length) { const lo = Math.min(...gOk) - .3, hi = Math.max(...gOk) + .3; svg += series(gradeY, lo, hi, 'var(--primary)', v => v.toFixed(2), true, true); }
+  if (cOk.length) { const lo = Math.min(...cOk) * .8, hi = Math.max(...cOk) * 1.15; svg += series(compY, lo, hi, 'var(--new)', v => v.toFixed(1), false, false); }
   svg += `</svg>`;
-  svg += `<div class="legend"><span><i style="background:var(--primary)"></i>평균 입결등급</span><span><i style="background:var(--new)"></i>평균 경쟁률</span></div>`;
+  svg += `<div class="legend"><span><i style="background:var(--primary)"></i>평균 입결 (위로 갈수록 우수)</span><span><i style="background:var(--new)"></i>평균 경쟁률</span></div>`;
   $('#chartB').innerHTML = svg;
 }
 
