@@ -36,6 +36,10 @@ const CATS = D.cats;
 const CAT_BY = {}; CATS.forEach(c => CAT_BY[c.key] = c);
 const JHTYPES = ['학생부교과', '학생부종합', '논술', '실기/실적', '특기자'];
 const REGIONS = [...new Set(ROWS.map(r => r.region).filter(Boolean))].sort();
+// '올해 유불리 예상' 추천은 메디컬(전 대학) 또는 상위권 본교(SKY·서성한·중경외시·건동홍)로 한정
+const TOP_UNIS = new Set(['서울대학교', '연세대학교', '고려대학교', '서강대학교', '성균관대학교', '한양대학교',
+  '중앙대학교', '경희대학교', '한국외국어대학교', '서울시립대학교', '건국대학교', '동국대학교', '홍익대학교']);
+const isPickWorthy = r => r.cats.includes('medical') || TOP_UNIS.has(r.uni);
 
 /* ---------- state ---------- */
 const S = {
@@ -369,6 +373,7 @@ function renderHighlights() {
   let pool = FILTERED.filter(r => {
     const v = V(r);
     if (!v.sig.length) return false;
+    if (!isPickWorthy(r)) return false;        // 메디컬·상위권 본교 한정
     if (S.hlFilter === 'good') return v.label === '유리';
     if (S.hlFilter === 'bad') return v.label === '불리';
     if (S.hlFilter === 'new') return r.dkind === 'new';
@@ -392,7 +397,7 @@ function renderHighlights() {
   }
   $('#hlSub').textContent = `· ${pool.length.toLocaleString()}건 중 주요 ${top.length}건`;
   const box = $('#highlightCards');
-  if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건에서 유불리 신호가 감지된 전형이 없습니다.</div>`; return; }
+  if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건의 <b>메디컬·상위권 본교</b>에서 두드러진 유불리 신호가 없습니다.<br><span class="muted">아래 전형 목록에서 전체 대학을 확인하세요.</span></div>`; return; }
   box.innerHTML = top.map(r => {
     const v = V(r), d = deltaInfo(r);
     const tags = [];
