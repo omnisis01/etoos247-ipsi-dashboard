@@ -400,6 +400,8 @@ function renderHighlights() {
   if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건의 <b>메디컬·상위권 본교</b>에서 두드러진 유불리 신호가 없습니다.<br><span class="muted">아래 전형 목록에서 전체 대학을 확인하세요.</span></div>`; return; }
   box.innerHTML = top.map(r => {
     const v = V(r), d = deltaInfo(r);
+    const medSub = ['med_med', 'med_dent', 'med_oriental', 'med_vet', 'med_pharm'].find(k => r.cats.includes(k));
+    const medBadge = medSub ? `<span class="med-badge">🩺 메디컬·${esc(CAT_BY[medSub].label)}</span>` : '';
     const tags = [];
     if (r.dkind === 'new') tags.push('<span class="tag new">신설</span>');
     else if (r.dkind === 'up') tags.push(`<span class="tag up">증원 ${d.txt}</span>`);
@@ -411,8 +413,8 @@ function renderHighlights() {
       const ico = s.dir === 'good' ? '<span class="dot-good">▲</span>' : s.dir === 'bad' ? '<span class="dot-bad">▼</span>' : '<span class="dot-new">✦</span>';
       return `<div class="imp-line">${ico}<span>${esc(s.t)}</span></div>`;
     }).join('');
-    return `<div class="hl-card" data-i="${r._i}" tabindex="0" role="button" aria-label="${esc(r.uni)} ${esc(r.dept)}, 올해 ${v.label} — 상세 보기">
-      <div class="hl-top"><span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
+    return `<div class="hl-card${medSub ? ' is-medical' : ''}" data-i="${r._i}" tabindex="0" role="button" aria-label="${medSub ? '메디컬 ' : ''}${esc(r.uni)} ${esc(r.dept)}, 올해 ${v.label} — 상세 보기">
+      <div class="hl-top">${medBadge}<span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
       <div class="hl-dept">${esc(r.dept)}</div>
       <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
       ${yoyHTML(r)}
