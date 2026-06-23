@@ -845,7 +845,7 @@ $('#resetBtn').onclick = () => {
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
-  const logo = $('.brand-logo'); if (logo) logo.src = t === 'dark' ? 'logo-dark.svg' : 'logo.svg';
+  const logo = $('.brand-logo'); if (logo) logo.src = t === 'dark' ? 'logo-dark.png' : 'logo.png';
   save('theme', t);
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
