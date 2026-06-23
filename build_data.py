@@ -2,7 +2,7 @@
 """Build compact, dictionary-encoded data.js for the 수시 dashboard from the master xlsx."""
 import openpyxl, re, json, os, html
 
-SRC = os.path.join(os.path.dirname(__file__), '..', '2027학년도 수시지원의 모든 것 V6.12.xlsx')
+SRC = os.path.join(os.path.dirname(__file__), '..', '2027학년도 수시지원의 모든 것 V6.23.xlsx')
 OUT_DIR = os.path.dirname(__file__)
 
 # ---------------------------------------------------------------- load
@@ -417,7 +417,7 @@ payload = {
     'meta': {
         'title': '2027학년도 수시지원 대시보드',
         'subtitle': '2026 대비 변화 · 입결 영향 · 3개년 추이',
-        'source': '2027학년도 수시지원의 모든 것 V6.12 (제작: 훈장 김민철)',
+        'source': '2027학년도 수시지원의 모든 것 V6.23 (제작: 훈장 김민철)',
         'years': {'cur': 2027, 'result': [2026, 2025, 2024]},
         'nRows': len(rows), 'nUni': len(order['uni']),
     },
