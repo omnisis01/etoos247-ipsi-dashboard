@@ -193,9 +193,17 @@ function sortFiltered() {
     }
   };
   FILTERED.sort((a, b) => {
+    if (key === 'grade') {            // 입결 정렬은 무데이터를 항상 맨 뒤로
+      const ga = a.g[0], gb = b.g[0];
+      if (ga == null && gb == null) return 0;
+      if (ga == null) return 1;
+      if (gb == null) return -1;
+      if (ga !== gb) return (ga - gb) * dir;
+      return (b.c[0] || 0) - (a.c[0] || 0);   // 동점 시 경쟁률 높은순
+    }
     let x = val(a), y = val(b);
     if (typeof x === 'string') return x.localeCompare(y, 'ko') * dir;
-    if (x === y) { // tiebreak by grade asc
+    if (x === y) {
       const ga = a.g[0] == null ? 999 : a.g[0], gb = b.g[0] == null ? 999 : b.g[0];
       return ga - gb;
     }
@@ -529,12 +537,14 @@ function renderTable() {
   });
   // sort segment quick
   const ss = $('#sortSeg');
+  // 입결 높은순 = 등급 숫자 작은(1.0) 순 = grade 오름차순(dir 1); 낮은순 = grade 내림차순(dir -1)
+  const SORTS = [['유불리순', 'impact', -1], ['입결 높은순', 'grade', 1], ['입결 낮은순', 'grade', -1], ['경쟁률순', 'comp', -1], ['모집인원순', 'enroll', -1]];
+  const isActive = (sk, sd) => S.sort === sk && (sk !== 'grade' || S.sortDir === sd);
   if (!ss.dataset.init) {
     ss.dataset.init = '1';
-    ss.innerHTML = [['impact', '유불리순'], ['grade', '입결 낮은순'], ['comp', '경쟁률순'], ['enroll', '모집인원순']]
-      .map(([k, l]) => `<button data-k="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('');
-    ss.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.sort = b.dataset.k; S.sortDir = b.dataset.k === 'grade' ? 1 : -1; [...ss.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.sort)); sortFiltered(); S.page = 1; renderTable(); };
-  } else { [...ss.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.sort)); }
+    ss.innerHTML = SORTS.map(([l, sk, sd]) => `<button data-sk="${sk}" data-sd="${sd}" class="${isActive(sk, sd) ? 'on' : ''}">${l}</button>`).join('');
+    ss.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.sort = b.dataset.sk; S.sortDir = +b.dataset.sd; [...ss.children].forEach(c => c.classList.toggle('on', isActive(c.dataset.sk, +c.dataset.sd))); sortFiltered(); S.page = 1; renderTable(); };
+  } else { [...ss.children].forEach(c => c.classList.toggle('on', isActive(c.dataset.sk, +c.dataset.sd))); }
 
   const total = FILTERED.length;
   const pages = Math.max(1, Math.ceil(total / S.perPage));

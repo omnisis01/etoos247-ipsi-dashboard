@@ -26,6 +26,10 @@ def num(v):
 def norm(t):
     return re.sub(r'\s+', '', t or '')
 
+def vgrade(v):
+    """입결 등급은 1.0~9.0 범위만 유효. 범위 밖(환산점수 오입력·오타 등)은 무데이터 처리."""
+    return v if (v is not None and 1.0 <= v <= 9.0) else None
+
 # ---------------------------------------------------------------- 전년대비 -> delta int
 def parse_delta(prev):
     p = s(prev)
@@ -325,7 +329,7 @@ for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     enroll = num(r[8]); prev = s(r[9]); change = s(r[10]); choejeo = s(r[11])
     comp = [num(r[18]), num(r[19]), num(r[20])]
-    grade = [num(r[22]), num(r[27]), num(r[31])]
+    grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
