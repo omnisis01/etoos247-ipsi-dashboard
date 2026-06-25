@@ -64,6 +64,7 @@
         <input id="search" type="search" aria-label="대학·학과 검색" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
       </div>
       <div class="top-actions">
+        <button id="insightBtn" class="ghost-btn insight-btn" aria-label="대학별 변화 인사이트 열기"><span aria-hidden="true">📰</span> <span class="btn-label">변화 인사이트</span></button>
         <button id="favBtn" class="ghost-btn fav-btn" aria-label="지원카드 열기"><span aria-hidden="true">🗂️</span> <span class="btn-label">지원카드</span> <span id="favCount" class="badge">0</span><span class="fav-max">/9</span></button>
         <button id="compareBtn" class="ghost-btn" aria-label="비교함 열기"><span aria-hidden="true">⇄</span> <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
         <button id="themeBtn" class="icon-btn" aria-label="다크/라이트 테마 전환">☀️</button>
@@ -126,9 +127,18 @@
   <div id="favDrawer" class="drawer hidden">
     <div class="drawer-inner" id="favInner"></div>
   </div>
+
+  <!-- 변화 인사이트 overlay -->
+  <div id="insightView" class="insight-view hidden">
+    <div class="insight-shell">
+      <aside class="insight-rail" id="insightRail"></aside>
+      <section class="insight-main" id="insightMain"></section>
+    </div>
+  </div>
 </div>
 
 <script src="data.js"></script>
+<script src="insights.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

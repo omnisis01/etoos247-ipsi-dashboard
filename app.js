@@ -853,6 +853,61 @@ function closeFavDrawer() { if ($('#favDrawer').classList.contains('hidden')) re
 $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer(); };
 $('#favBtn').onclick = openFav;
 
+/* ----- 변화 인사이트 (주요 대학 2028 vs 2027) ----- */
+const INS = window.IPSI_INSIGHTS || { meta: {}, order: [], unis: {} };
+let _insUni = (INS.order || []).find(u => INS.unis[u]) || (INS.order || [])[0] || null;
+function openInsight(uni) {
+  if (uni && INS.unis[uni]) _insUni = uni;
+  if (!_insUni || !INS.unis[_insUni]) _insUni = (INS.order || []).find(u => INS.unis[u]);
+  renderInsightRail(); renderInsightDetail(_insUni);
+  const v = $('#insightView'); const wasOpen = !v.classList.contains('hidden');
+  v.classList.remove('hidden');
+  if (!wasOpen) openDialog(v, '대학별 변화 인사이트');
+  track('open_insight', { uni: _insUni });
+}
+function closeInsight() { if ($('#insightView').classList.contains('hidden')) return; $('#insightView').classList.add('hidden'); closeDialog(); }
+function renderInsightRail() {
+  const rail = $('#insightRail');
+  rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>` +
+    (INS.order || []).map(u => {
+      const d = INS.unis[u], active = u === _insUni;
+      return `<button class="ins-rail-item${active ? ' active' : ''}${d ? '' : ' soon'}" data-uni="${esc(u)}"${d ? '' : ' disabled'}>
+        <span class="irl-name">${esc(u)}</span>${d ? (d.tier ? `<span class="ins-tier">${esc(d.tier)}</span>` : '') : '<span class="ins-soon">준비중</span>'}</button>`;
+    }).join('');
+  rail.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => { _insUni = b.dataset.uni; renderInsightRail(); renderInsightDetail(_insUni); track('open_insight', { uni: _insUni }); $('#insightMain').scrollTop = 0; });
+}
+function renderInsightDetail(uni) {
+  const main = $('#insightMain'), d = INS.unis[uni];
+  if (!d) { main.innerHTML = `<div class="ins-head"><div></div><button class="modal-close" id="insClose" aria-label="닫기">✕</button></div><div class="empty-state"><div class="es-ico">📰</div>준비중입니다.</div>`; $('#insClose').onclick = closeInsight; return; }
+  const tags = (d.tags || []).map(t => `<span class="ins-tag">${esc(t)}</span>`).join('');
+  const sections = (d.sections || []).map(s => {
+    let body = '';
+    if (s.rows) body += `<div class="ins-tablewrap"><table class="ins-table"><thead><tr><th>항목</th><th>2027</th><th aria-hidden="true"></th><th>2028</th></tr></thead><tbody>` +
+      s.rows.map(r => `<tr><td class="il">${esc(r.label)}</td><td class="ifrom">${esc(r.from)}</td><td class="ia ${esc(r.dir)}" aria-hidden="true">→</td><td class="it ${esc(r.dir)}"><b>${esc(r.to)}</b>${r.note ? `<span class="inote">${esc(r.note)}</span>` : ''}</td></tr>`).join('') + `</tbody></table></div>`;
+    if (s.bullets) body += `<ul class="ins-bullets">` + s.bullets.map(b => `<li>${esc(b)}</li>`).join('') + `</ul>`;
+    if (s.caption) body += `<p class="ins-caption">${esc(s.caption)}</p>`;
+    return `<div class="ins-section"><h4>${s.icon || ''} ${esc(s.title)}</h4>${body}</div>`;
+  }).join('');
+  const verdict = (d.verdict || []).map(v => `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : '🟠'}</span><span>${esc(v.text)}</span></div>`).join('');
+  const sources = (d.sources || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.label)} ↗</a>`).join(' · ');
+  main.innerHTML = `
+    <div class="ins-head">
+      <div class="ins-head-l"><div class="ins-uni">${esc(uni)}${d.tier ? ` <span class="ins-tier">${esc(d.tier)}</span>` : ''} <span class="muted">${esc(INS.meta.compare || '')}</span></div>
+        <h2>${esc(d.headline)}</h2></div>
+      <button class="modal-close" id="insClose" aria-label="인사이트 닫기">✕</button>
+    </div>
+    <div class="ins-scroll">
+      ${tags ? `<div class="ins-tags">${tags}</div>` : ''}
+      ${d.oneLine ? `<div class="ins-oneline">💡 ${esc(d.oneLine)}</div>` : ''}
+      ${sections}
+      ${verdict ? `<div class="ins-section"><h4>🎯 학생·학부모 관점 해석</h4><div class="ins-verdict">${verdict}</div></div>` : ''}
+      <div class="ins-foot">출처: ${sources || esc(INS.meta.source || '')}<br><span class="muted">${esc(INS.meta.note || '')}</span></div>
+    </div>`;
+  $('#insClose').onclick = closeInsight;
+}
+$('#insightView').onclick = e => { if (e.target.id === 'insightView') closeInsight(); };
+$('#insightBtn').onclick = () => openInsight();
+
 /* ----- topbar / theme / search / mobile ----- */
 let searchT;
 $('#search').oninput = e => { S.search = e.target.value; clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
@@ -867,7 +922,7 @@ function applyTheme(t) {
   save('theme', t);
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeSidebar(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeInsight(); closeSidebar(); } });
 
 const scrim = el('div', 'scrim'); document.body.appendChild(scrim);
 scrim.onclick = closeSidebar;
