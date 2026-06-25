@@ -882,7 +882,7 @@ function renderInsightDetail(uni) {
   const tags = (d.tags || []).map(t => `<span class="ins-tag">${esc(t)}</span>`).join('');
   const sections = (d.sections || []).map(s => {
     let body = '';
-    if (s.rows) body += `<div class="ins-tablewrap"><table class="ins-table"><thead><tr><th>항목</th><th>2027</th><th aria-hidden="true"></th><th>2028</th></tr></thead><tbody>` +
+    if (s.rows) body += `<div class="ins-tablewrap"><table class="ins-table"><thead><tr><th>항목</th><th>${esc(INS.meta.fromYear || '이전')}</th><th aria-hidden="true"></th><th>${esc(INS.meta.toYear || '올해')}</th></tr></thead><tbody>` +
       s.rows.map(r => `<tr><td class="il">${esc(r.label)}</td><td class="ifrom">${esc(r.from)}</td><td class="ia ${esc(r.dir)}" aria-hidden="true">→</td><td class="it ${esc(r.dir)}"><b>${esc(r.to)}</b>${r.note ? `<span class="inote">${esc(r.note)}</span>` : ''}</td></tr>`).join('') + `</tbody></table></div>`;
     if (s.bullets) body += `<ul class="ins-bullets">` + s.bullets.map(b => `<li>${esc(b)}</li>`).join('') + `</ul>`;
     if (s.caption) body += `<p class="ins-caption">${esc(s.caption)}</p>`;
