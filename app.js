@@ -889,7 +889,6 @@ function renderInsightDetail(uni) {
     return `<div class="ins-section"><h4>${s.icon || ''} ${esc(s.title)}</h4>${body}</div>`;
   }).join('');
   const verdict = (d.verdict || []).map(v => `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : '🟠'}</span><span>${esc(v.text)}</span></div>`).join('');
-  const sources = (d.sources || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.label)} ↗</a>`).join(' · ');
   main.innerHTML = `
     <div class="ins-head">
       <div class="ins-head-l"><div class="ins-uni">${esc(uni)}${d.tier ? ` <span class="ins-tier">${esc(d.tier)}</span>` : ''} <span class="muted">${esc(INS.meta.compare || '')}</span></div>
@@ -901,7 +900,7 @@ function renderInsightDetail(uni) {
       ${d.oneLine ? `<div class="ins-oneline">💡 ${esc(d.oneLine)}</div>` : ''}
       ${sections}
       ${verdict ? `<div class="ins-section"><h4>🎯 학생·학부모 관점 해석</h4><div class="ins-verdict">${verdict}</div></div>` : ''}
-      <div class="ins-foot">출처: ${sources || esc(INS.meta.source || '')}<br><span class="muted">${esc(INS.meta.note || '')}</span></div>
+      <div class="ins-foot"><span class="muted">${esc(INS.meta.note || '')}</span></div>
     </div>`;
   $('#insClose').onclick = closeInsight;
 }
