@@ -915,9 +915,7 @@ $('#resetBtn').onclick = () => {
   renderFilters(); renderAll();
 };
 function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
-  const logo = $('.brand-logo'); if (logo) logo.src = t === 'dark' ? 'logo-dark.png' : 'logo.png';
+  document.documentElement.dataset.theme = t;   // 아이콘·로고는 CSS가 data-theme로 전환
   save('theme', t);
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
