@@ -305,8 +305,23 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 
 /* ===================== 유불리 / YoY ===================== */
 .panel.hero{background:linear-gradient(180deg,var(--primary-soft),var(--surface) 60%);border-color:var(--line-strong)}
-.hero-desc{font-size:12px;color:var(--text-soft);margin:-8px 0 14px;line-height:1.6}
+.hero-desc{font-size:12px;color:var(--text-soft);margin:-8px 0 12px;line-height:1.6}
 .hero-desc b{color:var(--primary-ink)}
+.verdict-legend{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:16px}
+.verdict-legend summary{font-size:13px;font-weight:800;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
+.verdict-legend summary::-webkit-details-marker{display:none}
+.verdict-legend summary::after{content:"▾";margin-left:auto;color:var(--text-mute);font-size:11px;transition:transform .15s}
+.verdict-legend:not([open]) summary::after{transform:rotate(-90deg)}
+.verdict-legend summary:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:6px}
+.vl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin:11px 0 8px}
+.vl-item{border:1px solid var(--line);border-left-width:4px;border-radius:9px;padding:9px 11px;font-size:12px;line-height:1.5;background:var(--surface-2)}
+.vl-item b{display:block;font-size:12px;font-weight:800;margin-bottom:3px}
+.vl-item span{color:var(--text-soft);font-weight:600}
+.vl-item.good{border-left-color:var(--good)} .vl-item.good b{color:var(--good)}
+.vl-item.bad{border-left-color:var(--bad)} .vl-item.bad b{color:var(--bad)}
+.vl-item.warn{border-left-color:var(--new)} .vl-item.warn b{color:var(--new)}
+.vl-note{font-size:11px;color:var(--text-mute);line-height:1.6;margin-top:4px}
+.vl-note b{color:var(--text-soft)}
 .yoy-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
 .yoy-row.big{gap:8px}
 .yoy{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:800;padding:3px 8px;border-radius:7px;
