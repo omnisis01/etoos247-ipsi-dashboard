@@ -39,7 +39,7 @@ const REGIONS = [...new Set(ROWS.map(r => r.region).filter(Boolean))].sort();
 // '올해 유불리 예상' 추천은 메디컬(전 대학) 또는 상위권 본교(SKY·서성한·중경외시·건동홍)로 한정
 const TOP_UNIS = new Set(['서울대학교', '연세대학교', '고려대학교', '서강대학교', '성균관대학교', '한양대학교',
   '중앙대학교', '경희대학교', '한국외국어대학교', '서울시립대학교', '건국대학교', '동국대학교', '홍익대학교']);
-const isPickWorthy = r => r.cats.includes('medical') || TOP_UNIS.has(r.uni);
+const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semiconductor_contract') || TOP_UNIS.has(r.uni);
 
 /* ---------- state ---------- */
 const S = {
@@ -410,6 +410,7 @@ function renderHighlights() {
     const v = V(r), d = deltaInfo(r);
     const medSub = ['med_med', 'med_dent', 'med_oriental', 'med_vet', 'med_pharm'].find(k => r.cats.includes(k));
     const medBadge = medSub ? `<span class="med-badge">🩺 메디컬·${esc(CAT_BY[medSub].label)}</span>` : '';
+    const semiBadge = r.cats.includes('semiconductor_contract') ? `<span class="semi-badge" title="산학협력법 근거 정원 외 채용조건형 계약학과">🔗 정원 외·채용조건형</span>` : '';
     const tags = [];
     if (r.dkind === 'new') tags.push('<span class="tag new">신설</span>');
     else if (r.dkind === 'up') tags.push(`<span class="tag up">증원 ${d.txt}</span>`);
@@ -422,7 +423,7 @@ function renderHighlights() {
       return `<div class="imp-line">${ico}<span>${esc(s.t)}</span></div>`;
     }).join('');
     return `<div class="hl-card${medSub ? ' is-medical' : ''}" data-i="${r._i}" tabindex="0" role="button" aria-label="${medSub ? '메디컬 ' : ''}${esc(r.uni)} ${esc(r.dept)}, 올해 ${v.label} — 상세 보기">
-      <div class="hl-top">${medBadge}<span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
+      <div class="hl-top">${medBadge}${semiBadge}<span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
       <div class="hl-dept">${esc(r.dept)}</div>
       <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
       ${yoyHTML(r)}
@@ -565,7 +566,7 @@ function renderTable() {
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
-      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(r.dept)} 상세 보기">${esc(r.dept)}</button></td>
+      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(r.dept)} 상세 보기">${esc(r.dept)}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
       <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div></td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>

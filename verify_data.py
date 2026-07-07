@@ -23,6 +23,18 @@ def load(path):
 def col(sch, name):
     return sch.index(name)
 
+# 정원 외 채용조건형 반도체 계약학과 마스터 리스트 — 원본 엑셀 표기 누락과 무관하게 강제.
+# 여기 등재된 학과는 반드시 semiconductor_contract 카테고리에 잡혀야 한다.
+SEMI_CONTRACT_MASTER = [
+    ('고려대학교', '반도체공학과'),
+    ('연세대학교', '시스템반도체공학과'),
+    ('성균관대학교', '반도체시스템공학과'),
+    ('서강대학교', '시스템반도체공학과'),
+    ('한양대학교', '반도체공학과'),
+    ('KAIST', '반도체공학과'),
+    ('UNIST', '반도체공학과'),
+]
+
 def verify(d):
     fails = []
     sch = d['schema']; rows = d['rows']
@@ -58,6 +70,20 @@ def verify(d):
     # 5) 출처 라벨 존재
     if not d['meta'].get('source'):
         fails.append("meta.source 비어 있음")
+
+    # 6) 학과명에 '(외)' 잔존 금지 — 정원 외 채용조건형은 카테고리·배지로 노출한다.
+    idp = col(sch, 'dept')
+    stale = sorted({d['dicts']['dept'][r[idp]] for r in rows if '(외)' in d['dicts']['dept'][r[idp]]})
+    if stale:
+        fails.append(f"학과명에 '(외)' 잔존 {len(stale)}종: {stale} — build_data.py 정규화 확인")
+
+    # 7) SEMI_CONTRACT_MASTER의 학과는 반드시 semiconductor_contract 카테고리에 잡혀야 함.
+    iu = col(sch, 'uni'); ic = col(sch, 'cats')
+    matched = {(d['dicts']['uni'][r[iu]], d['dicts']['dept'][r[idp]])
+               for r in rows if 'semiconductor_contract' in r[ic]}
+    missing = [(u, dp) for u, dp in SEMI_CONTRACT_MASTER if (u, dp) not in matched]
+    if missing:
+        fails.append(f"정원 외 채용조건형 매칭 누락 {len(missing)}건: {missing} — SEMI_CONTRACT_WHITELIST 확인")
 
     return fails, {
         'rows': len(rows), 'uni': len(d['dicts']['uni']),

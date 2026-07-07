@@ -90,11 +90,20 @@ def parse_choejeo_change(change_text):
 
 # ---------------------------------------------------------------- categorization
 # Hardened against substring false-matches per category audit (17 reviewers).
-SEMI_CONTRACT_WHITELIST = [  # famous 채용조건형 계약학과 (uni-substring, exact dept)
-    ('고려대학교', '반도체공학과'), ('서강대학교', '시스템반도체공학과(외)'),
-    ('성균관대학교', '반도체시스템공학과'), ('연세대학교', '시스템반도체공학과'),
-    ('한양대학교', '반도체공학과(외)'), ('한국과학기술원', '반도체시스템공학과'),
-    ('KAIST', '반도체시스템공학과'), ('포항공과대학교', '반도체공학과'), ('POSTECH', '반도체공학과'),
+# 정원 외 채용조건형 반도체 계약학과 (산학협력법 근거) — (uni-substring, exact dept)
+# ※ 학과명은 '(외)' 표기 제거 후 정규화된 이름 기준.
+SEMI_CONTRACT_WHITELIST = [
+    ('고려대학교', '반도체공학과'),
+    ('연세대학교', '시스템반도체공학과'),
+    ('성균관대학교', '반도체시스템공학과'),
+    ('서강대학교', '시스템반도체공학과'),
+    ('한양대학교', '반도체공학과'),
+    ('KAIST', '반도체공학과'),
+    ('한국과학기술원', '반도체공학과'),
+    ('UNIST', '반도체공학과'),
+    ('울산과학기술원', '반도체공학과'),
+    ('POSTECH', '반도체공학과(계약학과)'),
+    ('포항공과대학교', '반도체공학과(계약학과)'),
 ]
 
 def categorize(uni, gye, dept, jhname, jagyeok):
@@ -327,6 +336,8 @@ cat_counter = {}
 audit = {}
 for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
+    # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
+    dept = dept.replace('(외)', '').strip()
     enroll = num(r[8]); prev = s(r[9]); change = s(r[10]); choejeo = s(r[11])
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
