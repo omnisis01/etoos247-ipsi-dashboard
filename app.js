@@ -877,6 +877,28 @@ function renderInsightRail() {
     }).join('');
   rail.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => { _insUni = b.dataset.uni; renderInsightRail(); renderInsightDetail(_insUni); track('open_insight', { uni: _insUni }); $('#insightMain').scrollTop = 0; });
 }
+// 서술체 문장을 두괄식(결론) + 개조식(글머리표)으로 분해
+function bulletize(text) {
+  const t = (text || '').trim();
+  if (!t) return { head: '', bullets: [] };
+  const m = t.match(/^([\s\S]+?)\s[—–-]\s([\s\S]+)$/);
+  const head = m ? m[1].trim() : t;
+  const rest = m ? m[2].trim() : '';
+  const bullets = rest
+    ? rest.split(/(?<=[.!?])\s+(?=[가-힣A-Za-z①-⑳])/)
+        .map(s => s.trim().replace(/[.]$/, ''))
+        .filter(Boolean)
+    : [];
+  return { head, bullets };
+}
+
+// verdict 문구를 '대상: 결론' 형태면 앞을 강조하도록 분해
+function splitVerdict(text) {
+  const t = (text || '').trim();
+  const m = t.match(/^([^:：]{2,32})[:：]\s*(.+)$/);
+  return m ? { subj: m[1].trim(), body: m[2].trim() } : { subj: '', body: t };
+}
+
 function renderInsightDetail(uni) {
   const main = $('#insightMain'), d = INS.unis[uni];
   if (!d) { main.innerHTML = `<div class="ins-head"><div></div><button class="modal-close" id="insClose" aria-label="닫기">✕</button></div><div class="empty-state"><div class="es-ico">📰</div>준비중입니다.</div>`; $('#insClose').onclick = closeInsight; return; }
@@ -889,7 +911,13 @@ function renderInsightDetail(uni) {
     if (s.caption) body += `<p class="ins-caption">${esc(s.caption)}</p>`;
     return `<div class="ins-section"><h4>${s.icon || ''} ${esc(s.title)}</h4>${body}</div>`;
   }).join('');
-  const verdict = (d.verdict || []).map(v => `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : '🟠'}</span><span>${esc(v.text)}</span></div>`).join('');
+  const verdict = (d.verdict || []).map(v => {
+    const sv = splitVerdict(v.text);
+    const body = sv.subj ? `<b>${esc(sv.subj)}</b> — ${esc(sv.body)}` : esc(sv.body);
+    return `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : '🟠'}</span><span>${body}</span></div>`;
+  }).join('');
+  const ol = bulletize(d.oneLine);
+  const oneLineHtml = ol.head ? `<div class="ins-oneline"><div class="ins-oneline-head">💡 ${esc(ol.head)}</div>${ol.bullets.length ? `<ul class="ins-oneline-bullets">${ol.bullets.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}</div>` : '';
   main.innerHTML = `
     <div class="ins-head">
       <div class="ins-head-l"><div class="ins-uni">${esc(uni)}${d.tier ? ` <span class="ins-tier">${esc(d.tier)}</span>` : ''} <span class="muted">${esc(INS.meta.compare || '')}</span></div>
@@ -898,7 +926,7 @@ function renderInsightDetail(uni) {
     </div>
     <div class="ins-scroll">
       ${tags ? `<div class="ins-tags">${tags}</div>` : ''}
-      ${d.oneLine ? `<div class="ins-oneline">💡 ${esc(d.oneLine)}</div>` : ''}
+      ${oneLineHtml}
       ${sections}
       ${verdict ? `<div class="ins-section"><h4>🎯 학생·학부모 관점 해석</h4><div class="ins-verdict">${verdict}</div></div>` : ''}
       <div class="ins-foot"><span class="muted">${esc(INS.meta.note || '')}</span></div>
