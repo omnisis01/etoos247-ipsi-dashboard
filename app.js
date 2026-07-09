@@ -19,6 +19,7 @@ const ROWS = D.rows.map((r, i) => ({
   method: dc.method[r[28]] || '', note: dc.note[r[29]] || '', date: dc.date[r[30]] || '',
   gradeRatio: dc.gradeRatio[r[31]] || '', subjects: dc.subjects[r[32]] || '', careerSubj: dc.careerSubj[r[33]] || '',
   cats: r[34] || [], score: r[35] || 0, reasons: r[36] || [], gtrend: r[37] || 'na', ctrend: r[38] || 'na',
+  std26: dc.std ? (dc.std[r[39]] || '') : '', stdK26: r[40] || '',
 }));
 
 const CAT_ICON = {
@@ -45,6 +46,7 @@ const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semicon
 const S = {
   cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '',
   changes: new Set(), gradeMax: 9.0, sort: 'impact', sortDir: -1,
+  stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut70' | 'cut90', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
   page: 1, perPage: 60, hlFilter: 'all', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
@@ -170,6 +172,11 @@ function applyFilters() {
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
     if (!passChange(r)) return false;
     if (S.gradeMax < 9 && !(r.g[0] != null && r.g[0] <= S.gradeMax)) return false;
+    // 입결 컷 필터 — 라디오(기준) + 슬라이더(등급 이내)
+    if (S.stdCut) {
+      if (r.stdK26 !== S.stdCut) return false;
+      if (S.cutGrade < 9 && !(r.g[0] != null && r.g[0] <= S.cutGrade)) return false;
+    }
     if (q) {
       const hay = (r.uni + ' ' + r.dept + ' ' + r.jhname + ' ' + r.region + ' ' + r.jhtype).toLowerCase();
       if (!hay.includes(q)) return false;
@@ -214,8 +221,46 @@ function sortFiltered() {
 /* ============================================================
    RENDER
    ============================================================ */
-function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderHighlights(); renderCharts(); renderTable(); }
-function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderHighlights(); renderCharts(); renderTable(); }
+function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+
+const CUT_LABELS = { avg: '평균', cut70: '70% 컷', cut90: '90% 컷' };
+function renderCutFilter() {
+  const box = document.querySelector('#cutFilter');
+  if (!box) return;
+  const active = S.stdCut;
+  const g = S.cutGrade;
+  const gLabel = g >= 9 ? '전체' : `${g.toFixed(1)} 이내`;
+  // 현재 필터로 몇 건 통과했는지
+  const matched = active ? FILTERED.length : 0;
+  const hint = active
+    ? `<span class="cf-count">${matched.toLocaleString()}건 매치</span>`
+    : `<span class="cf-hint muted">기준을 선택하면 내 성적으로 컷 이내 전형만 봅니다</span>`;
+  box.innerHTML = `
+    <div class="cf-head">
+      <span class="cf-title">🎯 <b>입결 컷 등급</b>으로 좁혀보기</span>
+      ${hint}
+    </div>
+    <div class="cf-row">
+      <div class="cf-radios" role="radiogroup" aria-label="입결 컷 기준">
+        ${['avg', 'cut70', 'cut90'].map(k => `<label class="cf-radio${active === k ? ' on' : ''}"><input type="radio" name="stdCut" value="${k}"${active === k ? ' checked' : ''}> ${CUT_LABELS[k]}</label>`).join('')}
+        <button class="cf-clear${active ? '' : ' hidden'}" type="button" aria-label="컷 필터 해제">해제</button>
+      </div>
+      <div class="cf-slider ${active ? '' : 'is-disabled'}">
+        <label for="cutGrade">등급 <b>${gLabel}</b></label>
+        <input id="cutGrade" type="range" min="1.0" max="9.0" step="0.1" value="${g}" ${active ? '' : 'disabled'}>
+      </div>
+    </div>`;
+  box.querySelectorAll('input[name="stdCut"]').forEach(el => el.onchange = () => {
+    S.stdCut = el.value;
+    if (S.cutGrade >= 9) S.cutGrade = 3.0;   // 기준 선택 시 합리적 기본값
+    renderSoft(); track('cut_filter', { std: S.stdCut, grade: S.cutGrade });
+  });
+  const clear = box.querySelector('.cf-clear');
+  if (clear) clear.onclick = () => { S.stdCut = ''; S.cutGrade = 9.0; renderSoft(); };
+  const slider = box.querySelector('#cutGrade');
+  if (slider) slider.oninput = () => { S.cutGrade = parseFloat(slider.value); renderSoft(); };
+}
 
 /* ----- category list ----- */
 function renderCatList() {
@@ -570,7 +615,7 @@ function renderTable() {
       <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div></td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>
-      <td><div class="cell-top"><span class="grade-val">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
+      <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
       <td><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
       <td><span class="impact-chip ${v.cls}">${v.label}</span></td>
       <td><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>

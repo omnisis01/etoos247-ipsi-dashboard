@@ -30,6 +30,23 @@ def vgrade(v):
     """입결 등급은 1.0~9.0 범위만 유효. 범위 밖(환산점수 오입력·오타 등)은 무데이터 처리."""
     return v if (v is not None and 1.0 <= v <= 9.0) else None
 
+def std_kind(k):
+    """대학이 발표한 입결 컷 기준을 3버킷으로 정규화: avg / cut70 / cut90 / 기타.
+       70%컷·75%·80%·85%가 대다수 대학의 관행이므로 cut70에 합류, 90%컷만 별도 유지."""
+    z = norm(k)
+    if not z: return ''
+    if '평균' in z or '퍙균' in z or '동륵' in z or '차평균' in z: return 'avg'
+    import re as _re
+    m = _re.search(r'(\d+)%?컷', z) or _re.search(r'(\d+)%?', z)
+    if m:
+        pct = int(m.group(1))
+        if pct >= 88: return 'cut90'
+        if pct <= 78: return 'cut70'
+        return 'cut70'  # 75·80·85%는 실무상 70%컷 쪽에 편입
+    if '최저' in z: return 'cut90'
+    if '컷' in z: return 'cut70'
+    return ''
+
 # ---------------------------------------------------------------- 전년대비 -> delta int
 def parse_delta(prev):
     p = s(prev)
@@ -345,6 +362,7 @@ for r in raw:
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
     gr = s(r[15]); subj = s(r[16]); career = s(r[17])
+    std26 = s(r[21]); stdK = std_kind(std26)
 
     delta_kind, delta_n = parse_delta(prev)
     ch_kind, ch_detail = parse_choejeo_change(change)
@@ -371,12 +389,13 @@ for r in raw:
         intern('method', method), intern('note', note), intern('date', date),
         intern('gradeRatio', gr), intern('subjects', subj), intern('careerSubj', career),
         tags, score, [rs for rs in reasons], gtrend, ctrend,
+        intern('std', std26), stdK,
     ])
 
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',
           'chung26','chung25','chung24','method','note','date','gradeRatio','subjects','careerSubj',
-          'cats','score','reasons','gtrend','ctrend']
+          'cats','score','reasons','gtrend','ctrend','std26','stdK26']
 
 # (key, label, desc, color, sub, parent)
 CATS = [

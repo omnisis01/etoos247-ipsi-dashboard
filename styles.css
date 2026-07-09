@@ -488,3 +488,24 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 }
 .scrim{position:fixed;inset:0;background:rgba(10,15,30,.4);z-index:35;display:none}
 .scrim.show{display:block}
+
+/* 입결 컷 등급 필터 */
+.cut-filter{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:16px}
+.cf-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.cf-title{font-size:13.5px;color:var(--text-soft)}
+.cf-title b{color:var(--text);font-weight:800}
+.cf-count{margin-left:auto;font-size:12px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--primary-soft);color:var(--primary-ink)}
+.cf-hint{margin-left:auto;font-size:12px}
+.cf-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.cf-radios{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cf-radio{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-soft);cursor:pointer;user-select:none}
+.cf-radio input{margin:0;accent-color:var(--primary)}
+.cf-radio.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.cf-radio.on input{filter:brightness(1.8)}
+.cf-clear{font-size:12px;font-weight:700;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--text-soft);cursor:pointer}
+.cf-clear.hidden{display:none}
+.cf-slider{display:flex;align-items:center;gap:10px;flex:1;min-width:220px}
+.cf-slider label{font-size:13px;color:var(--text-soft);white-space:nowrap}
+.cf-slider label b{color:var(--text);font-weight:800}
+.cf-slider input[type=range]{flex:1;accent-color:var(--primary)}
+.cf-slider.is-disabled{opacity:.5}

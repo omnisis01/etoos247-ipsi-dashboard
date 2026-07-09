@@ -71,6 +71,17 @@ def verify(d):
     if not d['meta'].get('source'):
         fails.append("meta.source 비어 있음")
 
+    # 5.5) 입결 컷 필터용 필드 존재 및 stdK26 값 유효성
+    for f in ('std26', 'stdK26'):
+        if f not in sch:
+            fails.append(f"schema에 '{f}' 없음 — build_data.py 확인")
+    if 'stdK26' in sch:
+        iK = col(sch, 'stdK26')
+        allowed = {'', 'avg', 'cut70', 'cut90'}
+        bad_k = sum(1 for r in rows if r[iK] not in allowed)
+        if bad_k:
+            fails.append(f"stdK26에 정의되지 않은 값 {bad_k}건 — std_kind() 확인")
+
     # 6) 학과명에 '(외)' 잔존 금지 — 정원 외 채용조건형은 카테고리·배지로 노출한다.
     idp = col(sch, 'dept')
     stale = sorted({d['dicts']['dept'][r[idp]] for r in rows if '(외)' in d['dicts']['dept'][r[idp]]})
