@@ -4,6 +4,17 @@
 
 ---
 
+## 2026-07-09 — 인사이트 32교 → 40교 (거점국립대 8교)
+- 대상: 경북·강원·전북·부산·경상국립·충남·충북·제주. `insights.js` order 32→40, unis 40.
+- **방식 전환**: checklist 원안은 넥스트플레이 '2027 VS 2026' 시리즈 파싱이었으나, 시리즈 34개 기사 전수 확인 결과 **수도권 대학만 발행되고 거점국립대 8교 기사는 없음**. 그래서 근거를 바꿈.
+  - 원본 엑셀 V6.29에서 8교의 전형별(전형유형/전형명) 2027 모집인원·전년대비(▲▼·신설) 분포·변경사항 원문·최저 유무를 집계 → `scratchpad/knu8_agg.json`.
+  - 강원대는 5개 캠퍼스(춘천·삼척·원주·강릉·도계) 합산(키에 `[캠퍼스]` 병기), 엑셀의 '경상대학교'는 공식명 '경상국립대학교'로 정규화.
+  - general-purpose Agent 2세트(각 4교)에 집계를 근거로 주고 웹(베리타스알파 등 2027 시행계획 보도)으로 서사 보강 → JSON. 숫자 날조 금지·oneLine 대시 구조·verdict 콜론 구조를 프롬프트에 명시.
+- **재사용 스킬 신설**: `build_ins.py`(order 확장+unis 주입, 이미 존재 대학은 SKIP), `scratchpad/check_ins_json.py`(스키마·대시·콜론·dir·(외)·2028 검증). 다음 확장도 이 파이프라인 재사용.
+- 검증: `check_ins_json.py` 통과 → `build_ins.py` 주입 → `verify_data.py` 통과 → 미리보기에서 부산대 상세 실제 CSS 렌더 스크린샷 확인(두괄식·표·판정 정상). 8교 전부 order 포함·oneLine head·verdict 굵게 확인.
+- **미리보기 캐시 함정**: python http.server가 `Cache-Control` 미전송 → 프리뷰 브라우저가 insights.js를 휴리스틱 디스크 캐시. 리로드·포트변경·nocache 쿼리로도 스크립트 태그 캐시가 안 깨짐. 검증은 `fetch('insights.js?bust='+Date.now())` 후 재주입 + app.js 렌더러 헬퍼(bulletize/splitVerdict) 복제로 우회. 실제 배포(GitHub Pages/Firebase)는 정상 캐시 헤더라 문제 없음.
+- 백로그: 넥스트플레이에 아주대(8820)·숙명여대(8815) 기사 존재하나 40교에 미반영 → checklist 백로그로 이관.
+
 ## 2026-07-09 — 세션 핸드오프 아티팩트 구축
 - 하네스 엔지니어링(Osmani·O'Reilly 2026 표준)의 handoff 파일 패턴 적용. 채팅 요약이 아니라 파일 시스템이 진리.
 - 파일: `dashboard/CLAUDE.md`(조종사 체크리스트) + `checklist.md`(태스크 큐) + `context-notes.md`(이 파일).
