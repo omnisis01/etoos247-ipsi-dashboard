@@ -71,6 +71,13 @@ def verify(d):
     if not d['meta'].get('source'):
         fails.append("meta.source 비어 있음")
 
+    # 5.4) 필수 SCHEMA 필드가 전부 있어야 한다 — 앱 렌더/필터가 의존.
+    required_fields = ['uni', 'dept', 'jhtype', 'jhname', 'enroll', 'g26', 'g25', 'g24',
+                       'c26', 'c25', 'c24', 'cats', 'std26', 'stdK26']
+    for f in required_fields:
+        if f not in sch:
+            fails.append(f"필수 SCHEMA 필드 누락: '{f}' — build_data.py SCHEMA 확인")
+
     # 5.5) 입결 컷 필터용 필드 존재 및 stdK26 값 유효성
     for f in ('std26', 'stdK26'):
         if f not in sch:
