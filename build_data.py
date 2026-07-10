@@ -350,13 +350,29 @@ def intern(key, val):
     return dd[val]
 
 rows = []
+# 알려진 원천(마스터 xlsx) 수능최저 오기 교정 — 외부 소스(2027 요강·토마스·입시위키)로 확인된 것만.
+# 마스터 파일을 직접 수정하지 않고 빌드 시 패치한다. (uni, dept, [jhname], old 원문) → new 원문.
+LEAST_CORRECTIONS = [
+    # 세명대 한의예: '합5'에 합산 영역수(3) 누락 → 3합5 (입시위키·토마스 확인). SMU의료인재·농어촌·기초차상위 3행 공통 문자열.
+    {'uni': '세명대학교', 'dept': '한의예과', 'old': '국,수(기미),영 합5', 'new': '국,수(기미),영 3합5'},
+    # 계명대 혁신신약 면접전형: 2합12 → 2합10 (2027 요강 원문 + 토마스 확인). 교과 일반/지역은 2합9로 정상.
+    {'uni': '계명대학교', 'dept': '혁신신약학과', 'jhname': '면접전형', 'old': '국,수,영,탐(1) 2합12', 'new': '국,수,영,탐(1) 2합10'},
+]
+_least_fixed = [0]
+def apply_least_correction(uni, dept, jhname, choejeo):
+    for c in LEAST_CORRECTIONS:
+        if c['uni'] == uni and c['dept'] == dept and c.get('jhname', jhname) == jhname and choejeo == c['old']:
+            _least_fixed[0] += 1
+            return c['new']
+    return choejeo
+
 cat_counter = {}
 audit = {}
 for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
-    enroll = num(r[8]); prev = s(r[9]); change = s(r[10]); choejeo = s(r[11])
+    enroll = num(r[8]); prev = s(r[9]); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
@@ -473,6 +489,7 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
+print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 4: 세명대 3 + 계명대 1)')
 print('category counts:')
 for k, l, d, c, sub, par in CATS:
     print(f'  {cat_counter.get(k,0):6d}  {("  └ " if sub else "")}{k:24s} {l}')
