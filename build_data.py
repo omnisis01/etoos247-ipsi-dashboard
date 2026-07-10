@@ -2,7 +2,8 @@
 """Build compact, dictionary-encoded data.js for the 수시 dashboard from the master xlsx."""
 import openpyxl, re, json, os, html
 
-SRC = os.path.join(os.path.dirname(__file__), '..', '입결', 'TongTongTong_2027학년도 수시지원의 모든 것 V6.29_부산 약학 최저  등수정.xlsx')
+# 원천 폴더가 '입결' → '입결 및 인사이트'로 개명됨(원천 xlsx 이동). 개명 시 이 경로도 갱신.
+SRC = os.path.join(os.path.dirname(__file__), '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V6.29_부산 약학 최저  등수정.xlsx')
 OUT_DIR = os.path.dirname(__file__)
 
 # ---------------------------------------------------------------- load
