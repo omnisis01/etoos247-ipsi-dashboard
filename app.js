@@ -22,6 +22,20 @@ const ROWS = D.rows.map((r, i) => ({
   std26: dc.std ? (dc.std[r[39]] || '') : '', stdK26: r[40] || '',
 }));
 
+// 수능최저 원문 → (합산 영역 수 N, 등급 합 X). "N합X" 유형만(전체 최저의 91%), "M개Y"·기타는 null.
+function parseLeast(t) {
+  if (!t) return { n: null, sum: null };
+  const m = t.replace(/\s/g, '').match(/(\d)합(\d{1,2})/);
+  return m ? { n: +m[1], sum: +m[2] } : { n: null, sum: null };
+}
+ROWS.forEach(r => { const p = parseLeast(r.choejeo); r.leastN = p.n; r.leastSum = p.sum; });
+// N개 합별 슬라이더 범위(데이터 실측 min~max)
+const LEAST_BOUNDS = {};
+[2, 3, 4].forEach(n => {
+  const sums = ROWS.filter(r => r.leastN === n).map(r => r.leastSum);
+  LEAST_BOUNDS[n] = sums.length ? { min: Math.min(...sums), max: Math.max(...sums), count: sums.length } : { min: n, max: n * 6, count: 0 };
+});
+
 const CAT_ICON = {
   all: '🎓', medical: '⚕️', med_med: '🩺', med_dent: '🦷', med_oriental: '🪡', med_vet: '🐾', med_pharm: '💊',
   nursing_health: '🏥', engineering: '⚙️',
@@ -45,7 +59,9 @@ const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semicon
 /* ---------- state ---------- */
 const S = {
   cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '',
-  changes: new Set(), gradeMax: 9.0, sort: 'impact', sortDir: -1,
+  changes: new Set(), sort: 'impact', sortDir: -1,
+  leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
+
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut70' | 'cut90', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
   page: 1, perPage: 60, hlFilter: 'all', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
@@ -171,7 +187,11 @@ function applyFilters() {
     if (S.minLeast === 'yes' && !r.hasChoejeo) return false;
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
     if (!passChange(r)) return false;
-    if (S.gradeMax < 9 && !(r.g[0] != null && r.g[0] <= S.gradeMax)) return false;
+    // 수능최저 검색 — 내 상위 N개 합(S.leastSum)으로 충족 가능한 전형(요구 합 ≥ 내 합)만
+    if (S.leastN) {
+      const n = +S.leastN;
+      if (!(r.leastN === n && r.leastSum != null && r.leastSum >= S.leastSum)) return false;
+    }
     // 입결 컷 필터 — 라디오(기준) + 슬라이더(등급 이내)
     if (S.stdCut) {
       if (r.stdK26 !== S.stdCut) return false;
@@ -346,13 +366,37 @@ function renderFilters() {
   sel.onchange = () => { S.region = sel.value; renderSoft(); };
   g4.appendChild(sel); box.appendChild(g4);
 
-  // 입결 상한
-  const g5 = el('div', 'f-group');
-  g5.innerHTML = `<div class="f-title">입결 등급 상한 <span class="range-val" id="gradeVal">${S.gradeMax >= 9 ? '전체' : '≤ ' + S.gradeMax.toFixed(1)}</span></div>`;
-  const rng = el('input'); rng.type = 'range'; rng.min = '1'; rng.max = '9'; rng.step = '0.5'; rng.value = S.gradeMax;
-  rng.oninput = () => { S.gradeMax = parseFloat(rng.value); $('#gradeVal').textContent = S.gradeMax >= 9 ? '전체' : '≤ ' + S.gradeMax.toFixed(1); };
-  rng.onchange = () => renderSoft();
-  g5.appendChild(rng); box.appendChild(g5);
+  // 수능최저 검색 (N개 합 + 내 등급 합 슬라이더) — 기존 '입결 등급 상한'을 대체
+  const g5 = el('div', 'f-group least-filter');
+  const n = S.leastN, b = n ? LEAST_BOUNDS[n] : null;
+  g5.innerHTML = `
+    <div class="f-title">🎯 수능최저 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건 충족</span>` : ''}</div>
+    <div class="lf-hint muted">${n ? `내 상위 ${n}개 영역 등급 합으로 충족 가능한 전형` : '합산 영역 수를 고르면 내 등급 합으로 충족 가능한 전형만 봅니다'}</div>
+    <div class="lf-radios" role="radiogroup" aria-label="합산 영역 수">
+      ${[2, 3, 4].map(k => `<label class="lf-radio${n === String(k) ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === String(k) ? ' checked' : ''}> ${k}개 합</label>`).join('')}
+      <button class="lf-clear${n ? '' : ' hidden'}" type="button" aria-label="최저 검색 해제">해제</button>
+    </div>
+    <div class="lf-slider ${n ? '' : 'is-disabled'}">
+      <label for="leastSum">내 ${n || 'N'}개 합 <b>${n ? S.leastSum : '—'}</b></label>
+      <input id="leastSum" type="range" min="${b ? b.min : 2}" max="${b ? b.max : 18}" step="1" value="${n ? S.leastSum : 0}" ${n ? '' : 'disabled'}>
+      ${n ? `<div class="lf-scale"><span>${b.min} 빡셈</span><span>느슨 ${b.max}</span></div>` : ''}
+    </div>`;
+  box.appendChild(g5);
+  g5.querySelectorAll('input[name="leastN"]').forEach(eln => eln.onchange = () => {
+    S.leastN = eln.value;
+    const bb = LEAST_BOUNDS[+eln.value];
+    S.leastSum = Math.max(bb.min, Math.min(bb.max, Math.round(+eln.value * 2.3)));  // 기본값 ≈ 평균 2.3등급
+    renderSoft(); renderFilters(); track('least_filter', { n: S.leastN, sum: S.leastSum });
+  });
+  const lc = g5.querySelector('.lf-clear');
+  if (lc) lc.onclick = () => { S.leastN = ''; S.leastSum = null; renderSoft(); renderFilters(); };
+  const ls = g5.querySelector('#leastSum');
+  if (ls) ls.oninput = () => {
+    S.leastSum = parseInt(ls.value);
+    renderSoft();
+    g5.querySelector('.lf-slider b').textContent = S.leastSum;
+    const rv = g5.querySelector('.range-val'); if (rv) rv.textContent = FILTERED.length.toLocaleString() + '건 충족';
+  };
 }
 
 /* ----- category header ----- */
@@ -1010,7 +1054,7 @@ $('#insightBtn').onclick = () => openInsight();
 let searchT;
 $('#search').oninput = e => { S.search = e.target.value; clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
 $('#resetBtn').onclick = () => {
-  S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.gradeMax = 9; S.search = ''; $('#search').value = '';
+  S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
   renderFilters(); renderAll();
 };
 function applyTheme(t) {
