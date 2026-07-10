@@ -22,13 +22,15 @@ const ROWS = D.rows.map((r, i) => ({
   std26: dc.std ? (dc.std[r[39]] || '') : '', stdK26: r[40] || '',
 }));
 
-// 수능최저 원문 → (합산 영역 수 N, 등급 합 X). "N합X" 유형만(전체 최저의 91%), "M개Y"·기타는 null.
+// 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
 function parseLeast(t) {
-  if (!t) return { n: null, sum: null };
-  const m = t.replace(/\s/g, '').match(/(\d)합(\d{1,2})/);
-  return m ? { n: +m[1], sum: +m[2] } : { n: null, sum: null };
+  const z = (t || '').replace(/\s/g, '');
+  if (!z || /^(없음|미적용|x|-|미정)$/i.test(z)) return { n: null, sum: null, type: 'none' };
+  const m = z.match(/(\d)합(\d{1,2})/);
+  if (m) return { n: +m[1], sum: +m[2], type: 'sum' };
+  return { n: null, sum: null, type: 'etc' };   // 최저 있으나 N합X로 표현 안 됨 → '그 외'
 }
-ROWS.forEach(r => { const p = parseLeast(r.choejeo); r.leastN = p.n; r.leastSum = p.sum; });
+ROWS.forEach(r => { const p = parseLeast(r.choejeo); r.leastN = p.n; r.leastSum = p.sum; r.leastType = p.type; });
 // N개 합별 슬라이더 범위(데이터 실측 min~max)
 const LEAST_BOUNDS = {};
 [2, 3, 4].forEach(n => {
@@ -187,10 +189,10 @@ function applyFilters() {
     if (S.minLeast === 'yes' && !r.hasChoejeo) return false;
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
     if (!passChange(r)) return false;
-    // 수능최저 검색 — 내 상위 N개 합(S.leastSum)으로 충족 가능한 전형(요구 합 ≥ 내 합)만
+    // 수능최저 검색 — N개 합: 내 합(S.leastSum)으로 충족 가능한 전형(요구 합 ≥ 내 합) / '그 외': N합X 아닌 특이 최저
     if (S.leastN) {
-      const n = +S.leastN;
-      if (!(r.leastN === n && r.leastSum != null && r.leastSum >= S.leastSum)) return false;
+      if (S.leastN === 'etc') { if (r.leastType !== 'etc') return false; }
+      else { const n = +S.leastN; if (!(r.leastN === n && r.leastSum != null && r.leastSum >= S.leastSum)) return false; }
     }
     // 입결 컷 필터 — 라디오(기준) + 슬라이더(등급 이내)
     if (S.stdCut) {
@@ -366,26 +368,27 @@ function renderFilters() {
   sel.onchange = () => { S.region = sel.value; renderSoft(); };
   g4.appendChild(sel); box.appendChild(g4);
 
-  // 수능최저 검색 (N개 합 + 내 등급 합 슬라이더) — 기존 '입결 등급 상한'을 대체
+  // 수능최저 검색 (N개 합 + 내 등급 합 슬라이더, '그 외' 특이 최저) — 기존 '입결 등급 상한'을 대체
   const g5 = el('div', 'f-group least-filter');
-  const n = S.leastN, b = n ? LEAST_BOUNDS[n] : null;
+  const n = S.leastN, isSum = n && n !== 'etc', b = isSum ? LEAST_BOUNDS[+n] : null;
+  const hint = !n ? '합산 영역 수를 고르면 내 등급 합으로 충족 가능한 전형만 봅니다'
+    : n === 'etc' ? 'N개 합으로 표현되지 않는 특이 최저(예: 1등급 2개) 전형' : `내 상위 ${n}개 영역 등급 합으로 충족 가능한 전형`;
   g5.innerHTML = `
-    <div class="f-title">🎯 수능최저 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건 충족</span>` : ''}</div>
-    <div class="lf-hint muted">${n ? `내 상위 ${n}개 영역 등급 합으로 충족 가능한 전형` : '합산 영역 수를 고르면 내 등급 합으로 충족 가능한 전형만 봅니다'}</div>
+    <div class="f-title">🎯 수능최저 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건${n === 'etc' ? '' : ' 충족'}</span>` : ''}</div>
+    <div class="lf-hint muted">${hint}</div>
     <div class="lf-radios" role="radiogroup" aria-label="합산 영역 수">
-      ${[2, 3, 4].map(k => `<label class="lf-radio${n === String(k) ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === String(k) ? ' checked' : ''}> ${k}개 합</label>`).join('')}
+      ${[['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합'], ['etc', '그 외']].map(([k, lab]) => `<label class="lf-radio${n === k ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === k ? ' checked' : ''}> ${lab}</label>`).join('')}
       <button class="lf-clear${n ? '' : ' hidden'}" type="button" aria-label="최저 검색 해제">해제</button>
     </div>
-    <div class="lf-slider ${n ? '' : 'is-disabled'}">
-      <label for="leastSum">내 ${n || 'N'}개 합 <b>${n ? S.leastSum : '—'}</b></label>
-      <input id="leastSum" type="range" min="${b ? b.min : 2}" max="${b ? b.max : 18}" step="1" value="${n ? S.leastSum : 0}" ${n ? '' : 'disabled'}>
-      ${n ? `<div class="lf-scale"><span>${b.min} 빡셈</span><span>느슨 ${b.max}</span></div>` : ''}
-    </div>`;
+    ${n === 'etc' ? '' : `<div class="lf-slider ${isSum ? '' : 'is-disabled'}">
+      <label for="leastSum">내 ${isSum ? n : 'N'}개 합 <b>${isSum ? S.leastSum : '—'}</b></label>
+      <input id="leastSum" type="range" min="${b ? b.min : 2}" max="${b ? b.max : 18}" step="1" value="${isSum ? S.leastSum : 0}" ${isSum ? '' : 'disabled'}>
+      ${isSum ? `<div class="lf-scale"><span>${b.min} 빡셈</span><span>느슨 ${b.max}</span></div>` : ''}
+    </div>`}`;
   box.appendChild(g5);
   g5.querySelectorAll('input[name="leastN"]').forEach(eln => eln.onchange = () => {
     S.leastN = eln.value;
-    const bb = LEAST_BOUNDS[+eln.value];
-    S.leastSum = Math.max(bb.min, Math.min(bb.max, Math.round(+eln.value * 2.3)));  // 기본값 ≈ 평균 2.3등급
+    if (eln.value !== 'etc') { const bb = LEAST_BOUNDS[+eln.value]; S.leastSum = Math.max(bb.min, Math.min(bb.max, Math.round(+eln.value * 2.3))); }
     renderSoft(); renderFilters(); track('least_filter', { n: S.leastN, sum: S.leastSum });
   });
   const lc = g5.querySelector('.lf-clear');
