@@ -912,6 +912,31 @@ function openInsight(uni) {
   track('open_insight', { uni: _insUni });
 }
 function closeInsight() { if ($('#insightView').classList.contains('hidden')) return; $('#insightView').classList.add('hidden'); closeDialog(); }
+// 홈 화면 변화 인사이트 배너: 전체 대학에서 고르게 4개를 뽑아 미리보기 카드로 노출
+function renderInsightBanner() {
+  const sec = $('#insightBanner');
+  const list = (INS.order || []).filter(u => INS.unis[u]);
+  if (!sec || list.length < 4) { if (sec) sec.classList.add('hidden'); return; }
+  // 인덱스를 고르게 분산해 SKY~거점국립~여대까지 다양하게 노출
+  const N = 4, feat = [];
+  for (let i = 0; i < N; i++) feat.push(list[Math.round(i * (list.length - 1) / (N - 1))]);
+  const cards = feat.map(u => {
+    const d = INS.unis[u];
+    const tags = (d.tags || []).slice(0, 2).map(t => `<span class="ins-tag">${esc(t)}</span>`).join('');
+    return `<button class="ib-card" data-uni="${esc(u)}" aria-label="${esc(u)} 변화 인사이트 보기">
+      <div class="ib-top"><span class="ib-uni">${esc(u)}</span>${d.tier ? `<span class="ins-tier">${esc(d.tier)}</span>` : ''}</div>
+      <div class="ib-head">${esc(d.headline)}</div>
+      <div class="ib-tags">${tags}</div></button>`;
+  }).join('');
+  sec.innerHTML = `<div class="panel-head">
+      <h2>📰 대학별 변화 인사이트 <span class="muted">2027 vs 2026 · ${list.length}개 대학</span></h2>
+      <button class="ghost-btn ib-all" id="ibAllBtn">전체 보기 <span aria-hidden="true">→</span></button>
+    </div>
+    <div class="ib-cards">${cards}</div>`;
+  sec.classList.remove('hidden');
+  $('#ibAllBtn').onclick = () => openInsight();
+  sec.querySelectorAll('.ib-card').forEach(c => c.onclick = () => openInsight(c.dataset.uni));
+}
 function renderInsightRail() {
   const rail = $('#insightRail');
   rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>` +
@@ -1006,5 +1031,5 @@ $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.n
 $('#footNote').innerHTML = `<b>이투스247학원</b> · 본 대시보드는 <b>${esc(D.meta.source)}</b> 자료를 가공한 참고용입니다. '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'dark'));
 updateCompareBtn(); updateFavBtn();
-renderCatList(); renderFilters(); renderAll();
+renderCatList(); renderFilters(); renderAll(); renderInsightBanner();
 })();
