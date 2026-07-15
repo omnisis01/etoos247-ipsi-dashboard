@@ -108,6 +108,11 @@ def verify(d):
         c = Counter(bad_dir)
         fails.append(f"수능최저 변화 방향 오분류 {sum(c.values())}건 — build_data.py의 least_direction() 확인: " + '; '.join(f'{k}({v}건)' for k, v in c.most_common(4)))
 
+    # 5.45) 입결 추세 비교의 전제 — 연도별 '입결 기준'(col21=2026, col26=2025)이 다르면
+    #       등급 차이는 지표 변경일 뿐이라 추세로 읽으면 안 된다. app.js가 막으려면 std25가 필요하다.
+    if 'std25' not in sch:
+        fails.append("schema에 'std25' 없음 — 입결 기준 연도 비교 불가(app.js yoyGrade의 basisMismatch 차단이 무력화됨)")
+
     # 5.5) 입결 컷 필터용 필드 존재 및 stdK26 값 유효성
     for f in ('std26', 'stdK26'):
         if f not in sch:

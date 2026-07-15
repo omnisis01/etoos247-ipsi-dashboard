@@ -403,7 +403,11 @@ for r in raw:
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
     gr = s(r[15]); subj = s(r[16]); career = s(r[17])
+    # 입결 '기준'은 연도별로 따로 있다(col21=2026, col26=2025, col30=2024). 대학이 해마다 기준을
+    # 바꾸기도 해서(예: 2025 평균 → 2026 70%컷) 기준이 다른 두 해의 등급을 비교하면 의미가 없다.
+    # 실제로 이 비교 때문에 가짜 입결 추세 신호가 983건 발생했다 → std25도 실어 보내 app.js에서 막는다.
     std26 = s(r[21]); stdK = std_kind(std26)
+    std25 = s(r[26])
 
     delta_kind, delta_n = parse_delta(prev)
     ch_kind, ch_detail = parse_choejeo_change(change)
@@ -430,13 +434,13 @@ for r in raw:
         intern('method', method), intern('note', note), intern('date', date),
         intern('gradeRatio', gr), intern('subjects', subj), intern('careerSubj', career),
         tags, score, [rs for rs in reasons], gtrend, ctrend,
-        intern('std', std26), stdK,
+        intern('std', std26), stdK, intern('std', std25),
     ])
 
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',
           'chung26','chung25','chung24','method','note','date','gradeRatio','subjects','careerSubj',
-          'cats','score','reasons','gtrend','ctrend','std26','stdK26']
+          'cats','score','reasons','gtrend','ctrend','std26','stdK26','std25']
 
 # (key, label, desc, color, sub, parent)
 CATS = [

@@ -20,6 +20,7 @@ const ROWS = D.rows.map((r, i) => ({
   gradeRatio: dc.gradeRatio[r[31]] || '', subjects: dc.subjects[r[32]] || '', careerSubj: dc.careerSubj[r[33]] || '',
   cats: r[34] || [], score: r[35] || 0, reasons: r[36] || [], gtrend: r[37] || 'na', ctrend: r[38] || 'na',
   std26: dc.std ? (dc.std[r[39]] || '') : '', stdK26: r[40] || '',
+  std25: dc.std ? (dc.std[r[41]] || '') : '',
 }));
 
 // 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
@@ -91,9 +92,18 @@ function track(name, params) { try { if (typeof gtag === 'function') gtag('event
 function numOr(s) { if (s == null) return null; const m = String(s).match(/-?\d+\.?\d*/); return m ? parseFloat(m[0]) : null; }
 
 /* ---- 2026 vs 2025 year-over-year per metric ---- */
-function yoyGrade(r) { // 입결 등급: 숫자↑ = 입결 하락(쉬워짐) = 유리
+// 입결 등급: 숫자↑ = 입결 하락(쉬워짐) = 유리.
+// ⚠ 단, 대학이 발표하는 '입결 기준'은 해마다 바뀔 수 있다(예: 2025 평균 → 2026 70%컷).
+// 기준이 다르면 등급 차이는 지표 변경일 뿐 실제 변화가 아니므로 추세로 읽으면 안 된다.
+// 실제로 이 비교 탓에 가짜 신호 983건(불리 633·유리 350)이 발생했다 → basisMismatch로 차단.
+const nzStd = t => (t || '').replace(/\s/g, '');
+function yoyGrade(r) {
   const a = r.g[1], b = r.g[0]; if (a == null || b == null) return null;
-  const d = b - a; return { y25: a, y26: b, d, dir: d >= 0.1 ? 'easier' : d <= -0.1 ? 'harder' : 'flat' };
+  const d = b - a;
+  if (r.std26 && r.std25 && nzStd(r.std26) !== nzStd(r.std25)) {
+    return { y25: a, y26: b, d, dir: 'na', basisMismatch: true, b25: r.std25, b26: r.std26 };
+  }
+  return { y25: a, y26: b, d, dir: d >= 0.1 ? 'easier' : d <= -0.1 ? 'harder' : 'flat' };
 }
 function yoyComp(r) { // 경쟁률: 하락 = 유리
   const a = r.c[1], b = r.c[0]; if (a == null || b == null) return null;
@@ -120,7 +130,11 @@ function verdict(r) {
   else if (r.chKind === '완화' || r.chKind === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKind} → 지원 증가`, m: '최저' }); score -= 2; }
   // 2026 vs 2025 결과 추이 (핵심)
   const g = yoyGrade(r), c = yoyComp(r), ch = yoyChung(r);
-  if (g) { if (g.dir === 'easier') { sig.push({ dir: 'good', t: `입결 하락세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score += 2; } else if (g.dir === 'harder') { sig.push({ dir: 'bad', t: `입결 상승세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score -= 2; } }
+  if (g) {
+    if (g.basisMismatch) { sig.push({ dir: 'warn', t: `입결 기준이 달라 추세 비교 불가 (${g.b25} → ${g.b26})`, m: '입결' }); }
+    else if (g.dir === 'easier') { sig.push({ dir: 'good', t: `입결 하락세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score += 2; }
+    else if (g.dir === 'harder') { sig.push({ dir: 'bad', t: `입결 상승세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score -= 2; }
+  }
   if (c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
   if (ch) { if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${ch.y25}→${ch.y26}명`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${ch.y25}→${ch.y26}명`, m: '충원' }); score -= 1; } }
   let cls, label;
