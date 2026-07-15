@@ -1,0 +1,46 @@
+#!/bin/sh
+# 데이터·인사이트가 스테이지되면 해당 하네스를 돌려 실패 시 커밋을 막는다.
+# 설치: cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+#
+# 유래(실제로 조용히 새어나간 사고들):
+#  - 학과명에 '(외)' 잔존, 입결 등급 범위 이탈
+#  - 수능최저 'N합M' 방향 오판 91전형(홍익대 3합8→2합5를 강화로 분류 → 유불리 판정이 반대)
+#  - 인사이트가 권역별로 쪼개진 행 하나를 전형 총원으로 오기(경북대 지역의사 8명 ← 실제 26명)
+# 이런 건 눈으로 안 보이고 배포 후에야 드러나므로 커밋 시점에 막는다.
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+FAIL=0
+
+# git hook은 최소 환경(LANG 미설정)으로 돈다. bash 3.2는 비-UTF8 로케일에서
+# 한글 경로 glob('../입결*/*.xlsx')을 확장하지 못해 "파일 없음"으로 오판한다.
+# 실제로 이 때문에 인사이트 하네스가 조용히 건너뛰어져 잘못된 커밋이 통과했다.
+export LANG="${LANG:-en_US.UTF-8}"
+
+run() {  # run <라벨> <스크립트>
+  [ -f "$2" ] || { echo "  ! $2 없음 — 건너뜀"; return; }
+  echo "── $1"
+  if python3 "$2"; then :; else FAIL=1; fi
+}
+
+echo "$STAGED" | grep -qE '^(data\.js|build_data\.py)$' && NEED_DATA=1
+echo "$STAGED" | grep -qE '^(insights\.js|build_ins\.py|merge_ins\.py|fix_ins_numbers\.py|apply_rewrite\.py)$' && NEED_INS=1
+
+[ -z "$NEED_DATA$NEED_INS" ] && exit 0
+echo "pre-commit: 데이터 하네스 실행"
+
+[ -n "$NEED_DATA" ] && run "verify_data.py (data.js 불변식)" verify_data.py
+# 인사이트 하네스는 원천 엑셀 유무를 스스로 판단해 없으면 SKIP(exit 0)한다.
+# 여기서 셸/glob으로 파일 존재를 확인하지 마라 — macOS는 파일명을 NFD로 저장해
+# 한글 경로 glob(NFC 패턴)이 빈 결과를 내고, 그 탓에 하네스가 조용히 건너뛰어져
+# 잘못된 인사이트가 커밋을 통과한 적이 있다.
+[ -n "$NEED_INS" ] && run "verify_insights.py (인사이트 모집인원 ↔ 엑셀)" verify_insights.py
+
+if [ "$FAIL" -ne 0 ]; then
+  echo ""
+  echo "커밋이 차단됐습니다. 위 위반을 고친 뒤 다시 커밋하세요."
+  echo "(정말 넘겨야 하면: git commit --no-verify)"
+  exit 1
+fi
+echo "pre-commit: 통과"
+exit 0

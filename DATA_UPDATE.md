@@ -29,9 +29,30 @@
 - 핵심 카테고리(medical·engineering·nursing_health·business·natural) 카운트 > 0
 - `meta.source` 비어 있지 않음
 
+## pre-commit hook (권장 설치)
+
+`data.js`·`build_data.py`·`insights.js` 등이 스테이지되면 해당 하네스를 자동 실행해 **실패 시 커밋을 막는다.**
+
+```bash
+cd dashboard
+cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+```
+
+- `data.js`/`build_data.py` 스테이지 → `verify_data.py`
+- `insights.js`/`build_ins.py`/`merge_ins.py` 등 스테이지 → `verify_insights.py`
+- 원천 엑셀이 없는 환경이면 인사이트 하네스는 자동 SKIP(차단 안 함).
+- 정말 넘겨야 하면 `git commit --no-verify`.
+
+> ⚠️ hook 안에서 **한글 경로를 셸 glob으로 찾지 마라.** macOS는 파일명을 NFD로 저장해
+> `../입결*/*.xlsx`(NFC 패턴)가 빈 결과를 낸다. 이 탓에 하네스가 조용히 건너뛰어져
+> 잘못된 인사이트가 커밋을 통과한 사고가 있었다. 존재 확인은 `os.path.exists`로 한다
+> (파일시스템이 정규화해 주므로 정상 동작).
+
 ## 왜 이렇게 하나 (Ratchet)
 
 각 불변식은 실제 겪은 실패에서 나왔다.
 - 입결 범위 — 환산점수가 등급칸에 섞여 9건 이상값 발생 → `vgrade()` 도입.
 - 연도 프레임 — 2028 vs 2027 기사를 잘못 받아 롤백한 이력.
 - diff 재사용 — V6.29 갱신 때 즉석 diff 스크립트를 두 번 짠 낭비를 `--diff` 로 굳힘.
+- 최저 방향 — `3합8→2합5`를 합만 보고 강화로 오판(91전형, 유불리 판정이 반대) → `least_direction()` 집합 비교 + 검증 규칙.
+- 인사이트 합계 — 권역별로 쪼갠 행 하나를 전형 총원으로 오기(경북대 지역의사 8 ← 26) → `verify_insights.py` 는 스코프 후 **합계**로만 비교.

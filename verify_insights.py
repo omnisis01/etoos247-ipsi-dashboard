@@ -56,6 +56,12 @@ def load_insights():
 
 def main():
     verbose = '--list' in sys.argv
+    # 원천 엑셀이 없으면(리포만 클론한 환경) 실패가 아니라 건너뛴다.
+    # 탐지는 os.path.exists로 한다 — macOS는 파일명을 NFD로 저장해 glob(NFC 리터럴)은 못 찾지만
+    # open/exists는 파일시스템이 정규화해 주므로 정상 동작한다.
+    if not os.path.exists(SRC):
+        print(f'SKIP  원천 엑셀 없음({os.path.basename(SRC)}) — 인사이트 대조 건너뜀')
+        sys.exit(0)
     rows, ins = load_excel(), load_insights()
     mism, okc, skips = [], 0, []
     for u in ins['order']:

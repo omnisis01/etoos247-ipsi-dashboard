@@ -5,10 +5,6 @@
 ## 다음 세션에서 이어할 항목
 
 
-- [ ] **⑤ verify_data pre-commit hook 자동화**
-  - `.git/hooks/pre-commit` 에 `data.js` 또는 `build_data.py` 스테이지된 경우 `python3 verify_data.py` 실행 → 실패 시 커밋 차단
-  - 스크립트 자체는 리포에 `dashboard/hooks/pre-commit` 로 두고, README/DATA_UPDATE.md 에 설치 명령(`cp dashboard/hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit`) 명시
-  - 성공 조건: 일부러 (외) 잔존한 파일 커밋 시 실패로 차단됨
 
 ## 잠재 후보 (백로그, 요청 시)
 - 대시보드 내부 AI 상담 도우미(성적 입력 → 유불리 자동 분석). 큰 작업, 별도 세션.
@@ -16,6 +12,7 @@
 - 지원카드·비교함 공유 URL 생성.
 
 ## 완료 이력
+- ✅ pre-commit hook 자동화 (verify_data + verify_insights, 위반 시 커밋 차단)
 - ✅ 모바일 반응형 점검·수정 (터치 44px, 검색창 전체 폭. 375·768 가로 스크롤 0)
 - ✅ 메디컬 교차검증(비파괴 리포트 `../메디컬_교차검증_리포트.md`) + 최저 오기 2건 정정(세명대 3합5·계명대 2합10) + 최저검색 '그 외' 분류
 - ✅ 인사이트 42교 → 49교 (지방 의약학 7교 신설) + 기존 8교 메디컬 섹션 보강
