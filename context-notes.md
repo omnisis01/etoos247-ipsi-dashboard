@@ -13,6 +13,13 @@
 - **재사용 스킬 신설**: `build_ins.py`(order 확장+unis 주입, 이미 존재 대학은 SKIP), `scratchpad/check_ins_json.py`(스키마·대시·콜론·dir·(외)·2028 검증). 다음 확장도 이 파이프라인 재사용.
 - 검증: `check_ins_json.py` 통과 → `build_ins.py` 주입 → `verify_data.py` 통과 → 미리보기에서 부산대 상세 실제 CSS 렌더 스크린샷 확인(두괄식·표·판정 정상). 8교 전부 order 포함·oneLine head·verdict 굵게 확인.
 - **미리보기 캐시 함정**: python http.server가 `Cache-Control` 미전송 → 프리뷰 브라우저가 insights.js를 휴리스틱 디스크 캐시. 리로드·포트변경·nocache 쿼리로도 스크립트 태그 캐시가 안 깨짐. 검증은 `fetch('insights.js?bust='+Date.now())` 후 재주입 + app.js 렌더러 헬퍼(bulletize/splitVerdict) 복제로 우회. 실제 배포(GitHub Pages/Firebase)는 정상 캐시 헤더라 문제 없음.
+## 2026-07-10 — 배포 + 모바일 반응형 점검·수정
+- **배포**: GitHub Pages(`git push origin main`, 14커밋). 실사이트 검증 — 인사이트 49교·신규 7교·보강 8교 섹션·최저 교정(세명대 3합5·계명대 2합10, 구 오기 제거) 전부 반영 확인.
+- **모바일 점검(375·768)**: 가로 스크롤 0, 오른쪽 넘침은 전부 의도된 `overflow-x:auto` 컨테이너 내부(실제 문제 0). 인사이트 오버레이 상하 스택 정상, 사이드바 드로어 정상.
+- **수정 1 — 터치 타깃**: 주요 버튼이 34~38px로 44px 기준 미달 → `@media(max-width:880px)`에 `.menu-toggle,.icon-btn,.ghost-btn{min-width/height:44px}`.
+- **수정 2 — 회귀 대응**: 버튼 확대로 검색창이 56px로 눌림(플레이스홀더 안 보임) → `≤620px`에서 `#topbar{flex-wrap:wrap}` + `.search-wrap{order:3;flex-basis:100%}` 로 아랫줄 전체 폭(347px). 768은 인라인 유지(회귀 없음).
+- **프리뷰 계측 함정 2가지**(다음 세션 주의): ① styles.css도 insights.js처럼 브라우저 디스크 캐시로 리로드가 안 먹음 → `fetch('styles.css?bust='+Date.now())` 후 `<style>` 주입으로 검증. ② **CSS 트랜지션이 백그라운드 탭에서 진행되지 않음** → 사이드바 `.open`인데 x가 −288로 보임. `transition:none` 강제 후 재측정하면 정상(−288→0). 버그로 오인 말 것.
+
 ## 2026-07-10 — 메디컬 교차검증(1-A) + 최저 오기 2건 교정 + '그 외' 분류
 - **교차검증 리포트**: `../메디컬_교차검증_리포트.md`. 우리 data vs 토마스 입결표·입시위키·피오르에듀. 결론: **마스터 정합성 견고**(지역의사 인원 28교 100% 일치 — 초기 '20건 불일치'는 우리가 권역별 행 분리한 매칭 오탐, 합산하면 일치 / 최저 96% / 입결 표본 평균차 0.055등급).
 - **정정 2건**(사용자 승인, 채택안 A): 세명대 한의예 `합5→3합5`(3행, N 누락), 계명대 혁신신약 면접 `2합12→2합10`(2027 요강 megastudy X27C08007 원문 확인). `build_data.py`의 `LEAST_CORRECTIONS`로 빌드 시 패치(마스터 xlsx 무수정). 앞으로 확인된 원천 오기는 여기에 추가.
