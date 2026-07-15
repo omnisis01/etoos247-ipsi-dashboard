@@ -69,9 +69,30 @@ def parse_delta(prev):
     return ('change', 0)
 
 # ---------------------------------------------------------------- 최저 변화 (heuristic)
+from itertools import product as _product
+_LEAST_DIR_CACHE = {}
+def least_direction(n1, m1, n2, m2):
+    """'N합M' 변화의 방향을 충족 가능 등급조합 집합의 포함관계로 엄밀 판정.
+       합(M)만 비교하면 영역 수(N)가 바뀔 때 오판한다.
+       실제 사례: 홍익대 '3합8 → 2합5'는 M이 8→5로 줄어 강화처럼 보이지만,
+       상위 2개만 보면 되므로 3합8 통과자를 모두 포함하는 '완화'다(72개 전형 오분류였음)."""
+    key = (n1, m1, n2, m2)
+    if key in _LEAST_DIR_CACHE: return _LEAST_DIR_CACHE[key]
+    old, new = set(), set()
+    for g in _product(range(1, 10), repeat=4):      # 국·수·영·탐 4개 영역, 1~9등급
+        k = tuple(sorted(g))
+        if sum(k[:n1]) <= m1: old.add(k)
+        if sum(k[:n2]) <= m2: new.add(k)
+    if old == new: r = '변경'
+    elif old < new: r = '완화'          # 새 조건이 기존 통과자를 전부 포함 + 더 넓음
+    elif new < old: r = '강화'
+    else: r = '변경'                     # 엇갈림(일부만 유리) → 방향 단정 불가
+    _LEAST_DIR_CACHE[key] = r
+    return r
+
 def parse_choejeo_change(change_text):
     """returns (kind, detail) where kind in 신설/폐지/완화/강화/변경/None.
-    수능최저 'N합M': M↑ = 완화(easier), M↓ = 강화(harder)."""
+    'N합M' 방향은 least_direction()으로 엄밀 판정한다(합 단순 비교는 N 변화 시 오판)."""
     t = s(change_text)
     if not t: return (None, '')
     segs = re.split(r'[\n/·;]', t)
@@ -83,6 +104,13 @@ def parse_choejeo_change(change_text):
     z = norm(cseg)
     if '신설' in z and '최저' in z: return ('신설', cseg)
     if '폐지' in z: return ('폐지', cseg)
+    # 합 변경이 '최저'가 든 구간이 아니라 다음 구간에 오는 경우가 있다.
+    # 예: '최저:탐,탐→탐(2)과(1) 택1 / 3합6→3합5 / 수학 필수' → 첫 구간엔 영역 지정만 있음.
+    # 그래서 구간이 아니라 전체 텍스트에서 'N합M→N합M'을 먼저 찾는다.
+    m_all = re.search(r'(\d)합(\d+)→(\d)합(\d+)', norm(t))
+    if m_all:
+        return (least_direction(int(m_all.group(1)), int(m_all.group(2)),
+                                int(m_all.group(3)), int(m_all.group(4))), cseg)
     if '→' in z:
         L, R = z.split('→', 1)
         Lh = re.search(r'(\d)합(\d+)', L); Rh = re.search(r'(\d)합(\d+)', R)
@@ -91,11 +119,7 @@ def parse_choejeo_change(change_text):
         if Lh and Rh:
             oc, ov = int(Lh.group(1)), int(Lh.group(2))
             nc, nv = int(Rh.group(1)), int(Rh.group(2))
-            if nv > ov: return ('완화', cseg)
-            if nv < ov: return ('강화', cseg)
-            if nc > oc: return ('강화', cseg)
-            if nc < oc: return ('완화', cseg)
-            return ('변경', cseg)
+            return (least_direction(oc, ov, nc, nv), cseg)
         Lk = re.search(r'(\d)개(\d+)', L); Rk = re.search(r'(\d)개(\d+)', R)
         if Lk and Rk:
             ov, nv = int(Lk.group(2)), int(Rk.group(2))

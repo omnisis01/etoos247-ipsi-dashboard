@@ -8,7 +8,7 @@
 - Ratchet: 실제로 겪은 실패만 규칙으로 넣는다(입결 등급 범위·연도 프레임·행수 급변).
 - 재사용 스킬: 매 갱신마다 즉석 diff를 다시 짜지 말고 --diff로 재사용.
 """
-import json, os, sys
+import json, os, sys, re
 
 HERE = os.path.dirname(__file__)
 
@@ -77,6 +77,36 @@ def verify(d):
     for f in required_fields:
         if f not in sch:
             fails.append(f"필수 SCHEMA 필드 누락: '{f}' — build_data.py SCHEMA 확인")
+
+    # 5.4) 수능최저 변화 방향(chKind) — 'N합M' 변화는 합만 비교하면 N이 바뀔 때 오판한다.
+    #      실제 사례: 홍익대 '3합8→2합5'를 강화로 오분류(72전형). 충족 가능 집합 포함관계로 재검증.
+    from itertools import product as _prod
+    _dc = {}
+    def _dir(n1, m1, n2, m2):
+        k = (n1, m1, n2, m2)
+        if k in _dc: return _dc[k]
+        o, n = set(), set()
+        for g in _prod(range(1, 10), repeat=4):
+            t = tuple(sorted(g))
+            if sum(t[:n1]) <= m1: o.add(t)
+            if sum(t[:n2]) <= m2: n.add(t)
+        _dc[k] = '변경' if o == n else ('완화' if o < n else ('강화' if n < o else '변경'))
+        return _dc[k]
+    i_change, i_ck = sch.index('change'), sch.index('chKind')
+    dic_change = d['dicts']['change']
+    bad_dir = []
+    for r in d['rows']:
+        ch = dic_change[r[i_change]] if r[i_change] is not None and r[i_change] < len(dic_change) else ''
+        m = re.search(r'(\d)합(\d+)→(\d)합(\d+)', (ch or '').replace(' ', ''))
+        if not m: continue
+        want = _dir(int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
+        got = r[i_ck] or ''
+        if got and got != want and got not in ('신설', '폐지'):
+            bad_dir.append(f"{m.group(0)}: chKind='{got}' 이나 엄밀판정='{want}'")
+    if bad_dir:
+        from collections import Counter
+        c = Counter(bad_dir)
+        fails.append(f"수능최저 변화 방향 오분류 {sum(c.values())}건 — build_data.py의 least_direction() 확인: " + '; '.join(f'{k}({v}건)' for k, v in c.most_common(4)))
 
     # 5.5) 입결 컷 필터용 필드 존재 및 stdK26 값 유효성
     for f in ('std26', 'stdK26'):
