@@ -508,11 +508,15 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   .menu-toggle{display:block}
   #content{padding:16px 14px 50px}
   .cat-header h2{font-size:20px}
+  /* 터치 타깃: 모바일·태블릿에서 주요 액션 버튼 최소 44px 확보 */
+  .menu-toggle,.icon-btn,.ghost-btn{min-width:44px;min-height:44px}
 }
 @media(max-width:620px){
   .top-actions .btn-label,.fav-max{display:none}
   .ghost-btn{padding:8px 11px;gap:5px}
-  #topbar{gap:9px;padding:11px 14px}
+  #topbar{gap:9px;padding:11px 14px;flex-wrap:wrap}
+  /* 44px 버튼과 한 줄에 두면 검색창이 눌리므로(≈56px) 아랫줄 전체 폭으로 내린다 */
+  .search-wrap{order:3;flex-basis:100%;max-width:none}
 }
 .scrim{position:fixed;inset:0;background:rgba(10,15,30,.4);z-index:35;display:none}
 .scrim.show{display:block}
