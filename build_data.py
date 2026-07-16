@@ -352,13 +352,34 @@ def apply_least_correction(uni, dept, jhname, choejeo):
             return c['new']
     return choejeo
 
+# ---------------------------------------------------------------- 전년대비 마크 정정
+# 원본 엑셀의 '전년대비' 마크 오기. 마크는 표시(18▼7)뿐 아니라 유불리 엔진에도
+# 최고 가중치(±2)로 들어가므로(app.js verdict), 틀리면 판정 자체가 뒤집힌다.
+PREV_CORRECTIONS = [
+    # 충남대 의예 학생부종합II 지역: ▼7 → 변동 없음. 2026·2027 모두 18명.
+    #  근거 ① 2026 수시모집요강 원문 3곳 일치(Ⅳ-5-3 "모집인원: 의예과 18명" / Ⅰ-1 전형요약 / Ⅱ 총괄표)
+    #      ② 자료집(2027 모집요강 기준) 좌측 2026 실측 = 18
+    #      ③ 산술: 2026 경쟁률 8.94는 모집 25로 재현 불가(18이면 지원자 161명 → 8.944)
+    #  원인: ▼7이 뜻하는 2026=25는 바로 위 '학생부교과 지역인재전형'의 인원이다.
+    #        이름에 '지역인재'가 겹쳐 전년도 인원을 조회할 때 형제 행을 잡은 것으로 보인다.
+    #        (충남대 의예 8개 전형 중 나머지 7개 마크는 모두 정확 → 요강과 대조 완료)
+    {'uni': '충남대학교', 'dept': '의예과', 'jhname': '학생부종합 II 지역전형', 'old': '▼7', 'new': '-'},
+]
+_prev_fixed = [0]
+def apply_prev_correction(uni, dept, jhname, prev):
+    for c in PREV_CORRECTIONS:
+        if c['uni'] == uni and c['dept'] == dept and c.get('jhname', jhname) == jhname and prev == c['old']:
+            _prev_fixed[0] += 1
+            return c['new']
+    return prev
+
 cat_counter = {}
 audit = {}
 for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
-    enroll = num(r[8]); prev = s(r[9]); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    enroll = num(r[8]); prev = apply_prev_correction(uni, dept, jhname, s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
@@ -477,6 +498,7 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
 print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 4: 세명대 3 + 계명대 1)')
+print(f'전년대비 마크 교정 적용: {_prev_fixed[0]}건 (예상 1: 충남대 의예 학생부종합II 지역)')
 print('category counts:')
 for k, l, d, c, sub, par in CATS:
     print(f'  {cat_counter.get(k,0):6d}  {("  └ " if sub else "")}{k:24s} {l}')
