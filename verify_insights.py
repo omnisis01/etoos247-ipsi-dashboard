@@ -64,6 +64,26 @@ def main():
         sys.exit(0)
     rows, ins = load_excel(), load_insights()
     mism, okc, skips = [], 0, []
+    # 0) 행 내부 정합성: from + 증감(note ▲/▼) = to, dir 방향 일치.
+    #    실제 사고: 인하대 면접형 from이 면접+서류 합(1,186)으로 적혀 note가 깨졌고,
+    #    인하대 지역균형 ▲를 ▼로 적는 수기 실수도 있었다. 산수는 기계가 검사한다.
+    inconsist = []
+    for u in ins['order']:
+        for sec in ins['unis'][u].get('sections', []):
+            for row in sec.get('rows', []) or []:
+                f, t, n = str(row.get('from', '')), str(row.get('to', '')), str(row.get('note', ''))
+                mf, mt = re.match(r'^([\d,]+)명', f), re.match(r'^([\d,]+)명', t)
+                mn = re.match(r'^([▲▼])(\d+)', n)
+                if not (mf and mt and mn): continue
+                a, b = int(mf.group(1).replace(',', '')), int(mt.group(1).replace(',', ''))
+                d = (1 if mn.group(1) == '▲' else -1) * int(mn.group(2))
+                dir_ok = (d > 0 and row.get('dir') == 'up') or (d < 0 and row.get('dir') == 'down') or (d == 0 and row.get('dir') == 'same')
+                if a + d != b or not dir_ok:
+                    inconsist.append(f"[{u}] {row.get('label')}: {f}→{t} [{n}] dir={row.get('dir')} (from+증감={a+d})")
+    if inconsist:
+        print(f'FAIL  행 내부 정합성 위반 {len(inconsist)}건 (from+증감≠to 또는 dir 불일치)')
+        for x in inconsist: print('  ' + x)
+        sys.exit(1)
     for u in ins['order']:
         pool = [x for x in rows if x['uni'] == u]
         if not pool:
