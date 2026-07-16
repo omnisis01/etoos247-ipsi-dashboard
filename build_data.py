@@ -363,8 +363,28 @@ def apply_least_correction(uni, dept, jhname, choejeo):
 #  · 마크가 순수 기호(▲N/▼N/-/공란)인 행만 — '신설'·'폐지'·'분리'·'통합'·텍스트는 원본 유지
 #    ('신설'인데 2026 존재 13건은 학과 개명 의심 → (B) 전형 변경 과제에서 별도 처리)
 #  · 재계산 값이 기존 마크와 같으면 원본 문자열 그대로(불필요한 diff 방지)
-_E26 = json.load(open(os.path.join(os.path.dirname(__file__), 'enroll26.json'), encoding='utf-8'))['enroll26']
+_SNAP26 = json.load(open(os.path.join(os.path.dirname(__file__), 'enroll26.json'), encoding='utf-8'))
+_E26 = _SNAP26['enroll26']
+_KEYS3_26 = set(_SNAP26['keys3'])
 _PURE_MARK = re.compile(r'^(-?|[▲▼△▽↑↓]\s*\d+)$')
+
+# ---------------------------------------------------------------- 전형 변경 판정
+# 2026 파일에 (대학|학과|전형명)이 — 표기 정규화 후에도 — 존재하지 않는 2027 전형은
+# 개편·개명·통합의 결과다(청주대 담임추천→미래인재 실사례). 이때 '전년대비' 마크는
+# 전신(前身)이 다른 전형이라 그대로 쓰면 오해를 부른다(사용자 결정: '전형 변경'으로 표기).
+# 마크가 숫자여도 대체한다 — 값이 맞더라도 비교 기준 자체가 바뀐 행이기 때문.
+# 신설·폐지·분리·통합 마크는 원본 의미가 이미 정확하므로 유지.
+def _nz_name(t):
+    t = re.sub(r'\s', '', t)
+    t = t.replace('Ⅰ', 'I').replace('Ⅱ', 'II').replace('Ⅲ', 'III').replace('·', '').replace('ㆍ', '')
+    return re.sub(r'전형$', '', t)
+_changed_count = [0]
+def is_changed_track(uni, dept_raw, jhname_raw, prev):
+    if not _PURE_MARK.fullmatch(prev): return False     # 신설·폐지·분리·통합·텍스트는 원본 유지
+    k3 = '|'.join((uni, _nz_name(dept_raw), _nz_name(jhname_raw)))
+    if k3 in _KEYS3_26: return False
+    _changed_count[0] += 1
+    return True
 _rawkey = lambda r: '|'.join((s(r[2]), s(r[4]), s(r[5]), s(r[6]), s(r[7])))
 _key27_count = {}
 for _r in raw:
@@ -421,7 +441,10 @@ for r in raw:
     std26 = s(r[21]); stdK = std_kind(std26)
     std25 = s(r[26])
 
-    delta_kind, delta_n = parse_delta(prev)
+    if is_changed_track(uni, s(r[4]), jhname, prev):
+        delta_kind, delta_n = 'changed', 0
+    else:
+        delta_kind, delta_n = parse_delta(prev)
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
 
@@ -528,6 +551,7 @@ sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
 print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 4: 세명대 3 + 계명대 1)')
 print(f'전년대비 재계산 교정: {len(_prev_recomputed)}건 (2026 실측 스냅샷 대조, 예상 51 — 스킵 1·오버라이드 1 반영)')
+print(f'전형 변경(개편·개명) 표기: {_changed_count[0]}건 (2026에 정규화 후에도 없는 대학|학과|전형명, 예상 약 3,000)')
 for _k, _old, _new, _e26, _e27 in _prev_recomputed:
     _u, _d, _, _j, _ = _k.split('|')
     print(f'    {_u} {_d} {_j}: {_old} → {_new}  (2026={_e26}, 2027={_e27})')

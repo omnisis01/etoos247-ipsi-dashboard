@@ -125,6 +125,7 @@ function verdict(r) {
   else if (r.dkind === 'closed') { sig.push({ dir: 'bad', t: '모집 폐지', m: '폐지' }); score -= 2; }
   else if (r.dkind === 'split') sig.push({ dir: 'warn', t: '모집단위 분리(인원·경쟁 재편)', m: '변동' });
   else if (r.dkind === 'merge') sig.push({ dir: 'warn', t: '모집단위 통합(인원·경쟁 재편)', m: '변동' });
+  else if (r.dkind === 'changed') sig.push({ dir: 'warn', t: '전형 변경(개편·개명) — 전년 대비 인원 비교 불가', m: '변경' });
   // 2027 구조 변화 (수능최저)
   if (r.chKind === '강화' || r.chKind === '신설') { sig.push({ dir: 'good', t: `수능최저 ${r.chKind} → 지원 위축`, m: '최저' }); score += 2; }
   else if (r.chKind === '완화' || r.chKind === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKind} → 지원 증가`, m: '최저' }); score -= 2; }
@@ -158,6 +159,7 @@ const deltaInfo = row => {
     case 'closed': return { cls: 'down', txt: '폐지' };
     case 'split': return { cls: 'new', txt: '분리' };
     case 'merge': return { cls: 'new', txt: '통합' };
+    case 'changed': return { cls: 'new', txt: '변경' };
     default: return { cls: 'neu', txt: '–' };
   }
 };
@@ -188,6 +190,7 @@ function passChange(row) {
     if (c === 'new' && row.dkind === 'new') return true;
     if (c === 'up' && row.dkind === 'up') return true;
     if (c === 'down' && row.dkind === 'down') return true;
+    if (c === 'changed' && row.dkind === 'changed') return true;
     if (c === 'ease' && row.chKind === '완화') return true;
     if (c === 'tighten' && (row.chKind === '강화' || row.chKind === '신설')) return true;
   }
@@ -356,7 +359,7 @@ function renderFilters() {
   const g2 = el('div', 'f-group');
   g2.innerHTML = '<div class="f-title">2026 대비 변화</div>';
   const r2 = el('div', 'chip-row');
-  [['new', '신설', 'new'], ['up', '증원', 'good'], ['down', '감원', 'bad'], ['ease', '최저 완화', 'bad'], ['tighten', '최저 강화·신설', 'good']].forEach(([k, lab, cls]) => {
+  [['new', '신설', 'new'], ['up', '증원', 'good'], ['down', '감원', 'bad'], ['changed', '전형 변경', 'new'], ['ease', '최저 완화', 'bad'], ['tighten', '최저 강화·신설', 'good']].forEach(([k, lab, cls]) => {
     const c = el('button', 'chip' + (S.changes.has(k) ? ' on ' + cls : ''), esc(lab));
     c.onclick = () => { S.changes.has(k) ? S.changes.delete(k) : S.changes.add(k); renderFilters(); renderSoft(); };
     r2.appendChild(c);
@@ -771,7 +774,7 @@ function openModal(i) {
     <div class="modal-body">
       <div class="msec"><div class="kv">
         <dt>전형</dt><dd>${esc(r.jhtype)} · ${esc(r.jhname)}</dd>
-        <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${esc(r.prev || '-')})</span></dd>
+        <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${r.dkind === 'changed' ? '전형 변경(개편·개명)' : esc(r.prev || '-')})</span></dd>
         <dt>지원자격</dt><dd>${esc(r.jagyeok) || '–'}</dd>
         <dt>전형방법</dt><dd>${esc(r.method) || '–'}</dd>
         <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKind ? `<span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}">최저 ${r.chKind}</span>` : ''}</dd>
