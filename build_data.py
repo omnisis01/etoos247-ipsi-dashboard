@@ -320,51 +320,9 @@ def categorize(uni, gye, dept, jhname, jagyeok):
 
     return tags
 
-# ---------------------------------------------------------------- impact signal
-def impact(delta_kind, delta_n, ch_kind, comp):
-    """comp = [c26,c25,c24]; returns (score, reasons[list of (sign,text)])."""
-    reasons = []
-    # 모집인원
-    if delta_kind == 'up':
-        reasons.append(('good', f'모집인원 {delta_n}명 증원 → 합격선 하락(유리) 가능'))
-    elif delta_kind == 'down':
-        reasons.append(('bad', f'모집인원 {abs(delta_n)}명 감원 → 합격선 상승(불리) 가능'))
-    elif delta_kind == 'new':
-        reasons.append(('new', '신설 모집단위 → 입결 미형성, 첫해 낮게 형성되는 경향(틈새 가능)'))
-    elif delta_kind == 'closed':
-        reasons.append(('bad', '모집 폐지'))
-    elif delta_kind == 'split':
-        reasons.append(('new', '모집단위 분리 → 인원·경쟁 재편, 변동성 큼'))
-    elif delta_kind == 'merge':
-        reasons.append(('new', '모집단위 통합 → 인원·경쟁 재편, 변동성 큼'))
-    # 최저
-    if ch_kind == '완화':
-        reasons.append(('bad', '수능최저 완화 → 지원자·경쟁률 상승, 합격선 상승(불리) 가능'))
-    elif ch_kind == '강화':
-        reasons.append(('good', '수능최저 강화 → 지원자 감소, 내신 합격선 하락(유리) 가능'))
-    elif ch_kind == '신설':
-        reasons.append(('good', '수능최저 신설 → 지원 위축, 내신 합격선 하락(유리) 가능'))
-    elif ch_kind == '폐지':
-        reasons.append(('bad', '수능최저 폐지 → 지원자 증가, 합격선 상승(불리) 가능'))
-    # 경쟁률 추세
-    c = [x for x in comp if x is not None]
-    if len(comp) == 3 and comp[0] is not None and comp[2] is not None:
-        if comp[0] >= comp[2] * 1.25:
-            reasons.append(('bad', f'경쟁률 상승추세 ({comp[2]:.1f}→{comp[0]:.1f})'))
-        elif comp[0] <= comp[2] * 0.8:
-            reasons.append(('good', f'경쟁률 하락추세 ({comp[2]:.1f}→{comp[0]:.1f})'))
-    score = sum(1 for s_, _ in reasons if s_ == 'good') - sum(1 for s_, _ in reasons if s_ == 'bad')
-    return score, reasons
-
-# trend direction for 입결 grades (lower grade = harder). 3yr [26,25,24]
-def trend(vals):
-    v = [x for x in vals]
-    if v[0] is not None and v[2] is not None:
-        d = v[0] - v[2]
-        if d <= -0.3: return 'up'      # grade number decreased -> 입결 상승(어려워짐)
-        if d >= 0.3: return 'down'     # grade number increased -> 입결 하락(쉬워짐)
-        return 'flat'
-    return 'na'
+# 유불리 판정(score/reasons)과 입결·경쟁률 추세(gtrend/ctrend)는 여기서 계산하지 않는다.
+# app.js의 verdict()·yoyGrade()·yoyComp()가 브라우저에서 전부 재계산하므로 data.js에 넣으면
+# 아무도 읽지 않는 중복 데이터(약 1MB)가 된다. 판정 로직은 app.js 한 곳에만 둔다.
 
 # ---------------------------------------------------------------- build rows
 # dictionaries for interning
@@ -416,9 +374,6 @@ for r in raw:
     delta_kind, delta_n = parse_delta(prev)
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
-    score, reasons = impact(delta_kind, delta_n, ch_kind, comp)
-    gtrend = trend(grade)
-    ctrend = ('up' if (comp[0] and comp[2] and comp[0] > comp[2]*1.1) else 'down' if (comp[0] and comp[2] and comp[0] < comp[2]*0.9) else 'flat' if (comp[0] and comp[2]) else 'na')
 
     tags = sorted(categorize(uni, gye, dept, jhname, jagyeok))
     for t in tags:
@@ -437,14 +392,14 @@ for r in raw:
         chung[0][:12], chung[1][:12], chung[2][:12],
         intern('method', method), intern('note', note), intern('date', date),
         intern('gradeRatio', gr), intern('subjects', subj), intern('careerSubj', career),
-        tags, score, [rs for rs in reasons], gtrend, ctrend,
+        tags,
         intern('std', std26), stdK, intern('std', std25),
     ])
 
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',
           'chung26','chung25','chung24','method','note','date','gradeRatio','subjects','careerSubj',
-          'cats','score','reasons','gtrend','ctrend','std26','stdK26','std25']
+          'cats','std26','stdK26','std25']
 
 # (key, label, desc, color, sub, parent)
 CATS = [

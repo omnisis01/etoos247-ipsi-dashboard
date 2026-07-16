@@ -18,9 +18,9 @@ const ROWS = D.rows.map((r, i) => ({
   chung: [r[25], r[26], r[27]],
   method: dc.method[r[28]] || '', note: dc.note[r[29]] || '', date: dc.date[r[30]] || '',
   gradeRatio: dc.gradeRatio[r[31]] || '', subjects: dc.subjects[r[32]] || '', careerSubj: dc.careerSubj[r[33]] || '',
-  cats: r[34] || [], score: r[35] || 0, reasons: r[36] || [], gtrend: r[37] || 'na', ctrend: r[38] || 'na',
-  std26: dc.std ? (dc.std[r[39]] || '') : '', stdK26: r[40] || '',
-  std25: dc.std ? (dc.std[r[41]] || '') : '',
+  cats: r[34] || [],
+  std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
+  std25: dc.std ? (dc.std[r[37]] || '') : '',
 }));
 
 // 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
@@ -232,7 +232,7 @@ function sortFiltered() {
       case 'enroll': return r.enroll == null ? -1 : r.enroll;
       case 'uni': return r.uni;
       case 'delta': return (r.dn == null ? 0 : r.dn);
-      default: return r.score;
+      default: return V(r).score;
     }
   };
   FILTERED.sort((a, b) => {
