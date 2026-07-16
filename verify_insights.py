@@ -6,7 +6,7 @@
 import json, re, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V6.29_부산 약학 최저  등수정.xlsx')
+SRC = os.path.join(HERE, '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V7.15_부산동아의대 지역의사제 최저오류.xlsx')
 INS = os.path.join(HERE, 'insights.js')
 
 # 자동 대조가 불가능해 의도적으로 건너뛰는 라벨(사유 명시).
