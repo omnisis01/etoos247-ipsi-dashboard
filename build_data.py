@@ -352,26 +352,55 @@ def apply_least_correction(uni, dept, jhname, choejeo):
             return c['new']
     return choejeo
 
-# ---------------------------------------------------------------- 전년대비 마크 정정
-# 원본 엑셀의 '전년대비' 마크 오기. 마크는 표시(18▼7)뿐 아니라 유불리 엔진에도
-# 최고 가중치(±2)로 들어가므로(app.js verdict), 틀리면 판정 자체가 뒤집힌다.
-PREV_CORRECTIONS = [
-    # 충남대 의예 학생부종합II 지역: ▼7 → 변동 없음. 2026·2027 모두 18명.
-    #  근거 ① 2026 수시모집요강 원문 3곳 일치(Ⅳ-5-3 "모집인원: 의예과 18명" / Ⅰ-1 전형요약 / Ⅱ 총괄표)
-    #      ② 자료집(2027 모집요강 기준) 좌측 2026 실측 = 18
-    #      ③ 산술: 2026 경쟁률 8.94는 모집 25로 재현 불가(18이면 지원자 161명 → 8.944)
-    #  원인: ▼7이 뜻하는 2026=25는 바로 위 '학생부교과 지역인재전형'의 인원이다.
-    #        이름에 '지역인재'가 겹쳐 전년도 인원을 조회할 때 형제 행을 잡은 것으로 보인다.
-    #        (충남대 의예 8개 전형 중 나머지 7개 마크는 모두 정확 → 요강과 대조 완료)
-    {'uni': '충남대학교', 'dept': '의예과', 'jhname': '학생부종합 II 지역전형', 'old': '▼7', 'new': '-'},
-]
-_prev_fixed = [0]
-def apply_prev_correction(uni, dept, jhname, prev):
-    for c in PREV_CORRECTIONS:
-        if c['uni'] == uni and c['dept'] == dept and c.get('jhname', jhname) == jhname and prev == c['old']:
-            _prev_fixed[0] += 1
-            return c['new']
-    return prev
+# ---------------------------------------------------------------- 전년대비 재계산
+# 원본 엑셀의 '전년대비' 마크는 2026 마스터(ver 8.2) 실측 대조 결과 99.72% 정확하지만
+# 52건이 틀렸다(충남대 의예 종합II ▼7 → 실제 변동 없음 등 — 형제 전형 인원을 끌어온 오기).
+# 마크는 표시(18▼7)뿐 아니라 유불리 엔진에 최고 가중치(±2)로 들어가 판정을 뒤집는다.
+# → 마크를 믿는 대신 작년 실측 스냅샷(enroll26.json)으로 전년대비를 재계산한다.
+# 안전장치 3중:
+#  · 양쪽 파일 모두 키(대학|학과|전형유형|전형명|지원자격)가 유일한 1:1 행만 —
+#    분할/합산(그래뉼래러티) 오해 차단(건양대 사회복지 22+21행 사례)
+#  · 마크가 순수 기호(▲N/▼N/-/공란)인 행만 — '신설'·'폐지'·'분리'·'통합'·텍스트는 원본 유지
+#    ('신설'인데 2026 존재 13건은 학과 개명 의심 → (B) 전형 변경 과제에서 별도 처리)
+#  · 재계산 값이 기존 마크와 같으면 원본 문자열 그대로(불필요한 diff 방지)
+_E26 = json.load(open(os.path.join(os.path.dirname(__file__), 'enroll26.json'), encoding='utf-8'))['enroll26']
+_PURE_MARK = re.compile(r'^(-?|[▲▼△▽↑↓]\s*\d+)$')
+_rawkey = lambda r: '|'.join((s(r[2]), s(r[4]), s(r[5]), s(r[6]), s(r[7])))
+_key27_count = {}
+for _r in raw:
+    _k = _rawkey(_r)
+    _key27_count[_k] = _key27_count.get(_k, 0) + 1
+# 재계산 예외 — 52건 전건을 '재계산에 쓴 2026값 ↔ 2026 경쟁률' 산술로 재검해 모순 3건을
+# 개별 판정한 결과(2건 예외, 1건은 소수1자리 반올림에 따른 검사 오탐으로 재계산 유지).
+_E26_OVERRIDES = {
+    # 경상국립대 자율전공학부 교과 일반: ver 8.2의 40이 아니라 41이 맞다.
+    #  근거 ① 2026 수시요강 총괄표 '자율전공학부 41 41' ② 경쟁률 16.24는 모집 41(지원자 666)로만 재현(40 불가)
+    ('경상대학교', '자율전공학부', '학생부교과', '일반전형'): 41,
+}
+_RECOMPUTE_SKIP = {
+    # 경북대 IT대학 자율학부 논술: 동명이단위 함정. 2026엔 'IT대학 자율학부'(논술 5)와
+    # 'IT 첨단자율학부'(논술 10)가 별개로 공존(2026 요강 521·522행 확인). 2027 파일의
+    # 'IT대학 자율학부' 논술 10의 전신은 후자다(2026 경쟁률 11.3은 모집 10으로만 재현,
+    # 2027에 IT 첨단자율 논술 행이 없음). 동명 키 재계산(5 기준 ▲5)은 오히려 틀리고
+    # 원본 마크 '-'(변동 없음)가 단위 연속 관점에서 옳다.
+    ('경북대학교', 'IT대학 자율학부', '논술', '논술전형'),
+}
+_prev_recomputed = []
+def recompute_prev(key, enroll_cell, prev):
+    # 모집인원 셀이 '순수 숫자'일 때만. '남:4\n여:4' 같은 특수 표기는 num()이 앞 숫자(4)만
+    # 뽑아 총원(8)과 달라지므로 재계산하면 오히려 틀린다(단국대 성악전공 실사례 — 제외).
+    if not isinstance(enroll_cell, (int, float)) or not _PURE_MARK.fullmatch(prev): return prev
+    if _key27_count.get(key) != 1: return prev
+    k4 = tuple(key.split('|')[:4])
+    if k4 in _RECOMPUTE_SKIP: return prev
+    e26 = _E26_OVERRIDES.get(k4) or _E26.get(key)
+    if e26 is None: return prev          # 2026에 동일 키 없음(개명·신설·표기차) → 원본 유지
+    real = int(enroll_cell) - e26
+    new = '-' if real == 0 else (f'▲{real}' if real > 0 else f'▼{-real}')
+    old_norm = re.sub(r'\s', '', prev).replace('△', '▲').replace('↑', '▲').replace('▽', '▼').replace('↓', '▼') or '-'
+    if new == old_norm: return prev
+    _prev_recomputed.append((key, prev or '(공란)', new, e26, int(enroll_cell)))
+    return new
 
 cat_counter = {}
 audit = {}
@@ -379,7 +408,7 @@ for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
-    enroll = num(r[8]); prev = apply_prev_correction(uni, dept, jhname, s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    enroll = num(r[8]); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
@@ -498,7 +527,10 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
 print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 4: 세명대 3 + 계명대 1)')
-print(f'전년대비 마크 교정 적용: {_prev_fixed[0]}건 (예상 1: 충남대 의예 학생부종합II 지역)')
+print(f'전년대비 재계산 교정: {len(_prev_recomputed)}건 (2026 실측 스냅샷 대조, 예상 51 — 스킵 1·오버라이드 1 반영)')
+for _k, _old, _new, _e26, _e27 in _prev_recomputed:
+    _u, _d, _, _j, _ = _k.split('|')
+    print(f'    {_u} {_d} {_j}: {_old} → {_new}  (2026={_e26}, 2027={_e27})')
 print('category counts:')
 for k, l, d, c, sub, par in CATS:
     print(f'  {cat_counter.get(k,0):6d}  {("  └ " if sub else "")}{k:24s} {l}')
