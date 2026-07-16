@@ -250,11 +250,15 @@ def categorize(uni, gye, dept, jhname, jagyeok):
         elif any(k in d for k in ['중어', '중국', '일어', '일본', '동아시아', '아시아언어']): tags.add('lang_asia')
         else: tags.add('lang_etc')
 
-    # --- 문사철 (literature/history/philosophy), anti-greedy ---
+    # --- 문사철(어문 제외) (history/philosophy + non-language literature), anti-greedy ---
+    # 어문 계열(국어국문·영어영문 등 language 태그)은 문사철에서 제외한다(사용자 확정).
+    # 이전엔 '문학과' substring이 영어영'문학과' 등 외국어문학과 638건을 끌어들이고,
+    # 국어국문 등 국문 계열 384건도 이중 태깅돼 문사철 1,558건 중 66%가 어문과 겹쳤다.
     HUM = ['국어국문', '국문학', '한문학', '문예창작', '문학과', '사학과', '한국사', '국사학', '동양사', '서양사',
            '역사학', '역사문화', '미술사', '고고', '철학', '윤리학', '종교', '신학과', '신학부', '기독교', '불교',
            '선교', '목회', '인문학부', '인문콘텐츠', '문화재', '역사학과', '사학전공']
-    if any(k in d for k in HUM) and not any(x in d for x in ['교육', '군사', '수사', '천문', '통신', '과학수사']):
+    if (any(k in d for k in HUM) and 'language' not in tags
+            and not any(x in d for x in ['교육', '군사', '수사', '천문', '통신', '과학수사'])):
         tags.add('humanities_core')
 
     # --- social science ---
@@ -474,7 +478,7 @@ CATS = [
     ('lang_eng','영어','영어영문·영미','#8b5cf6',True,'language'),
     ('lang_asia','중국어·일본어','중어중문·일어일문·동아시아','#a78bfa',True,'language'),
     ('lang_etc','유럽·기타외국어','불·독·노·서·아랍·베트남 등','#6d28d9',True,'language'),
-    ('humanities_core','문사철','문학·사학·철학','#9333ea',False,''),
+    ('humanities_core','문사철(어문 제외)','사학·철학·종교 및 어문 외 문학','#9333ea',False,''),
     ('non_business_humanities','비상경','인문 전체(상경 제외)','#a855f7',False,''),
     ('social_science','사회과학','정치·행정·언론·사회','#c026d3',False,''),
     ('statistics','통계','통계·데이터','#0d9488',False,''),
