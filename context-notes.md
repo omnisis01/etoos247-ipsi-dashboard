@@ -198,3 +198,29 @@
 ## 2026-07-09 — FOUC 제거
 - head 인라인 스크립트 + CSS `data-theme` 로 첫 페인트 전 테마 확정.
 - JS 로고/아이콘 스왑 로직 제거, CSS `data-theme` 셀렉터로 대체.
+
+## 2026-07-18 — PDF 저장 + 인사이트 대량 확장 (대학 축 완성)
+
+### PDF 저장 (지원카드·비교함)
+window.print() + @media print. 화면 UI(body.printing에서 #app 등) 숨기고 #printArea만 노출. printFav()/printCompare()가 A4 문서 렌더. 이투스247 헤더·날짜·유불리 색상. afterprint에서 정리. 서버 불필요(정적).
+
+### 인사이트 이슈 축 3건 + 레일 그룹핑
+- tier='이슈': 지역인재·지역의사제 총정리 / 무전공·자유전공 / 수능최저 변화. 전부 대시보드 원자료 자체 집계 근거(날조 없음).
+- renderInsightRail을 축 분리: tier(이슈/특집)는 '🔎 이슈·특집' 상단 그룹, 나머지 '🏫 대학별' 하단. `.ins-rail-group` CSS.
+
+### 대학 축 대량 확장 — 49 → 166개 대학 (파이프라인 확립)
+**핵심 패턴(다음 확장도 이대로)**: 서술은 에이전트, 표(rows)는 결정론 스크립트. 역할 분리가 품질·검증을 안정시킴.
+1. `build_data.py` 재빌드된 data.js + insights.js order로 **미보유 대학 집계** → `scratchpad/uni_agg.json`(대학별 total27·증감상위·신설·폐지·changed·최저변화·지역인재/지역의사/무전공).
+2. `scratchpad/uni_rows.json` 결정론 생성: **전형명별 대학 전체 합산**(경북대 거점국립 방식). `from:"2026 수준"`(텍스트→산수검사 스킵), `to:"N명(M개 단위)"`, note="증X·감Y단위·신설Z·개편W"(단위 방향 개수 — 신설 인플레 회피). **verify_insights의 전형명 합산 검사와 그래뉼래러티 일치가 관건.**
+3. 에이전트는 `_prompt_uni.txt` 공통 프롬프트로 서술만(headline·oneLine·verdict·bullets), **rows 만들지 말 것**. 배치 8교씩, 병렬 6개까지.
+4. 병합(에이전트 서술 + uni_rows 표) → `build_ins.py` → `verify_insights.py`(pre-commit).
+
+**겪은 함정(반드시 기억)**:
+- ⚠️ **build_ins.py는 verify 실패해도 insights.js를 이미 수정한다.** 파일럿 실패 후 insights.js에 5교가 남아, 다음 집계에서 have로 제외돼 rows가 안 나옴 → `/tmp/insights_pre_*.js` 백업에서 복원 필요. **주입 전 항상 insights.js 백업.**
+- 학과별 from/to는 지원자격 변형 여러 행과 합산 매칭돼 verify 실패(계명대 간호 12 vs 37). → 전형명 그룹 합산으로 해결.
+- net 증감은 신설 하위행이 부풀림(조선대 일반전형 +401 중 신설 다수). → 단위 방향 개수로 서술.
+- KAIST·한동대 등은 전형 3개 미만이라 표 없이 서술만(정상).
+
+### 잔여
+- 배포 미실행(파일럿부터 미배포). 사용자 지시 대기.
+- (A) 요강 2.5라운드(잔여 5건 ~46명)·3라운드(CDN 미게재 85교) 미착수.
