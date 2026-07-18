@@ -841,7 +841,7 @@ function openCompare() {
   } else {
     const rowM = (lab, fn) => `<tr><td class="rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
     inner.innerHTML = `<div class="drawer-head"><h3>전형 비교 <span class="muted">${items.length}개</span></h3>
-      <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
+      <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
       <div style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
         `<th>${esc(r.uni)}<div class="muted">${esc(r.dept.slice(0, 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
         ${rowM('🎯 올해 유불리', r => `<span class="impact-chip ${V(r).cls}">${V(r).label}</span>`)}
@@ -861,6 +861,7 @@ function openCompare() {
   if (!wasOpen) openDialog($('#compareInner'), '전형 비교함');
   $('#cmpClose').setAttribute('aria-label', '비교함 닫기');
   $('#cmpClose').onclick = closeCompareDrawer;
+  const cp = $('#cmpPrint'); if (cp) cp.onclick = printCompare;
   const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); save('cmp', []); updateCompareBtn(); renderTable(); openCompare(); };
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); save('cmp', [...S.compare]); updateCompareBtn(); renderTable(); openCompare(); });
 }
@@ -940,7 +941,7 @@ function openFav() {
   const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
   inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/9</span></h3>
       <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
-    <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
+    <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
     <div class="fav-wrap">
       <div class="fav-group-label hope">🎯 지원희망 (수시 6장) <span class="muted">${S.fav.hope.length}/6</span></div>
       ${mk('hope', FAV_HOPE_MAX)}
@@ -952,6 +953,7 @@ function openFav() {
   if (!wasOpen) openDialog($('#favInner'), '내 지원카드');
   $('#favClose').setAttribute('aria-label', '지원카드 닫기');
   $('#favClose').onclick = closeFavDrawer;
+  const fp = $('#favPrint'); if (fp) fp.onclick = printFav;
   const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = { hope: [], reach: [] }; saveFav(); renderTable(); openFav(); } };
   inner.querySelectorAll('[data-up]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.up.split(':'); moveFav(bk, +p, -1); });
   inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.dn.split(':'); moveFav(bk, +p, 1); });
@@ -962,6 +964,62 @@ function openFav() {
 function closeFavDrawer() { if ($('#favDrawer').classList.contains('hidden')) return; $('#favDrawer').classList.add('hidden'); closeDialog(); }
 $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer(); };
 $('#favBtn').onclick = openFav;
+
+/* ----- PDF 저장 (인쇄) — 지원카드·비교함을 A4 인쇄용 문서로 렌더 후 window.print() ----- */
+function printDoc(title, subtitle, bodyHTML) {
+  const host = $('#printArea');
+  const stamp = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  host.innerHTML = `<div class="pr-head">
+      <div><div class="pr-title">${esc(title)}</div><div class="pr-sub">${esc(subtitle)}</div></div>
+      <div class="pr-brand">이투스247학원<div class="pr-date">${esc(stamp)} 기준</div></div>
+    </div>${bodyHTML}
+    <div class="pr-foot">2027학년도 수시지원 대시보드 · 입결·경쟁률은 2026학년도 기준 · 모집인원·수능최저는 2027학년도 기준</div>`;
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); host.innerHTML = ''; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+function printFav() {
+  if (!favCount()) { alert('지원카드가 비어 있습니다. 표의 ☆에서 먼저 담아주세요.'); return; }
+  const card = (i, label) => {
+    const r = ROWS[i], v = V(r), d = deltaInfo(r), g = yoyGrade(r), c = yoyComp(r);
+    const dirTxt = x => x == null ? '' : x.basisMismatch ? '기준상이' : ({ easier: '유리', harder: '불리', flat: '유지', down: '유리', up: '불리' }[x.dir] || '');
+    return `<tr>
+      <td class="pr-rank">${label}</td>
+      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(r.dept)}</td>
+      <td>${esc(r.jhtype)}<br><span class="pr-mut">${esc(r.jhname)}</span></td>
+      <td class="pr-c">${fmtInt(r.enroll)}<br><span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span></td>
+      <td class="pr-c">${r.hasChoejeo ? esc(r.choejeo) : '<span class="pr-mut">없음</span>'}</td>
+      <td class="pr-c"><b>${fmt(r.g[0])}</b><br><span class="pr-mut">${r.g[1] == null ? '' : fmt(r.g[1]) + '→'} ${dirTxt(g)}</span></td>
+      <td class="pr-c">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1<br><span class="pr-mut">${dirTxt(c)}</span></td>
+      <td class="pr-c pr-vd ${v.cls}">${v.label}</td></tr>`;
+  };
+  const section = (bucket, name) => {
+    if (!S.fav[bucket].length) return '';
+    const rows = S.fav[bucket].map((i, k) => card(i, bucket === 'hope' ? (k + 1) : '상' + (k + 1))).join('');
+    return `<h2 class="pr-h2">${name} <span class="pr-mut">${S.fav[bucket].length}장</span></h2>
+      <table class="pr-table"><thead><tr><th>순위</th><th>대학 / 모집단위</th><th>전형</th><th>모집<br>(전년대비)</th><th>수능최저</th><th>입결<br>(2026)</th><th>경쟁률<br>(2026)</th><th>올해<br>유불리</th></tr></thead><tbody>${rows}</tbody></table>`;
+  };
+  printDoc('내 지원카드', `지원희망 ${S.fav.hope.length}장 · 상향·도전 ${S.fav.reach.length}장`,
+    section('hope', '🎯 지원희망') + section('reach', '🚀 상향·도전'));
+}
+function printCompare() {
+  const items = [...S.compare].map(i => ROWS[i]);
+  if (!items.length) { alert('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
+  const rowM = (lab, fn) => `<tr><td class="pr-rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
+  const body = `<table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
+      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(r.dept.slice(0, 18))}</span></th>`).join('')}</tr></thead><tbody>
+      ${rowM('올해 유불리', r => `<span class="pr-vd ${V(r).cls}">${V(r).label}</span>`)}
+      ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
+      ${rowM('전형', r => esc(r.jhtype) + '<br><span class="pr-mut">' + esc(r.jhname) + '</span>')}
+      ${rowM('모집(전년대비)', r => `${fmtInt(r.enroll)} <span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span>`)}
+      ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) : '없음')}
+      ${rowM('입결 2025→2026', r => `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>`)}
+      ${rowM('경쟁률 2025→2026', r => `${r.c[1] == null ? '–' : r.c[1].toFixed(1)} → <b>${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1</b>`)}
+      ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
+    </tbody></table>`;
+  printDoc('전형 비교', `${items.length}개 전형 비교`, body);
+}
 
 /* ----- 변화 인사이트 (주요 대학 2028 vs 2027) ----- */
 const INS = window.IPSI_INSIGHTS || { meta: {}, order: [], unis: {} };
