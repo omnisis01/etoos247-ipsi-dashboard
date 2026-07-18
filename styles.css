@@ -453,6 +453,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .ins-rail-item.soon{opacity:.55;cursor:default}
 .ins-tier{font-size:10px;font-weight:800;padding:1px 7px;border-radius:6px;background:var(--primary);color:#fff;flex:none}
 .ins-soon{font-size:10.5px;font-weight:700;color:var(--text-mute);flex:none}
+.ins-rail-group{padding:12px 11px 5px;font-size:12px;font-weight:800;color:var(--text);letter-spacing:-.01em}
+.ins-rail-group .muted{font-weight:600;font-size:10.5px}
 .insight-main{flex:1;min-width:0;display:flex;flex-direction:column}
 .ins-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 24px 15px;border-bottom:1px solid var(--line)}
 .ins-uni{font-size:13px;font-weight:800;color:var(--primary-ink);margin-bottom:6px;display:flex;align-items:center;gap:7px}

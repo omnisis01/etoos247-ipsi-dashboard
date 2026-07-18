@@ -1061,12 +1061,18 @@ function renderInsightBanner() {
 }
 function renderInsightRail() {
   const rail = $('#insightRail');
-  rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>` +
-    (INS.order || []).map(u => {
-      const d = INS.unis[u], active = u === _insUni;
-      return `<button class="ins-rail-item${active ? ' active' : ''}${d ? '' : ' soon'}" data-uni="${esc(u)}"${d ? '' : ' disabled'}>
-        <span class="irl-name">${esc(u)}</span>${d ? (d.tier ? `<span class="ins-tier">${esc(d.tier)}</span>` : '') : '<span class="ins-soon">준비중</span>'}</button>`;
-    }).join('');
+  const item = u => {
+    const d = INS.unis[u], active = u === _insUni;
+    return `<button class="ins-rail-item${active ? ' active' : ''}${d ? '' : ' soon'}" data-uni="${esc(u)}"${d ? '' : ' disabled'}>
+      <span class="irl-name">${esc(u)}</span>${d ? (d.tier ? `<span class="ins-tier">${esc(d.tier)}</span>` : '') : '<span class="ins-soon">준비중</span>'}</button>`;
+  };
+  // 축 분리: 이슈·특집(주제별 총정리)을 상단에, 대학별을 하단에.
+  const order = INS.order || [];
+  const issues = order.filter(u => INS.unis[u] && (INS.unis[u].tier === '이슈' || INS.unis[u].tier === '특집'));
+  const unis = order.filter(u => !issues.includes(u));
+  rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>`
+    + (issues.length ? `<div class="ins-rail-group">🔎 이슈·특집 <span class="muted">주제별 총정리</span></div>` + issues.map(item).join('') : '')
+    + `<div class="ins-rail-group">🏫 대학별 <span class="muted">${unis.filter(u => INS.unis[u]).length}개 대학</span></div>` + unis.map(item).join('');
   rail.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => { _insUni = b.dataset.uni; renderInsightRail(); renderInsightDetail(_insUni); track('open_insight', { uni: _insUni }); $('#insightMain').scrollTop = 0; });
 }
 // 서술체 문장을 두괄식(결론) + 개조식(글머리표)으로 분해
