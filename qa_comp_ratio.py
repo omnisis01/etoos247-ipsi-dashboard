@@ -28,6 +28,22 @@ def main():
     i = {k: sch.index(k) for k in ('uni', 'dept', 'jhtype', 'jhname', 'jagyeok', 'enroll', 'c26')}
     dic = d['dicts']
     snap = json.load(open(os.path.join(HERE, 'enroll26.json'), encoding='utf-8'))['enroll26']
+    # build_data.py가 2026 요강으로 확정한 인원 교정(_E26_OVERRIDES)을 여기서도 반영한다.
+    # 원본 enroll26.json은 사용자 제공 스냅샷이라 손대지 않고, 교정만 겹쳐 읽는다.
+    # 공유하지 않으면 이미 규명·교정한 행이 계속 '의심'으로 남아 래칫이 무뎌진다.
+    import re as _re
+    _bt = open(os.path.join(HERE, 'build_data.py'), encoding='utf-8').read()
+    _blk = _re.search(r'_E26_OVERRIDES = \{(.*?)\n\}', _bt, _re.S)
+    _ov = {}
+    if _blk:
+        for _m in _re.finditer(r"\('([^']+)', '([^']+)', '([^']+)', '([^']+)'\): (\d+)", _blk.group(1)):
+            _ov[tuple(_m.group(i) for i in (1, 2, 3, 4))] = int(_m.group(5))
+    if _ov:
+        for _k in list(snap):
+            _p = _k.split('|')
+            if len(_p) >= 4 and tuple(_p[:4]) in _ov:
+                snap[_k] = _ov[tuple(_p[:4])]
+        print(f"  (2026 인원 교정 {len(_ov)}건 반영)")
 
     applicable = suspect = 0
     hits = []
