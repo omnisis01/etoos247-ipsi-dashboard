@@ -466,6 +466,7 @@ _ROW_DEDUPE = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop'] 
 _dedupe_seen = set()
 _dropped = []
 _new_wiped = []
+_grade_wiped = []
 
 # 2026 입결(70%컷) 교정. 원천 엑셀의 입결이 비었거나 다른 판본 값인 경우를 외부 입결자료로 보정한다.
 # 근거: '대학전형및3개년입결_메디컬.xlsx'(대학×전형별, 비고에 기준 명시)와
@@ -540,6 +541,11 @@ for r in raw:
     # data.js 자체에서 비워야 이 값을 쓰는 모든 소비자(앱·하네스·향후 도구)가 한 번에 안전해진다.
     if delta_kind == 'new' and (any(x is not None for x in comp) or any(x is not None for x in grade)
                                 or any(x for x in chung)):
+        # ⚠️ 이 제거는 입결교정(_GRADE_CORR)보다 뒤에 온다. 신설 행에 입결교정을 걸면
+        #    교정은 '적용됨'으로 집계되고 값은 여기서 지워져 조용히 무효가 된다.
+        #    실제로 서강대 일반전형 II(2027 신설)에 그런 항목을 넣었다가 발견했다.
+        if _gk in _GRADE_CORR:
+            _grade_wiped.append(_gk)
         _new_wiped.append((uni, dept, jhtype, jhname))
         comp = [None, None, None]; grade = [None, None, None]
         conv = [None, None, None]; chung = ['', '', '']
@@ -596,6 +602,9 @@ for _a in _ADDED_ROWS:
 _miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
 _drop_hit = [x for x in _dropped if x[1] != 'dedupe']
 _dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
+if _grade_wiped:
+    raise SystemExit(f"[입결교정] 신설 행에 건 입결교정 {len(_grade_wiped)}건이 신설 실적 제거로 무효화됨 — "
+                     f"data_corrections.json에서 빼거나 해당 행의 신설 판정을 검토할 것: {_grade_wiped}")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
