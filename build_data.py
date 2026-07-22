@@ -466,6 +466,17 @@ _ROW_DEDUPE = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop'] 
 _dedupe_seen = set()
 _dropped = []
 
+# 전형명 오기 교정. 인원은 맞는데 이름이 틀린 경우가 있다 —
+# 한남대는 실기전형 163명(미술교육·스포츠과학·융합디자인·회화)이 '일반전형'으로 실려
+# 교과 일반전형 1,350명과 한 이름으로 섞였고, 중부대는 요강상 별개인 두 전형
+# ('학교생활우수자' 교과70+면접30 8명 / '학교생활우수자(항공운항서비스)' 교과50+면접50 21명)이
+# 같은 이름으로 실렸다. 학생이 전형을 고르는 화면이라 이름이 틀리면 인원이 맞아도 오해를 부른다.
+# 같은 키에 행이 둘이면 'e'(모집인원)로 특정한다.
+_ROW_RENAME = {}
+for _c in _CORR.get('rename', []):
+    _ROW_RENAME.setdefault((_c['uni'], _c['dept'], _c['jht'], _c['jhn']), []).append((_c.get('e'), _c['to']))
+_renamed = set()
+
 cat_counter = {}
 audit = {}
 for r in raw:
@@ -478,6 +489,10 @@ for r in raw:
     if _dk in _ROW_DEDUPE:
         if _dk in _dedupe_seen: _dropped.append((_dk, 'dedupe')); continue
         _dedupe_seen.add(_dk)
+    if _dk in _ROW_RENAME:
+        for _e, _to in _ROW_RENAME[_dk]:
+            if _e is None or _e == num(r[8]):
+                _renamed.add((_dk, _e)); jhname = _to; break
     enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
@@ -551,7 +566,7 @@ for _a in _ADDED_ROWS:
 _miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
 _drop_hit = [x for x in _dropped if x[1] != 'dedupe']
 _dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
-print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)}"
+print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
       + (f" · ⚠️미적용 {_miss}" if _miss else ""))
 if _miss or len(_drop_hit) != len(_ROW_DROP) or len(_dedupe_hit) < len(_ROW_DEDUPE):
     raise SystemExit(f"교정 불일치 — 엑셀 값이 바뀌었을 수 있음. 미적용 값={_miss}, 제거={_drop_hit}, 중복제거={_dedupe_hit}")
