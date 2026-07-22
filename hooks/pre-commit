@@ -30,6 +30,10 @@ echo "$STAGED" | grep -qE '^(insights\.js|build_ins\.py|merge_ins\.py|fix_ins_nu
 echo "pre-commit: 데이터 하네스 실행"
 
 [ -n "$NEED_DATA" ] && run "verify_data.py (data.js 불변식)" verify_data.py
+# 경쟁률 산술 래칫 — 2026 경쟁률 × 2026 모집인원이 정수여야 한다는 제약으로
+# 스냅샷(enroll26.json)·경쟁률·동명이단위 모순을 잡는다. 기존 37건은 기준선으로 고정돼
+# 빌드를 막지 않고, 새 의심이 생길 때만 실패한다(전년대비 마크 오류의 선행 신호).
+[ -n "$NEED_DATA" ] && run "qa_comp_ratio.py (경쟁률 산술 래칫)" qa_comp_ratio.py
 # 인사이트 하네스는 원천 엑셀 유무를 스스로 판단해 없으면 SKIP(exit 0)한다.
 # 여기서 셸/glob으로 파일 존재를 확인하지 마라 — macOS는 파일명을 NFD로 저장해
 # 한글 경로 glob(NFC 패턴)이 빈 결과를 내고, 그 탓에 하네스가 조용히 건너뛰어져
