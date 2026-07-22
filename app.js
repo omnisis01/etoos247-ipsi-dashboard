@@ -481,15 +481,22 @@ function renderHighlights() {
   const seg = $('#hlFilter');
   if (!seg.dataset.init) {
     seg.dataset.init = '1';
-    seg.innerHTML = [['all', '전체'], ['good', '유리'], ['bad', '불리'], ['new', '신설']]
+    seg.innerHTML = [['all', '전체'], ['good', '유리'], ['bad', '불리'], ['new', '신설'], ['nong', '농어촌']]
       .map(([k, l]) => `<button data-k="${k}" class="${S.hlFilter === k ? 'on' : ''}">${l}</button>`).join('');
     seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.hlFilter = b.dataset.k; [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.hlFilter)); renderHighlights(); };
   } else {
     [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.hlFilter));
   }
+  const nong = S.hlFilter === 'nong';
+  const hd = $('#heroDesc');
+  if (hd) hd.innerHTML = nong
+    ? '<b>농어촌학생전형</b>만 모아 봅니다 — 큐레이션 없이 <b>전 대학</b> 대상으로, 2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 추정</b>입니다. 카드를 누르면 근거를 볼 수 있어요.'
+    : '2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 추정</b>입니다. <b>메디컬·상위권 본교(SKY·서성한·중경외시·건동홍)</b>만 선별합니다. 카드를 누르면 근거를 볼 수 있어요.';
   let pool = FILTERED.filter(r => {
     const v = V(r);
     if (!v.sig.length) return false;
+    // 농어촌만 보기: 큐레이션(메디컬·상위권) 우회 — 전 대학의 농어촌학생전형을 유불리와 함께
+    if (nong) return r.jhname.includes('농어촌');
     if (!isPickWorthy(r)) return false;        // 메디컬·상위권 본교 한정
     if (S.hlFilter === 'good') return v.label === '유리';
     if (S.hlFilter === 'bad') return v.label === '불리';
@@ -512,9 +519,9 @@ function renderHighlights() {
     pool.sort((a, b) => hlRelevance(b) - hlRelevance(a));
     top = pool.slice(0, 12);
   }
-  $('#hlSub').textContent = `· ${pool.length.toLocaleString()}건 중 주요 ${top.length}건`;
+  $('#hlSub').textContent = nong ? `· 농어촌학생전형 · 전 대학 ${pool.length.toLocaleString()}건 중 주요 ${top.length}건` : `· ${pool.length.toLocaleString()}건 중 주요 ${top.length}건`;
   const box = $('#highlightCards');
-  if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건의 <b>메디컬·상위권 본교</b>에서 두드러진 유불리 신호가 없습니다.<br><span class="muted">아래 전형 목록에서 전체 대학을 확인하세요.</span></div>`; return; }
+  if (!top.length) { box.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="es-ico">🔍</div>이 조건의 <b>${nong ? '농어촌학생전형' : '메디컬·상위권 본교'}</b>에서 두드러진 유불리 신호가 없습니다.<br><span class="muted">아래 전형 목록에서 전체 대학을 확인하세요.</span></div>`; return; }
   box.innerHTML = top.map(r => {
     const v = V(r), d = deltaInfo(r);
     const medSub = ['med_med', 'med_dent', 'med_oriental', 'med_vet', 'med_pharm'].find(k => r.cats.includes(k));
