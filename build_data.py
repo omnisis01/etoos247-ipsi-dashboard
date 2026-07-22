@@ -455,7 +455,11 @@ def apply_enroll_correction(uni, dept, jhtype, jhname, enroll):
     return enroll
 
 # 유령 행 제거(예: 전남대 여수 '공학계열' — 2026 모집단위가 2027 개편으로 폐지됐으나 엑셀에 잔존).
-_ROW_DROP = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop']}
+# 같은 키(대학|학과|전형유형|전형명)에 행이 둘인 경우가 있어(한양대 경제금융 8·17) 선택 'e'(모집인원)로
+# 특정한다. 'e' 없으면 해당 키 전체 제거.
+_ROW_DROP = {}
+for _c in _CORR['drop']:
+    _ROW_DROP.setdefault((_c['uni'], _c['dept'], _c['jht'], _c['jhn']), set()).add(_c.get('e'))
 _dropped = []
 
 cat_counter = {}
@@ -464,8 +468,9 @@ for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
-    if (uni, dept, jhtype, jhname) in _ROW_DROP:
-        _dropped.append((uni, dept, jhtype, jhname)); continue
+    _dk = (uni, dept, jhtype, jhname)
+    if _dk in _ROW_DROP and (None in _ROW_DROP[_dk] or num(r[8]) in _ROW_DROP[_dk]):
+        _dropped.append((_dk, num(r[8]))); continue
     enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정

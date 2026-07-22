@@ -53,11 +53,14 @@ def load_excel():
                     'jht': s(r[5]), 'jhn': s(r[6]), 'e': num(r[8])})
     # 교정 적용: 값 수정 / 유령 행 제거 / 누락 행 추가
     ec = {(c['uni'], c['dept'], c['jht'], c['jhn']): (c['old'], c['new']) for c in _CORR['enroll']}
-    drop = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop']}
+    # 같은 키에 행이 둘인 경우가 있어 선택 'e'(모집인원)로 특정한다 — build_data.py와 동일 규칙.
+    drop = {}
+    for c in _CORR['drop']:
+        drop.setdefault((c['uni'], c['dept'], c['jht'], c['jhn']), set()).add(c.get('e'))
     kept = []
     for x in out:
         k = (x['uni'], x['dept'], x['jht'], x['jhn'])
-        if k in drop: continue
+        if k in drop and (None in drop[k] or x['e'] in drop[k]): continue
         if k in ec and x['e'] == ec[k][0]: x['e'] = ec[k][1]
         kept.append(x)
     for a in _CORR['add']:
