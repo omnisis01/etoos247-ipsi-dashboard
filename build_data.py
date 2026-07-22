@@ -467,6 +467,18 @@ _dedupe_seen = set()
 _dropped = []
 _new_wiped = []
 
+# 2026 입결(70%컷) 교정. 원천 엑셀의 입결이 비었거나 다른 판본 값인 경우를 외부 입결자료로 보정한다.
+# 근거: '대학전형및3개년입결_메디컬.xlsx'(대학×전형별, 비고에 기준 명시)와
+#       '24~26년 3개년 입결 자료.xlsx'(50%/70%컷 분리) 두 종.
+# ⚠️ 두 자료는 서로도 메디컬 70%컷 기준 약 25% 불일치한다(판본 차이). 그래서
+#    ① 두 자료가 일치하는데 대시보드만 다른 경우와 ② 대시보드가 비어 있는 경우만 반영한다.
+#    한쪽 자료만 대시보드와 다른 경우(19건)는 판정 근거가 부족해 손대지 않는다.
+# ⚠️ 반영 대상은 전부 std26='최종등록자70%컷' 행이다 — 기준이 다르면 값을 섞으면 안 된다.
+_GRADE_CORR = {}
+for _c in _CORR.get('ipgyeol', []):
+    _GRADE_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c.get('old'), _c['new'])
+_grade_fixed = set()
+
 # 전형명 오기 교정. 인원은 맞는데 이름이 틀린 경우가 있다 —
 # 한남대는 실기전형 163명(미술교육·스포츠과학·융합디자인·회화)이 '일반전형'으로 실려
 # 교과 일반전형 1,350명과 한 이름으로 섞였고, 중부대는 요강상 별개인 두 전형
@@ -499,6 +511,11 @@ for r in raw:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
+    _gk = (uni, dept, jhtype, jhname)
+    if _gk in _GRADE_CORR:
+        _old, _new = _GRADE_CORR[_gk]
+        if (grade[0] is None and _old is None) or (grade[0] is not None and _old is not None and abs(grade[0] - _old) < 1e-9):
+            grade[0] = _new; _grade_fixed.add(_gk)
     conv = [num(r[23]), num(r[28]), num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
@@ -579,6 +596,7 @@ for _a in _ADDED_ROWS:
 _miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
 _drop_hit = [x for x in _dropped if x[1] != 'dedupe']
 _dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
+print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
       + (f" · ⚠️미적용 {_miss}" if _miss else ""))
