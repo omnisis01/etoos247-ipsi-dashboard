@@ -71,14 +71,26 @@ const deptDisp = r => !isJisaje(r) ? r.dept
 function parseLeast(t) {
   const z = (t || '').replace(/\s/g, '');
   if (!z || /^(없음|미적용|x|-|미정)$/i.test(z)) return { n: null, sum: null, type: 'none' };
-  const m = z.match(/(\d)합(\d{1,2})/);
-  if (m) return { n: +m[1], sum: +m[2], type: 'sum' };
+  // ① 'N합M'이 여러 번 나오면 가장 완화된(합이 큰) 조건을 쓴다.
+  //    선택과목·응시조건에 따른 대안 경로가 병기되기 때문이다
+  //    (예: '수+국,영,탐(1) 2합8 / 과탐 1과목 응시 : 2합9').
+  //    이 필터는 '내 합으로 충족 가능한 전형'을 찾는 용도라, 한 경로라도 충족되면 보여야 한다.
+  //    첫 매치만 쓰면 41행이 실제로는 지원 가능한데 목록에서 빠졌다.
+  const ms = [...z.matchAll(/(\d)합(\d{1,2})/g)];
+  if (ms.length) {
+    const best = ms.reduce((a, b) => (+b[2] > +a[2] ? b : a));
+    return { n: +best[1], sum: +best[2], type: 'sum' };
+  }
+  // ② '1개M'은 '1합M'과 수학적으로 같다(한 영역이 M등급 이내). 471행이 여기 해당한다.
+  //    ⚠️ '3개3'(3개 각 3등급)은 '3합3'과 전혀 다르므로 1개일 때만 변환한다.
+  const one = z.match(/1개(\d)/);
+  if (one) return { n: 1, sum: +one[1], type: 'sum' };
   return { n: null, sum: null, type: 'etc' };   // 최저 있으나 N합X로 표현 안 됨 → '그 외'
 }
 ROWS.forEach(r => { const p = parseLeast(r.choejeo); r.leastN = p.n; r.leastSum = p.sum; r.leastType = p.type; });
 // N개 합별 슬라이더 범위(데이터 실측 min~max)
 const LEAST_BOUNDS = {};
-[2, 3, 4].forEach(n => {
+[1, 2, 3, 4].forEach(n => {
   const sums = ROWS.filter(r => r.leastN === n).map(r => r.leastSum);
   LEAST_BOUNDS[n] = sums.length ? { min: Math.min(...sums), max: Math.max(...sums), count: sums.length } : { min: n, max: n * 6, count: 0 };
 });
@@ -439,11 +451,11 @@ function renderFilters() {
     <div class="f-title">🎯 수능최저 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건${n === 'etc' ? '' : ' 충족'}</span>` : ''}</div>
     <div class="lf-hint muted">${hint}</div>
     <div class="lf-radios" role="radiogroup" aria-label="합산 영역 수">
-      ${[['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합'], ['etc', '그 외']].map(([k, lab]) => `<label class="lf-radio${n === k ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === k ? ' checked' : ''}> ${lab}</label>`).join('')}
+      ${[['1', '1개'], ['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합'], ['etc', '그 외']].map(([k, lab]) => `<label class="lf-radio${n === k ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === k ? ' checked' : ''}> ${lab}</label>`).join('')}
       <button class="lf-clear${n ? '' : ' hidden'}" type="button" aria-label="최저 검색 해제">해제</button>
     </div>
     ${n === 'etc' ? '' : `<div class="lf-slider ${isSum ? '' : 'is-disabled'}">
-      <label for="leastSum">내 ${isSum ? n : 'N'}개 합 <b>${isSum ? S.leastSum : '—'}</b></label>
+      <label for="leastSum">${isSum && n === '1' ? '내 최고 등급' : `내 ${isSum ? n : 'N'}개 합`} <b>${isSum ? S.leastSum : '—'}</b></label>
       <input id="leastSum" type="range" min="${b ? b.min : 2}" max="${b ? b.max : 18}" step="1" value="${isSum ? S.leastSum : 0}" ${isSum ? '' : 'disabled'}>
       ${isSum ? `<div class="lf-scale"><span>${b.min} 빡셈</span><span>느슨 ${b.max}</span></div>` : ''}
     </div>`}`;
