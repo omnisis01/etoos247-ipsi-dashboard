@@ -465,6 +465,7 @@ for _c in _CORR['drop']:
 _ROW_DEDUPE = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop'] if c.get('dedupe')}
 _dedupe_seen = set()
 _dropped = []
+_new_wiped = []
 
 # 전형명 오기 교정. 인원은 맞는데 이름이 틀린 경우가 있다 —
 # 한남대는 실기전형 163명(미술교육·스포츠과학·융합디자인·회화)이 '일반전형'으로 실려
@@ -514,6 +515,18 @@ for r in raw:
         delta_kind, delta_n = parse_delta(prev)
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
+
+    # 신설 전형의 상속된 과거 실적 제거.
+    # 2027 신설 전형에 2025·2026 실적이 있을 수 없는데 원천 엑셀 25행이 같은 학과 다른 전형의
+    # 값을 그대로 물려받았다(아주대 의학과 지역의사선발전형에 ACE전형 경쟁률 27.1→34.2가 붙어
+    # '경쟁률 상승=불리' 오판정까지 났다). 전년 실적은 학과가 아니라 학과×전형에 귀속된다.
+    # data.js 자체에서 비워야 이 값을 쓰는 모든 소비자(앱·하네스·향후 도구)가 한 번에 안전해진다.
+    if delta_kind == 'new' and (any(x is not None for x in comp) or any(x is not None for x in grade)
+                                or any(x for x in chung)):
+        _new_wiped.append((uni, dept, jhtype, jhname))
+        comp = [None, None, None]; grade = [None, None, None]
+        conv = [None, None, None]; chung = ['', '', '']
+        std26 = ''; stdK = ''; std25 = ''
 
     tags = sorted(categorize(uni, gye, dept, jhname, jagyeok))
     for t in tags:
@@ -566,6 +579,7 @@ for _a in _ADDED_ROWS:
 _miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
 _drop_hit = [x for x in _dropped if x[1] != 'dedupe']
 _dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
+print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
       + (f" · ⚠️미적용 {_miss}" if _miss else ""))
 if _miss or len(_drop_hit) != len(_ROW_DROP) or len(_dedupe_hit) < len(_ROW_DEDUPE):

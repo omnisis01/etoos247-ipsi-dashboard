@@ -172,6 +172,39 @@ def verify(d):
         fails.append(f"완전중복 행 {len(dups)}종 — 요강 총계로 확인 후 실중복이면 data_corrections.json "
                      f"dedupe, 정상 분할이면 DUP_OK 등록: {[f'{a}|{b[:12]}|{c}|{e}' for a, b, c, e in (x[:4] for x in dups)][:8]}")
 
+    # 9) 신설 전형은 과거 실적을 가질 수 없다.
+    #    유래: 원천 엑셀 94행이 같은 학과 다른 전형의 값을 물려받았다. 아주대 의학과
+    #    지역의사선발전형(2027 신설·권역당 1명)에 같은 학과 ACE전형의 경쟁률 27.1→34.2가 붙어
+    #    '경쟁률 상승 = 불리' 판정까지 났다. 전년 실적은 학과가 아니라 학과×전형에 귀속된다.
+    #    build_data.py가 비우므로 여기서는 그 작업이 실제로 됐는지만 확인한다.
+    idk = col(sch, 'dkind'); ic26 = col(sch, 'c26'); ig26 = col(sch, 'g26')
+    ich = [col(sch, k) for k in ('chung26', 'chung25', 'chung24')]
+    ic = [col(sch, k) for k in ('c26', 'c25', 'c24')]
+    ig = [col(sch, k) for k in ('g26', 'g25', 'g24')]
+    leak = [r for r in rows if r[idk] == 'new' and (
+        any(r[i] is not None for i in ic) or any(r[i] is not None for i in ig)
+        or any(r[i] for i in ich))]
+    if leak:
+        fails.append(f"신설 전형에 과거 실적 잔존 {len(leak)}행 — build_data.py의 신설 실적 제거가 "
+                     f"동작하지 않았다: {[(d['dicts']['uni'][r[iu]], d['dicts']['dept'][r[idp]][:10]) for r in leak][:6]}")
+
+    # 10) 학과 단위로 복사된 경쟁률 탐지.
+    #     같은 학과의 서로 다른 전형 3개 이상이 '소수점이 있는' 동일 경쟁률을 공유하면
+    #     우연이 아니다(소수 1자리 이상은 분모가 제각각이라 3중 일치 확률이 사실상 0).
+    #     정수값 일치는 소규모 전형에서 흔하므로 제외한다.
+    from collections import defaultdict
+    by_dept = defaultdict(lambda: defaultdict(set))
+    for r in rows:
+        v = r[ic26]
+        if v is None or float(v) == int(float(v)):
+            continue
+        key = (d['dicts']['uni'][r[iu]], d['dicts']['dept'][r[idp]])
+        by_dept[key][v].add((r[ijt], d['dicts']['jhname'][r[ijn]]))
+    shared = [(k, v, len(s)) for k, m in by_dept.items() for v, s in m.items() if len(s) >= 3]
+    if shared:
+        fails.append(f"학과 단위 경쟁률 복사 의심 {len(shared)}건 — 한 학과의 전형 3개 이상이 같은 "
+                     f"소수 경쟁률을 공유한다: {[(a, b[:10], v, n) for (a, b), v, n in shared][:5]}")
+
     return fails, {
         'rows': len(rows), 'uni': len(d['dicts']['uni']),
         'source': d['meta'].get('source', ''),
