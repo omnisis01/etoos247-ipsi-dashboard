@@ -23,6 +23,46 @@ const ROWS = D.rows.map((r, i) => ({
   std25: dc.std ? (dc.std[r[37]] || '') : '',
 }));
 
+/* ---------- 표시용 학과명 ----------
+   지역의사제(지사제)는 같은 의예과·의학과라도 졸업 후 해당 지역 의무복무가 붙는 별개 트랙이라
+   목록에서 일반 전형과 즉시 구별돼야 한다. 학과명 옆에 '(지사제)'를 붙인다.
+   전수 174행 전부 의예과·의학과라 비(非)의대 오탐은 없다.
+   이미 괄호가 붙은 학과명('의학과(의예과)' 6행)은 괄호를 겹치지 않고 안쪽에 합친다.
+   ⚠️ 전형명만으로 판별하면 2교를 놓친다. 두 곳은 제도상 지역의사제(진료권별 의무복무 10년)인데
+   자체 전형명이 '지역의사'를 쓰지 않는다 — 복지부 공표 인원(성균관 3명·단국천안 15명)이
+   본 데이터의 권역 합계와 정확히 일치해 확인했다. 명단에 박아 예외 처리한다. */
+const JISAJE_ALIAS = new Set(['성균관대학교|성균인재-지역인재전형', '단국대학교(천안)|지역의료인재전형']);
+const isJisaje = r => /지역의사/.test(r.jhname || '') || JISAJE_ALIAS.has(r.uni + '|' + r.jhname);
+const deptDisp = r => !isJisaje(r) ? r.dept
+  : r.dept.endsWith(')') ? r.dept.slice(0, -1) + '·지사제)'
+  : r.dept + '(지사제)';
+
+/* ---------- 권역 구분자(qual) ----------
+   지역의사제처럼 같은 대학·학과·전형을 권역별로 쪼개 1명씩 뽑는 전형이 있다.
+   구분 정보가 '지원자격'에만 있어서 카드·목록에는 똑같은 줄이 6~7개 반복돼 보였다
+   (아주대 의학과 지역의사선발전형 = 의정부/남양주/이천/포천/인천서북/인천중부 각 1명).
+   전수 46종·205행. 같은 키에 행이 둘 이상일 때만 지원자격 앞부분을 구분자로 붙인다
+   — 평소엔 붙지 않으므로 화면이 지저분해지지 않는다. */
+(() => {
+  const grp = {};
+  ROWS.forEach(r => {
+    const k = r.uni + '|' + r.dept + '|' + r.jhtype + '|' + r.jhname;
+    (grp[k] = grp[k] || []).push(r);
+  });
+  Object.values(grp).forEach(list => {
+    if (list.length < 2) return;
+    list.forEach(r => {
+      // 지원자격 첫 구절(괄호 앞)이 권역명인 경우가 대부분: '의정부권(의정부시,동두천시…)'
+      const q = (r.jagyeok || '').replace(/\s+/g, ' ').trim();
+      if (!q) return;
+      r.qual = (q.split('(')[0] || q).trim().slice(0, 18);
+    });
+    // 구분자가 전부 같으면(구분에 도움이 안 되면) 붙이지 않는다.
+    const vals = new Set(list.map(r => r.qual || ''));
+    if (vals.size < 2) list.forEach(r => { delete r.qual; });
+  });
+})();
+
 // 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
 function parseLeast(t) {
   const z = (t || '').replace(/\s/g, '');
@@ -545,10 +585,10 @@ function renderHighlights() {
       const ico = s.dir === 'good' ? '<span class="dot-good">▲</span>' : s.dir === 'bad' ? '<span class="dot-bad">▼</span>' : '<span class="dot-new">✦</span>';
       return `<div class="imp-line">${ico}<span>${esc(s.t)}</span></div>`;
     }).join('');
-    return `<div class="hl-card${medSub ? ' is-medical' : ''}" data-i="${r._i}" tabindex="0" role="button" aria-label="${medSub ? '메디컬 ' : ''}${esc(r.uni)} ${esc(r.dept)}, 올해 ${v.label} — 상세 보기">
+    return `<div class="hl-card${medSub ? ' is-medical' : ''}" data-i="${r._i}" tabindex="0" role="button" aria-label="${medSub ? '메디컬 ' : ''}${esc(r.uni)} ${esc(deptDisp(r))}, 올해 ${v.label} — 상세 보기">
       <div class="hl-top">${medBadge}${semiBadge}<span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
-      <div class="hl-dept">${esc(r.dept)}</div>
-      <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
+      <div class="hl-dept">${esc(deptDisp(r))}</div>
+      <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)}${r.qual ? ` · <span class="qual-tag">${esc(r.qual)}</span>` : ''} · 모집 ${fmtInt(r.enroll)}명</div>
       ${yoyHTML(r)}
       <div class="hl-tags">${tags.join('')}</div>
       <div class="hl-impact">${reasons || '<span class="muted">상세 보기</span>'}</div>
@@ -689,8 +729,8 @@ function renderTable() {
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
-      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(r.dept)} 상세 보기">${esc(r.dept)}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div></td>
+      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
+      <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}</td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>
       <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
@@ -782,7 +822,7 @@ function openModal(i) {
   $('#modalCard').innerHTML = `
     <div class="modal-head"><div class="mh-top"><div>
       <div class="mh-uni">${esc(r.uni)} · ${esc(r.region)} ${esc(r.sigun)}</div>
-      <h3>${esc(r.dept)}</h3>
+      <h3>${esc(deptDisp(r))}</h3>
       <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${cats}</div>
     </div><button class="modal-close" id="modalClose">✕</button></div></div>
     <div class="modal-body">
@@ -941,7 +981,7 @@ function favSlotCard(i, bucket, pos, lastIdx) {
   return `<div class="fav-slot" data-open="${i}"><span class="rank-badge ${bucket}">${label}</span>
     <div class="fav-body">
       <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div>
-      <div class="fav-dept">${esc(r.dept)}</div>
+      <div class="fav-dept">${esc(deptDisp(r))}</div>
       <div class="fav-meta"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span> 모집 ${fmtInt(r.enroll)} <span class="delta ${d.cls}">${d.txt}</span>
         · 입결 <b>${fmt(r.g[0])}</b> · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
       ${yoyHTML(r)}
@@ -1000,7 +1040,7 @@ function printFav() {
     const dirTxt = x => x == null ? '' : x.basisMismatch ? '기준상이' : ({ easier: '유리', harder: '불리', flat: '유지', down: '유리', up: '불리' }[x.dir] || '');
     return `<tr>
       <td class="pr-rank">${label}</td>
-      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(r.dept)}</td>
+      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(deptDisp(r))}</td>
       <td>${esc(r.jhtype)}<br><span class="pr-mut">${esc(r.jhname)}</span></td>
       <td class="pr-c">${fmtInt(r.enroll)}<br><span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span></td>
       <td class="pr-c">${r.hasChoejeo ? esc(r.choejeo) : '<span class="pr-mut">없음</span>'}</td>
