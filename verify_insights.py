@@ -34,6 +34,10 @@ JHT = [(r'\(교과\)|학생부교과|\s교과\b|교과$', '학생부교과'),
 
 def nz(t): return re.sub(r'[\s()·,/\-]|전형$', '', t or '')
 
+# (A) 2.5라운드 모집인원 교정 — data_corrections.json을 build_data.py와 공유한다.
+# 인사이트 숫자는 교정 후 값을 쓰므로, 대조 기준인 엑셀도 동일하게 교정해야 일치한다.
+_CORR = json.load(open(os.path.join(HERE, 'data_corrections.json'), encoding='utf-8'))
+
 def load_excel():
     import openpyxl
     wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
@@ -44,8 +48,21 @@ def load_excel():
     out = []
     for r in wb['전체'].iter_rows(min_row=4, values_only=True):
         if not s(r[2]): continue
-        out.append({'uni': s(r[2]), 'dept': s(r[4]), 'jht': s(r[5]), 'jhn': s(r[6]), 'e': num(r[8])})
-    return out
+        # 학과명 '(외)' 제거 — build_data.py와 동일 정규화(교정 키 매칭용)
+        out.append({'uni': s(r[2]), 'dept': s(r[4]).replace('(외)', '').strip(),
+                    'jht': s(r[5]), 'jhn': s(r[6]), 'e': num(r[8])})
+    # 교정 적용: 값 수정 / 유령 행 제거 / 누락 행 추가
+    ec = {(c['uni'], c['dept'], c['jht'], c['jhn']): (c['old'], c['new']) for c in _CORR['enroll']}
+    drop = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop']}
+    kept = []
+    for x in out:
+        k = (x['uni'], x['dept'], x['jht'], x['jhn'])
+        if k in drop: continue
+        if k in ec and x['e'] == ec[k][0]: x['e'] = ec[k][1]
+        kept.append(x)
+    for a in _CORR['add']:
+        kept.append({'uni': a['uni'], 'dept': a['dept'], 'jht': a['jht'], 'jhn': a['jhn'], 'e': a['e']})
+    return kept
 
 def load_insights():
     p = subprocess.run(['node', '-e', f'global.window={{}};require({json.dumps(INS)});process.stdout.write(JSON.stringify(window.IPSI_INSIGHTS))'],

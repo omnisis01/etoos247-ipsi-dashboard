@@ -436,13 +436,35 @@ def recompute_prev(key, enroll_cell, prev):
     _prev_recomputed.append((key, prev or '(공란)', new, e26, int(enroll_cell)))
     return new
 
+# ---------------------------------------------------------------- 모집인원(enroll) 교정
+# (A) 2.5라운드 — 대교협 CDN 2027 수시모집요강 원문 대조로 확인된 원본 엑셀(V7.15) 모집인원 오류.
+# 근거는 요강 총괄표·모집단위표·정정공지·개편공지(단일 추론 아님). 교정 목록은 data_corrections.json에
+# 두어 verify_insights.py(인사이트↔교정후 엑셀 대조)와 공유한다 — 두 곳에 중복 정의하면 표류하므로.
+# 키는 (대학, 학과['(외)' 제거후], 전형유형, 전형명). old와 일치할 때만 교정 — 엑셀 갱신으로 값이
+# 바뀌면 자동으로 적용을 멈춰(오적용 방지) 최종 리포트에서 미적용으로 드러난다.
+_CORR = json.load(open(os.path.join(os.path.dirname(__file__), 'data_corrections.json'), encoding='utf-8'))
+_ENROLL_CORRECTIONS = {(c['uni'], c['dept'], c['jht'], c['jhn']): (c['old'], c['new']) for c in _CORR['enroll']}
+_enroll_fixed = {}
+def apply_enroll_correction(uni, dept, jhtype, jhname, enroll):
+    c = _ENROLL_CORRECTIONS.get((uni, dept, jhtype, jhname))
+    if c and enroll == c[0]:
+        _enroll_fixed[(uni, dept, jhtype, jhname)] = c
+        return c[1]
+    return enroll
+
+# 유령 행 제거(예: 전남대 여수 '공학계열' — 2026 모집단위가 2027 개편으로 폐지됐으나 엑셀에 잔존).
+_ROW_DROP = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop']}
+_dropped = []
+
 cat_counter = {}
 audit = {}
 for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
-    enroll = num(r[8]); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    if (uni, dept, jhtype, jhname) in _ROW_DROP:
+        _dropped.append((uni, dept, jhtype, jhname)); continue
+    enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
@@ -482,6 +504,39 @@ for r in raw:
         tags,
         intern('std', std26), stdK, intern('std', std25),
     ])
+
+# ---------------------------------------------------------------- 누락 행 보완 (요강 근거)
+# 요강 모집단위표에 있으나 원본 엑셀(V7.15)이 누락한 행(예: 부산대 스포츠과학과 농어촌 1명, 요강 p33).
+# 신규 유입 모집단위라 3개년 경쟁률·입결 이력이 없다 → 비교 필드는 공란/None(사실대로). prev '-'(중립).
+_ADDED_ROWS = _CORR['add']
+for _a in _ADDED_ROWS:
+    _u, _d, _jt, _jn, _e = _a['uni'], _a['dept'], _a['jht'], _a['jhn'], _a['e']
+    _cats = _a['cats']
+    for _t in _cats:
+        cat_counter[_t] = cat_counter.get(_t, 0) + 1
+        audit.setdefault(_t, {}).setdefault((_u, _d), 0)
+        audit[_t][(_u, _d)] += 1
+    rows.append([
+        intern('region', _a['region']), intern('sigun', _a['sigun']), intern('uni', _u), _a['gye'],
+        intern('dept', _d), _jt, intern('jhname', _jn), intern('jagyeok', ''),
+        _e, '-', 'none', 0,
+        intern('change', ''), intern('choejeo', ''), 0, '',
+        0, 0, 0,
+        None, None, None,
+        0, 0, 0,
+        '', '', '',
+        intern('method', ''), intern('note', ''), intern('date', ''),
+        intern('gradeRatio', ''), intern('subjects', ''), intern('careerSubj', ''),
+        _cats,
+        intern('std', ''), std_kind(''), intern('std', ''),
+    ])
+
+# 모집인원 교정 리포트 — 적용 누락(엑셀 값 변동) 즉시 감지
+_miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
+print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_dropped)}/{len(_ROW_DROP)} · 행추가 {len(_ADDED_ROWS)}"
+      + (f" · ⚠️미적용 {_miss}" if _miss else ""))
+if _miss or len(_dropped) != len(_ROW_DROP):
+    raise SystemExit(f"교정 불일치 — 엑셀 값이 바뀌었을 수 있음. 미적용 값={_miss}, 제거={_dropped}")
 
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',
