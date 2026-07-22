@@ -24,11 +24,15 @@ run() {  # run <라벨> <스크립트>
 }
 
 echo "$STAGED" | grep -qE '^(data\.js|build_data\.py)$' && NEED_DATA=1
+echo "$STAGED" | grep -qE '^match_util\.py$' && NEED_MATCH=1
 echo "$STAGED" | grep -qE '^(insights\.js|build_ins\.py|merge_ins\.py|fix_ins_numbers\.py|apply_rewrite\.py)$' && NEED_INS=1
 
-[ -z "$NEED_DATA$NEED_INS" ] && exit 0
+[ -z "$NEED_DATA$NEED_INS$NEED_MATCH" ] && exit 0
 echo "pre-commit: 데이터 하네스 실행"
 
+# 외부자료 조인용 정규화 — 로마숫자를 지우면 전형 Ⅰ/Ⅱ가 뒤섞여 허위 불일치가 대량 발생한다.
+# 실제로 하루에 조인 버그를 세 번 냈고 그중 하나가 불일치를 64건으로 부풀렸다.
+[ -n "$NEED_MATCH" ] && run "match_util.py (조인 정규화 자기검증)" match_util.py
 [ -n "$NEED_DATA" ] && run "verify_data.py (data.js 불변식)" verify_data.py
 # 경쟁률 산술 래칫 — 2026 경쟁률 × 2026 모집인원이 정수여야 한다는 제약으로
 # 스냅샷(enroll26.json)·경쟁률·동명이단위 모순을 잡는다. 기존 37건은 기준선으로 고정돼

@@ -468,6 +468,16 @@ _dropped = []
 _new_wiped = []
 _grade_wiped = []
 
+# 전년대비 구분(dkind) 교정. 원천 엑셀이 '신설'로 적었지만 실제로는 기존 전형의 분리·개편인 경우.
+# 실사례: 서강대 학생부종합 일반전형 II — 요강 p5 '주요 변경사항'이 "학생부종합 일반전형 전형 분리:
+#         학생부종합(일반) → 학생부종합(일반Ⅰ)/(일반Ⅱ)"라고 명시한다. 신설이 아니라 분리다.
+#         'new'로 두면 신설 실적 제거가 걸려 같은 모집단위의 2026 입결까지 사라진다.
+# 'changed'는 app.js가 '전형 변경(개편·개명) — 전년 대비 인원 비교 불가'로 안내한다.
+_DKIND_CORR = {}
+for _c in _CORR.get('dkind', []):
+    _DKIND_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c['from'], _c['to'])
+_dkind_fixed = set()
+
 # 2026 입결(70%컷) 교정. 원천 엑셀의 입결이 비었거나 다른 판본 값인 경우를 외부 입결자료로 보정한다.
 # 근거: '대학전형및3개년입결_메디컬.xlsx'(대학×전형별, 비고에 기준 명시)와
 #       '24~26년 3개년 입결 자료.xlsx'(50%/70%컷 분리) 두 종.
@@ -531,6 +541,9 @@ for r in raw:
         delta_kind, delta_n = 'changed', 0
     else:
         delta_kind, delta_n = parse_delta(prev)
+    _dkk = (uni, dept, jhtype, jhname)
+    if _dkk in _DKIND_CORR and delta_kind == _DKIND_CORR[_dkk][0]:
+        delta_kind = _DKIND_CORR[_dkk][1]; delta_n = 0; _dkind_fixed.add(_dkk)
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
 
@@ -605,6 +618,7 @@ _dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
 if _grade_wiped:
     raise SystemExit(f"[입결교정] 신설 행에 건 입결교정 {len(_grade_wiped)}건이 신설 실적 제거로 무효화됨 — "
                      f"data_corrections.json에서 빼거나 해당 행의 신설 판정을 검토할 것: {_grade_wiped}")
+print(f"[구분교정] dkind {len(_dkind_fixed)}/{len(_DKIND_CORR)}건")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
