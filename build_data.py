@@ -32,18 +32,27 @@ def vgrade(v):
     return v if (v is not None and 1.0 <= v <= 9.0) else None
 
 def std_kind(k):
-    """대학이 발표한 입결 컷 기준을 3버킷으로 정규화: avg / cut70 / cut90 / 기타.
-       70%컷·75%·80%·85%가 대다수 대학의 관행이므로 cut70에 합류, 90%컷만 별도 유지."""
+    """대학이 발표한 입결 기준을 버킷으로 정규화: avg / cut50 / cut70 / cut90 / stage1 / 기타.
+       ⚠️ 서로 다른 기준을 한 버킷에 넣으면 필터가 왜곡된다. 실제로 세 건이 섞여 있었다.
+        · 50%컷(132행: 서울대·전남대·홍익대)이 cut70에 편입돼 있었다. 50%컷은 70%컷보다
+          확실히 낮은(좋은) 값이라 같은 버킷이면 '70%컷 이내' 필터가 과대 포함된다 → cut50 분리.
+        · '1단계합격자평균'(345행)·'지원자교과평균'(15행)이 avg에 편입돼 있었다. 1단계 합격자와
+          지원자는 최종등록자보다 훨씬 넓은 풀이라 등급이 나쁘게 나온다 → stage1 분리.
+        · '최종등록자 논술 정답 개수 평균'(22행, 삼육대)은 등급이 아니라 정답 개수다.
+          현재 값이 전부 비어 있어 실해는 없지만 avg로 잡히므로 '' 처리한다.
+       75·80·85%컷은 대다수 대학의 관행 범위라 cut70에 합류시킨다(원문은 std26에 그대로 남는다)."""
     z = norm(k)
     if not z: return ''
+    if '정답' in z: return ''                      # 등급이 아닌 지표
+    if '1단계' in z or '지원자' in z: return 'stage1'
     if '평균' in z or '퍙균' in z or '동륵' in z or '차평균' in z: return 'avg'
     import re as _re
     m = _re.search(r'(\d+)%?컷', z) or _re.search(r'(\d+)%?', z)
     if m:
         pct = int(m.group(1))
         if pct >= 88: return 'cut90'
-        if pct <= 78: return 'cut70'
-        return 'cut70'  # 75·80·85%는 실무상 70%컷 쪽에 편입
+        if pct <= 55: return 'cut50'
+        return 'cut70'  # 70·75·80·85%는 실무상 한 묶음
     if '최저' in z: return 'cut90'
     if '컷' in z: return 'cut70'
     return ''

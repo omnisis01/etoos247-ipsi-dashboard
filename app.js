@@ -334,7 +334,12 @@ function sortFiltered() {
 function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
 function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
 
-const CUT_LABELS = { avg: '평균', cut70: '70% 컷', cut90: '90% 컷' };
+// 입결 기준 버킷. 서로 다른 기준을 섞으면 '컷 이내' 필터가 왜곡되므로 분리해 둔다.
+// stage1(1단계합격자·지원자 평균)은 최종등록자보다 훨씬 넓은 풀이라 별도 취급한다.
+// 버킷별 보유 행 수. 0건인 기준은 라디오에 띄우지 않는다.
+const STD_COUNT = {};
+ROWS.forEach(r => { if (r.stdK26 && r.g[0] != null) STD_COUNT[r.stdK26] = (STD_COUNT[r.stdK26] || 0) + 1; });
+const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut90: '90% 컷', stage1: '1단계 평균' };
 function renderCutFilter() {
   const box = document.querySelector('#cutFilter');
   if (!box) return;
@@ -353,7 +358,7 @@ function renderCutFilter() {
     </div>
     <div class="cf-row">
       <div class="cf-radios" role="radiogroup" aria-label="입결 컷 기준">
-        ${['avg', 'cut70', 'cut90'].map(k => `<label class="cf-radio${active === k ? ' on' : ''}"><input type="radio" name="stdCut" value="${k}"${active === k ? ' checked' : ''}> ${CUT_LABELS[k]}</label>`).join('')}
+        ${['avg', 'cut50', 'cut70', 'cut90', 'stage1'].filter(k => STD_COUNT[k]).map(k => `<label class="cf-radio${active === k ? ' on' : ''}"><input type="radio" name="stdCut" value="${k}"${active === k ? ' checked' : ''}> ${CUT_LABELS[k]}</label>`).join('')}
         <button class="cf-clear${active ? '' : ' hidden'}" type="button" aria-label="컷 필터 해제">해제</button>
       </div>
       <div class="cf-slider ${active ? '' : 'is-disabled'}">
