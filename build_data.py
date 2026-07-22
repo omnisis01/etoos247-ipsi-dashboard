@@ -459,7 +459,11 @@ def apply_enroll_correction(uni, dept, jhtype, jhname, enroll):
 # 특정한다. 'e' 없으면 해당 키 전체 제거.
 _ROW_DROP = {}
 for _c in _CORR['drop']:
+    if _c.get('dedupe'): continue
     _ROW_DROP.setdefault((_c['uni'], _c['dept'], _c['jht'], _c['jhn']), set()).add(_c.get('e'))
+# 완전 중복 행(인원·자격까지 동일) 제거 — 첫 행만 남긴다. 엑셀에 같은 전형이 두 줄 실린 경우.
+_ROW_DEDUPE = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop'] if c.get('dedupe')}
+_dedupe_seen = set()
 _dropped = []
 
 cat_counter = {}
@@ -471,6 +475,9 @@ for r in raw:
     _dk = (uni, dept, jhtype, jhname)
     if _dk in _ROW_DROP and (None in _ROW_DROP[_dk] or num(r[8]) in _ROW_DROP[_dk]):
         _dropped.append((_dk, num(r[8]))); continue
+    if _dk in _ROW_DEDUPE:
+        if _dk in _dedupe_seen: _dropped.append((_dk, 'dedupe')); continue
+        _dedupe_seen.add(_dk)
     enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
@@ -542,10 +549,12 @@ for _a in _ADDED_ROWS:
 
 # 모집인원 교정 리포트 — 적용 누락(엑셀 값 변동) 즉시 감지
 _miss = [k for k in _ENROLL_CORRECTIONS if k not in _enroll_fixed]
-print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_dropped)}/{len(_ROW_DROP)} · 행추가 {len(_ADDED_ROWS)}"
+_drop_hit = [x for x in _dropped if x[1] != 'dedupe']
+_dedupe_hit = [x for x in _dropped if x[1] == 'dedupe']
+print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)}"
       + (f" · ⚠️미적용 {_miss}" if _miss else ""))
-if _miss or len(_dropped) != len(_ROW_DROP):
-    raise SystemExit(f"교정 불일치 — 엑셀 값이 바뀌었을 수 있음. 미적용 값={_miss}, 제거={_dropped}")
+if _miss or len(_drop_hit) != len(_ROW_DROP) or len(_dedupe_hit) < len(_ROW_DEDUPE):
+    raise SystemExit(f"교정 불일치 — 엑셀 값이 바뀌었을 수 있음. 미적용 값={_miss}, 제거={_drop_hit}, 중복제거={_dedupe_hit}")
 
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',

@@ -56,11 +56,18 @@ def load_excel():
     # 같은 키에 행이 둘인 경우가 있어 선택 'e'(모집인원)로 특정한다 — build_data.py와 동일 규칙.
     drop = {}
     for c in _CORR['drop']:
+        if c.get('dedupe'): continue
         drop.setdefault((c['uni'], c['dept'], c['jht'], c['jhn']), set()).add(c.get('e'))
+    # 완전 중복 행 제거 — build_data.py와 동일하게 첫 행만 남긴다.
+    dedupe = {(c['uni'], c['dept'], c['jht'], c['jhn']) for c in _CORR['drop'] if c.get('dedupe')}
+    seen_dup = set()
     kept = []
     for x in out:
         k = (x['uni'], x['dept'], x['jht'], x['jhn'])
         if k in drop and (None in drop[k] or x['e'] in drop[k]): continue
+        if k in dedupe:
+            if k in seen_dup: continue
+            seen_dup.add(k)
         if k in ec and x['e'] == ec[k][0]: x['e'] = ec[k][1]
         kept.append(x)
     for a in _CORR['add']:
