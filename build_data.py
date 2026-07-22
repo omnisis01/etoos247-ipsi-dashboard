@@ -444,6 +444,8 @@ def recompute_prev(key, enroll_cell, prev):
 # 바뀌면 자동으로 적용을 멈춰(오적용 방지) 최종 리포트에서 미적용으로 드러난다.
 _CORR = json.load(open(os.path.join(os.path.dirname(__file__), 'data_corrections.json'), encoding='utf-8'))
 _ENROLL_CORRECTIONS = {(c['uni'], c['dept'], c['jht'], c['jhn']): (c['old'], c['new']) for c in _CORR['enroll']}
+# 일부 교정은 실제 증감(엑셀이 전년값 방치)이라 전년대비 마크도 함께 바로잡는다(선택 'prev' 필드).
+_ENROLL_PREV = {(c['uni'], c['dept'], c['jht'], c['jhn']): c['prev'] for c in _CORR['enroll'] if 'prev' in c}
 _enroll_fixed = {}
 def apply_enroll_correction(uni, dept, jhtype, jhname, enroll):
     c = _ENROLL_CORRECTIONS.get((uni, dept, jhtype, jhname))
@@ -465,6 +467,8 @@ for r in raw:
     if (uni, dept, jhtype, jhname) in _ROW_DROP:
         _dropped.append((uni, dept, jhtype, jhname)); continue
     enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
+        prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [num(r[18]), num(r[19]), num(r[20])]
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     conv = [num(r[23]), num(r[28]), num(r[32])]
