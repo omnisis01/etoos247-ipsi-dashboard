@@ -130,14 +130,21 @@ function verdict(r) {
   if (r.chKind === '강화' || r.chKind === '신설') { sig.push({ dir: 'good', t: `수능최저 ${r.chKind} → 지원 위축`, m: '최저' }); score += 2; }
   else if (r.chKind === '완화' || r.chKind === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKind} → 지원 증가`, m: '최저' }); score -= 2; }
   // 2026 vs 2025 결과 추이 (핵심)
+  // ⚠️ 신설 전형은 제외한다. 전년 실적의 귀속이 불분명하기 때문이다 —
+  //    값이 비어 있거나(정상), 학과 단위 값이 그대로 복사돼 들어온다.
+  //    실사례: 아주대 의학과 지역의사선발전형(2027 신설)이 같은 학과 ACE전형의
+  //    경쟁률 34.18/27.1/44.15를 그대로 보유 → '경쟁률 상승' 불리 신호가 잘못 붙었다.
+  //    전수 25행(조선7·아주6·부산4 등). 신호를 만들지 않고 값이 있으면 경고만 남긴다.
   const g = yoyGrade(r), c = yoyComp(r), ch = yoyChung(r);
-  if (g) {
+  const isNew = r.dkind === 'new';
+  if (isNew && (c || g)) sig.push({ dir: 'warn', t: '표시된 과거 경쟁률·입결은 이 전형의 실적이 아님(신설)', m: '신설' });
+  if (!isNew && g) {
     if (g.basisMismatch) { sig.push({ dir: 'warn', t: `입결 기준이 달라 추세 비교 불가 (${g.b25} → ${g.b26})`, m: '입결' }); }
     else if (g.dir === 'easier') { sig.push({ dir: 'good', t: `입결 하락세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score += 2; }
     else if (g.dir === 'harder') { sig.push({ dir: 'bad', t: `입결 상승세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score -= 2; }
   }
-  if (c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
-  if (ch) { if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${ch.y25}→${ch.y26}명`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${ch.y25}→${ch.y26}명`, m: '충원' }); score -= 1; } }
+  if (!isNew && c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
+  if (!isNew && ch) { if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${ch.y25}→${ch.y26}명`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${ch.y25}→${ch.y26}명`, m: '충원' }); score -= 1; } }
   let cls, label;
   if (score >= 2) { cls = 'good'; label = '유리'; }
   else if (score <= -2) { cls = 'bad'; label = '불리'; }
