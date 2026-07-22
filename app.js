@@ -557,9 +557,15 @@ function renderHighlights() {
     [g, b, n].forEach(a => a.sort((x, y) => hlRelevance(y) - hlRelevance(x)));
     top = []; let gi = 0, bi = 0, ni = 0;
     while (top.length < 12 && (gi < g.length || bi < b.length || ni < n.length)) {
+      const before = top.length;
       if (gi < g.length) top.push(g[gi++]);
       if (top.length < 12 && bi < b.length) top.push(b[bi++]);
       if (top.length < 12 && ni < n.length && top.length % 4 === 3) top.push(n[ni++]);
+      // ⚠️ 진전 가드. 신설(n)만 남고 top.length%4!==3 이면 세 줄 모두 건너뛰어
+      //    조건은 참인데 아무것도 안 담기는 무한 루프가 된다 — 실제로 '아주' 검색 시
+      //    브라우저가 멈췄다(아주대는 메디컬로 선별되는데 남은 후보가 지역의사선발 신설뿐이라
+      //    유리·불리가 비었다). 남은 항목은 아래 잔여 채우기가 처리하므로 빠져나가면 된다.
+      if (top.length === before) break;
     }
     [...g.slice(gi), ...b.slice(bi), ...n.slice(ni)].sort((x, y) => hlRelevance(y) - hlRelevance(x)).forEach(r => { if (top.length < 12) top.push(r); });
   } else {
