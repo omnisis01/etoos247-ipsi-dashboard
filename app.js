@@ -1211,7 +1211,7 @@ $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? clos
 /* ----- init ----- */
 $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.nRows.toLocaleString()}건 · 대학 ${D.meta.nUni}곳`;
 $('#footNote').innerHTML = `<b>이투스247학원</b> · 본 대시보드는 <b>${esc(D.meta.source)}</b> 자료를 가공한 참고용입니다. '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
-applyTheme(load('theme', 'dark'));
+applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트
 updateCompareBtn(); updateFavBtn();
 renderCatList(); renderFilters(); renderAll(); renderInsightBanner();
 })();
