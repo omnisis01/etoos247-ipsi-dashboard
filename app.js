@@ -27,6 +27,19 @@ const ROWS = D.rows.map((r, i) => ({
    여기서 다시 막지 않는다 — 방어를 두 군데 두면 어느 쪽이 진짜인지 알 수 없게 된다.
    verify_data.py가 '신설 행에 경쟁률·입결·추합이 없다'를 불변식으로 검사한다. */
 
+/* ---------- 추합 단위 판별 ----------
+   대부분의 대학은 추가합격을 '인원'으로 싣지만 동국대(139행)·연세대(1행)는 '충원율(배수)'로 싣는다.
+   배수 × 2026 모집인원이 132/139에서 정수로 수렴해 확인했다(2027 인원으로는 112/140로 열등 —
+   추합26은 2026 실적이므로 2026 인원이 맞는 짝이다).
+   단위를 섞으면 '추합 0.29→1.57명', 'Math.round(0.75)=1명' 같은 표시가 나온다.
+   25·24년 모집인원이 없어 전 연도를 인원으로 환산할 수는 없으므로 '표시 단위'를 행마다 구분한다.
+   ⚠️ 연도 간 비교(yoyChung)는 같은 단위끼리라 그대로 유효하다 — 신호는 건드리지 않는다. */
+ROWS.forEach(r => {
+  r.chungRatio = r.chung.some(v => v != null && /^\d+\.\d+$/.test(String(v).trim()));
+});
+const chungUnit = r => (r.chungRatio ? '배' : '명');
+const fmtChung = (r, v) => (r.chungRatio ? Number(v).toFixed(2) : String(Math.round(v)));
+
 /* ---------- 표시용 학과명 ----------
    지역의사제(지사제)는 같은 의예과·의학과라도 졸업 후 해당 지역 의무복무가 붙는 별개 트랙이라
    목록에서 일반 전형과 즉시 구별돼야 한다. 학과명 옆에 '(지사제)'를 붙인다.
@@ -194,7 +207,8 @@ function verdict(r) {
     else if (g.dir === 'harder') { sig.push({ dir: 'bad', t: `입결 상승세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score -= 2; }
   }
   if (c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
-  if (ch) { if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${ch.y25}→${ch.y26}명`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${ch.y25}→${ch.y26}명`, m: '충원' }); score -= 1; } }
+  if (ch) { const cu = chungUnit(r), c1 = fmtChung(r, ch.y25), c2 = fmtChung(r, ch.y26);
+    if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${c1}→${c2}${cu}`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${c1}→${c2}${cu}`, m: '충원' }); score -= 1; } }
   let cls, label;
   if (score >= 2) { cls = 'good'; label = '유리'; }
   else if (score <= -2) { cls = 'bad'; label = '불리'; }
@@ -829,7 +843,7 @@ function openModal(i) {
     const ar = lab.includes('입결')
       ? (info.dir === 'harder' ? '▲' : info.dir === 'easier' ? '▼' : '–')
       : (info.y26 > info.y25 ? '▲' : info.y26 < info.y25 ? '▼' : '–');
-    const dec = lab.includes('입결') ? 2 : lab.includes('추합') ? 0 : 1;
+    const dec = lab.includes('입결') ? 2 : lab.includes('추합') ? (lab.includes('배') ? 2 : 0) : 1;
     return `<tr><td class="metric">${lab}</td><td>${fmtf(info.y25)}</td><td><b>${fmtf(info.y26)}</b></td><td class="ycell ${cls}">${ar} ${Math.abs(info.d).toFixed(dec)}</td><td><span class="impact-chip ${cls}">${word}</span></td></tr>`;
   };
   const cats = r.cats.map(k => CAT_BY[k] ? `<span class="tag" style="background:${CAT_BY[k].color}22;color:${CAT_BY[k].color}">${esc(CAT_BY[k].label)}</span>` : '').join(' ');
@@ -859,7 +873,7 @@ function openModal(i) {
         <table class="trend-table yoy-table"><thead><tr><th>지표</th><th>2025</th><th>2026</th><th>전년비</th><th>해석</th></tr></thead><tbody>
           ${yoyCmp('입결(등급)', v.g, x => x.toFixed(2), dir => dir === 'easier')}
           ${yoyCmp('경쟁률', v.c, x => x.toFixed(1) + ':1', dir => dir === 'down')}
-          ${yoyCmp('추합(충원)', v.ch, x => Math.round(x), dir => dir === 'up')}
+          ${yoyCmp(`추합(충원, ${chungUnit(r)})`, v.ch, x => fmtChung(r, x), dir => dir === 'up')}
         </tbody></table>
         <div class="impact-box" style="margin-top:12px">${reasons}</div>
         <div class="muted" style="margin-top:6px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.</div>
@@ -870,7 +884,7 @@ function openModal(i) {
           ${trendRow('입결(등급)', [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
           ${trendRow('입결(환산)', [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
-          ${trendRow('충원(추합)', [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => Math.round(v), 'var(--neutral)')}
+          ${trendRow(`충원(추합, ${chungUnit(r)})`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
         </tbody></table>
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
