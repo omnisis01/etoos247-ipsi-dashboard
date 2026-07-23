@@ -534,6 +534,12 @@ for _c in _CORR.get('date', []):
     _DATE_CORR[(_c['uni'], _c['jhn'], _c['old'])] = _c['new']
 _date_fixed = set()
 
+# 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
+_REGION_CORR = {}
+for _c in _CORR.get('region', []):
+    _REGION_CORR[(_c['uni'], _c['dept'])] = (_c['region'], _c['sigun'])
+_region_fixed = set()
+
 cat_counter = {}
 audit = {}
 for r in raw:
@@ -606,8 +612,11 @@ for r in raw:
         audit.setdefault(t, {}).setdefault((uni, dept), 0)
         audit[t][(uni, dept)] += 1
 
+    _reg, _sig = r[0], r[1]
+    if (uni, dept) in _REGION_CORR:
+        _reg, _sig = _REGION_CORR[(uni, dept)]; _region_fixed.add((uni, dept))
     rows.append([
-        intern('region', r[0]), intern('sigun', r[1]), intern('uni', uni), gye[:2],
+        intern('region', _reg), intern('sigun', _sig), intern('uni', uni), gye[:2],
         intern('dept', dept), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
         enroll, prev, delta_kind, delta_n,
         intern('change', change), intern('choejeo', choejeo), has_choejeo, ch_kind or '',
@@ -659,6 +668,9 @@ if len(_date_fixed) != len(_DATE_CORR):
     _miss = sorted(set(_DATE_CORR) - _date_fixed)
     raise SystemExit(f"[중단] 일자교정 미적용 {len(_miss)}건 — 엑셀이 갱신됐다면 data_corrections.json 'date'에서 제거할 것: {_miss}")
 print(f"[일자교정] date {len(_date_fixed)}/{len(_DATE_CORR)}건")
+if len(_region_fixed) != len(_REGION_CORR):
+    raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
+print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
