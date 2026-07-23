@@ -228,7 +228,7 @@ def verify(d):
                 stale.add(s_); break
             if dow not in _DOW or real != dow:
                 stale.add(s_); break
-    STALE_DATE_MAX = 16     # 현재 16종(13교·112행). 늘어나면 새 회귀다.
+    STALE_DATE_MAX = 0      # 16종 전부 요강 원문 대조로 교정 완료(data_corrections.json 'date'). 늘어나면 새 회귀다.
     if len(stale) > STALE_DATE_MAX:
         fails.append(f"고사 일자 요일 불일치 {len(stale)}종 (허용 {STALE_DATE_MAX}) — "
                      f"작년 일정이 새로 섞였을 수 있다: {sorted(stale)[:6]}")

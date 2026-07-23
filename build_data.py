@@ -526,6 +526,14 @@ for _c in _CORR.get('rename', []):
     _ROW_RENAME.setdefault((_c['uni'], _c['dept'], _c['jht'], _c['jhn']), []).append((_c.get('e'), _c['to']))
 _renamed = set()
 
+# 대학별고사 일자 교정. 원본 엑셀에 2026학년도(작년) 일정이 잔존한 13교 — 요일을 2026년
+# 달력으로 검산해 검출했고(어긋난 것 전부 2025년 달력과 일치), 각 교 2027 요강 원문으로 확정.
+# old가 엑셀 원문과 완전일치할 때만 적용한다. 엑셀이 갱신되면 미적용으로 남아 아래 검증에 걸린다.
+_DATE_CORR = {}
+for _c in _CORR.get('date', []):
+    _DATE_CORR[(_c['uni'], _c['jhn'], _c['old'])] = _c['new']
+_date_fixed = set()
+
 cat_counter = {}
 audit = {}
 for r in raw:
@@ -555,6 +563,9 @@ for r in raw:
     conv = [num(r[23]), num(r[28]), num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
+    _dtk = (uni, jhname, date)
+    if _dtk in _DATE_CORR:
+        date = _DATE_CORR[_dtk]; _date_fixed.add(_dtk)
     gr = s(r[15]); subj = s(r[16]); career = s(r[17])
     # 입결 '기준'은 연도별로 따로 있다(col21=2026, col26=2025, col30=2024). 대학이 해마다 기준을
     # 바꾸기도 해서(예: 2025 평균 → 2026 70%컷) 기준이 다른 두 해의 등급을 비교하면 의미가 없다.
@@ -644,6 +655,10 @@ if _grade_wiped:
     raise SystemExit(f"[입결교정] 신설 행에 건 입결교정 {len(_grade_wiped)}건이 신설 실적 제거로 무효화됨 — "
                      f"data_corrections.json에서 빼거나 해당 행의 신설 판정을 검토할 것: {_grade_wiped}")
 print(f"[구분교정] dkind {len(_dkind_fixed)}/{len(_DKIND_CORR)}건")
+if len(_date_fixed) != len(_DATE_CORR):
+    _miss = sorted(set(_DATE_CORR) - _date_fixed)
+    raise SystemExit(f"[중단] 일자교정 미적용 {len(_miss)}건 — 엑셀이 갱신됐다면 data_corrections.json 'date'에서 제거할 것: {_miss}")
+print(f"[일자교정] date {len(_date_fixed)}/{len(_DATE_CORR)}건")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
