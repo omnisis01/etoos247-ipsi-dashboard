@@ -359,6 +359,7 @@ function sortFiltered() {
       case 'comp': return r.c[0] == null ? -1 : r.c[0];
       case 'enroll': return r.enroll == null ? -1 : r.enroll;
       case 'uni': return r.uni;
+      case 'jh': return r.jhtype + '·' + r.jhname;   // 전형유형 묶음 후 전형명 가나다
       case 'delta': return (r.dn == null ? 0 : r.dn);
       default: return V(r).score;
     }
@@ -397,8 +398,8 @@ function sortFiltered() {
 /* ============================================================
    RENDER
    ============================================================ */
-function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
-function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
 
 // 입결 기준 버킷. 서로 다른 기준을 섞으면 '컷 이내' 필터가 왜곡되므로 분리해 둔다.
 // stage1(1단계합격자·지원자 평균)은 최종등록자보다 훨씬 넓은 풀이라 별도 취급한다.
@@ -583,8 +584,38 @@ function renderCatHeader() {
   const c = S.cat === 'all' ? { label: '전체 전형', desc: '전국 모든 대학·계열 수시 전형', color: 'var(--primary)', key: 'all' } : CAT_BY[S.cat];
   $('#catHeader').innerHTML =
     `<div class="ch-icon" style="background:${c.color}">${CAT_ICON[c.key] || '🎓'}</div>
-     <div><h2>${esc(c.label)}</h2><p>${esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개 전형</p></div>`;
+     <div><h2>${esc(c.label)}</h2><p>${esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>`;
 }
+
+/* ----- 대학 단위 전형별 학과 요약 -----
+   검색·필터 결과가 한 대학으로 좁혀지면, 전형유형(교과/종합/논술/실기)별로
+   전형→학과를 정렬해 한눈에 보여준다(사용자 요청). 여러 대학이 섞이면 숨긴다. */
+const JHTYPE_ORDER = ['학생부교과', '학생부종합', '논술', '실기/실적'];
+function renderUniPanel() {
+  const box = $('#uniPanel');
+  if (!box) return;
+  const unis = new Set(FILTERED.map(r => r.uni));
+  if (unis.size !== 1 || FILTERED.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const uni = FILTERED[0].uni;
+  const byType = {};
+  FILTERED.forEach(r => {
+    const t = JHTYPE_ORDER.includes(r.jhtype) ? r.jhtype : '기타';
+    ((byType[t] = byType[t] || {})[r.jhname] = byType[t][r.jhname] || []).push(r);
+  });
+  const typeKeys = [...JHTYPE_ORDER, '기타'].filter(t => byType[t]);
+  box.innerHTML = `<div class="panel-head"><h2>🏫 ${esc(uni)} 전형별 학과 한눈에</h2>
+      <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
+    <div class="uni-cols">${typeKeys.map(t => {
+      const jhs = Object.entries(byType[t]).sort((a, b) => sumE(b[1]) - sumE(a[1]));
+      return `<div class="uni-col"><h3>${esc(t)} <span class="muted">${jhs.reduce((s, [, rs]) => s + sumE(rs), 0).toLocaleString()}명</span></h3>
+        ${jhs.map(([jh, rs]) => `<details class="uni-jh"><summary><b>${esc(jh)}</b> <span class="muted">${rs.length}개 단위 · ${sumE(rs).toLocaleString()}명</span></summary>
+          <ul>${rs.slice().sort((a, b) => (b.enroll || 0) - (a.enroll || 0)).map(r =>
+            `<li>${esc(deptDisp(r)).replace(/\n/g, ' ')} <span class="muted">${r.enroll != null ? r.enroll + '명' : ''}</span></li>`).join('')}</ul>
+        </details>`).join('')}</div>`;
+    }).join('')}</div>`;
+  box.style.display = '';
+}
+const sumE = rs => rs.reduce((s, r) => s + (r.enroll || 0), 0);
 
 /* ----- KPIs ----- */
 function renderKPIs() {
@@ -792,7 +823,7 @@ function renderTrendChart() {
 /* ----- table ----- */
 const COLS = [
   { k: 'uni', label: '대학 / 모집단위', sort: 'uni' },
-  { k: 'jh', label: '전형', sort: null },
+  { k: 'jh', label: '전형', sort: 'jh' },
   { k: 'enroll', label: '모집(전년대비)', sort: 'enroll' },
   { k: 'least', label: '수능최저', sort: null },
   { k: 'grade', label: '입결 2026 (전년비)', sort: 'grade' },
@@ -813,7 +844,7 @@ function renderTable() {
   ).join('') + '</tr>';
   $('#gridHead').querySelectorAll('th').forEach(th => {
     const sk = th.dataset.sort; if (!sk) return;
-    const doSort = () => { if (S.sort === sk) S.sortDir *= -1; else { S.sort = sk; S.sortDir = (sk === 'grade' || sk === 'uni') ? 1 : -1; } sortFiltered(); S.page = 1; renderTable(); };
+    const doSort = () => { if (S.sort === sk) S.sortDir *= -1; else { S.sort = sk; S.sortDir = (sk === 'grade' || sk === 'uni' || sk === 'jh') ? 1 : -1; } sortFiltered(); S.page = 1; renderTable(); };
     th.onclick = doSort;
     th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doSort(); } };
   });
@@ -834,7 +865,7 @@ function renderTable() {
   const start = (S.page - 1) * S.perPage;
   const slice = FILTERED.slice(start, start + S.perPage);
   $('#tableCount').textContent = `· 총 ${total.toLocaleString()}개`;
-  const statusEl = $('#a11yStatus'); if (statusEl) statusEl.textContent = `${(CAT_BY[S.cat] ? CAT_BY[S.cat].label : '전체')} 검색결과 ${total.toLocaleString()}개 전형`;
+  const statusEl = $('#a11yStatus'); if (statusEl) statusEl.textContent = `${(CAT_BY[S.cat] ? CAT_BY[S.cat].label : '전체')} 검색결과 ${total.toLocaleString()}개`;
 
   $('#gridBody').innerHTML = slice.map(r => {
     const d = deltaInfo(r);

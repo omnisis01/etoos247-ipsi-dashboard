@@ -588,3 +588,13 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   .pr-vd.good{color:#1a7f37}.pr-vd.bad{color:#c1121f}.pr-vd.neu,.pr-vd.new{color:#555}
   .pr-foot{margin-top:16px;padding-top:8px;border-top:1px solid #ccc;font-size:9px;color:#888;text-align:center}
 }
+
+/* 대학 단위 전형별 학과 요약(검색이 한 대학으로 좁혀졌을 때) */
+.uni-panel{padding:14px 16px}
+.uni-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
+.uni-col h3{font-size:13px;margin:0 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.uni-jh{margin:4px 0;font-size:12.5px}
+.uni-jh summary{cursor:pointer;padding:3px 2px;border-radius:6px}
+.uni-jh summary:hover{background:var(--surface-2)}
+.uni-jh ul{margin:4px 0 6px 16px;padding:0;list-style:disc;color:var(--text)}
+.uni-jh li{margin:2px 0}
