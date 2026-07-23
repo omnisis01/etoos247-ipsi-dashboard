@@ -573,17 +573,19 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   body.printing #insightView,body.printing .skip-link{display:none!important}
   body.printing #printArea{display:block!important}
   body.printing{background:#fff!important}
-  #printArea{color:#111;font-size:11px;line-height:1.4}
+  /* 브라우저 인쇄 설정이 '여백 없음'이어도 문서가 스스로 여백을 갖도록 padding으로 보장.
+     @page margin은 사용자의 대화상자 저장값에 밀릴 수 있다(실제 발생). */
+  #printArea{color:#111;font-size:12px;line-height:1.5;padding:12mm 12mm 10mm;box-sizing:border-box}
   .pr-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:14px}
   .pr-title{font-size:20px;font-weight:800}
   .pr-sub{font-size:12px;color:#555;margin-top:2px}
   .pr-brand{text-align:right;font-size:13px;font-weight:800}
   .pr-date{font-size:10px;color:#666;font-weight:500;margin-top:2px}
   .pr-h2{font-size:14px;font-weight:800;margin:16px 0 6px;padding-left:6px;border-left:4px solid #111}
-  .pr-mut{color:#666;font-size:9.5px}
+  .pr-mut{color:#666;font-size:10px}
   .pr-table,.pr-cmp{width:100%;border-collapse:collapse;margin-bottom:8px}
-  .pr-table th,.pr-table td,.pr-cmp th,.pr-cmp td{border:1px solid #bbb;padding:4px 6px;vertical-align:top;text-align:left}
-  .pr-table thead th,.pr-cmp thead th{background:#f0f0f0;font-size:9.5px;font-weight:800;text-align:center}
+  .pr-table th,.pr-table td,.pr-cmp th,.pr-cmp td{border:1px solid #bbb;padding:6px 8px;vertical-align:top;text-align:left}
+  .pr-table thead th,.pr-cmp thead th{background:#f0f0f0;font-size:10.5px;font-weight:800;text-align:center}
   .pr-table tr,.pr-cmp tr{break-inside:avoid}
   .pr-c{text-align:center}
   .pr-rank{text-align:center;font-weight:800;width:34px}
