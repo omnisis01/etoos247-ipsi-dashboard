@@ -207,6 +207,32 @@ def verify(d):
         fails.append(f"학과 단위 경쟁률 복사 의심 {len(shared)}건 — 한 학과의 전형 3개 이상이 같은 "
                      f"소수 경쟁률을 공유한다: {[(a, b[:10], v, n) for (a, b), v, n in shared][:5]}")
 
+    # 11) 대학별고사 일자의 요일 검산 — 작년(2026학년도) 일정 잔존 탐지.
+    #     '11.22(토)'처럼 날짜와 요일이 함께 적히는데, 2026년 달력으로 요일이 어긋나면
+    #     대개 2025년 달력 기준이다(실제로 13종·112행이 전부 2025 요일과 일치했다).
+    #     이 값으로 '수능 전/후'를 판정하면 틀리므로 app.js가 판정을 보류하고,
+    #     여기서는 그 규모가 늘지 않는지만 감시한다(래칫).
+    import datetime as _dt
+    _DOW = ['월', '화', '수', '목', '금', '토', '일']   # datetime.weekday() 기준
+    idt = col(sch, 'date')
+    dic_date = d['dicts']['date']
+    stale = set()
+    for r in rows:
+        v = r[idt]
+        s_ = dic_date[v] if (v is not None and v < len(dic_date)) else ''
+        for m in re.finditer(r'(\d{1,2})\.\s*(\d{1,2})\s*\(([^)]{1,3})\)', s_ or ''):
+            mo, dy, dow = int(m.group(1)), int(m.group(2)), m.group(3).strip()
+            try:
+                real = _DOW[_dt.date(2026, mo, dy).weekday()]
+            except ValueError:
+                stale.add(s_); break
+            if dow not in _DOW or real != dow:
+                stale.add(s_); break
+    STALE_DATE_MAX = 16     # 현재 16종(13교·112행). 늘어나면 새 회귀다.
+    if len(stale) > STALE_DATE_MAX:
+        fails.append(f"고사 일자 요일 불일치 {len(stale)}종 (허용 {STALE_DATE_MAX}) — "
+                     f"작년 일정이 새로 섞였을 수 있다: {sorted(stale)[:6]}")
+
     return fails, {
         'rows': len(rows), 'uni': len(d['dicts']['uni']),
         'source': d['meta'].get('source', ''),

@@ -50,6 +50,12 @@ const fmtChung = (r, v) => (r.chungRatio ? Number(v).toFixed(2) : String(Math.ro
    본 데이터의 권역 합계와 정확히 일치해 확인했다. 명단에 박아 예외 처리한다. */
 const JISAJE_ALIAS = new Set(['성균관대학교|성균인재-지역인재전형', '단국대학교(천안)|지역의료인재전형']);
 const isJisaje = r => /지역의사/.test(r.jhname || '') || JISAJE_ALIAS.has(r.uni + '|' + r.jhname);
+/* 고사 시기 배지. 라벨에 날짜를 함께 실어 학생이 바로 일정을 가늠하게 한다. */
+function examBadge(r) {
+  if (r.examWhen === 'pre') return ` <span class="exam-tag pre" title="수능(11/19) 전 고사 — 수시 납치 우려">수능 전 ${esc(r.date.split(/[~,]/)[0])}</span>`;
+  if (r.examWhen === 'post') return ` <span class="exam-tag post" title="수능(11/19) 후 고사 — 가채점 보고 선택 가능">수능 후 ${esc(r.date.split(/[~,]/)[0])}</span>`;
+  return '';
+}
 const deptDisp = r => !isJisaje(r) ? r.dept
   : r.dept.endsWith(')') ? r.dept.slice(0, -1) + '·지사제)'
   : r.dept + '(지사제)';
@@ -100,6 +106,38 @@ function parseLeast(t) {
   if (one) return { n: 1, sum: +one[1], type: 'sum' };
   return { n: null, sum: null, type: 'etc' };   // 최저 있으나 N합X로 표현 안 됨 → '그 외'
 }
+/* ---------- 대학별고사 시기와 '수시 납치' 위험도 ----------
+   수시에 합격하면 정시·추가모집에 지원할 수 없다(추가합격·등록포기도 마찬가지).
+   수능을 잘 봐도 이미 붙은 수시 때문에 정시로 못 가는 상황을 '수시 납치'라 한다.
+   회피 수단은 사실상 하나뿐 — 대학별고사에 불참하면 불합격 처리되어 정시 자격이 살아난다.
+   따라서 고사 시기가 회피 가능성을 가른다. 2027 수능일은 2026-11-19(목).
+     · 고사 없음(교과100·서류100) → 회피 불가, 위험 최고
+     · 수능 '전' 면접·논술      → 이미 응시해 취소 불가, 위험 높음
+     · 수능 '후' 면접·논술      → 가채점 보고 불참 가능, 위험 낮음
+   ⚠️ 수능최저는 방패가 아니다. 납치는 '수능을 잘 봤다'는 전제라 최저는 어차피 충족된다.
+   ⚠️ 원문 일자의 요일이 2026년 달력과 어긋나는 행(112행·13교)은 작년 일정이 남은 것으로 보여
+      전/후 판정에서 제외한다 — 틀린 판정은 없느니만 못하다. */
+const SUNEUNG_2027 = new Date(2026, 10, 19);
+const _DOW = ['일', '월', '화', '수', '목', '금', '토'];
+ROWS.forEach(r => {
+  r.examWhen = null;                    // 'pre' | 'post' | null(판정 불가)
+  const hasExam = /면접|논술|실기|실적/.test(r.method || '');
+  r.hasExam = hasExam;
+  const t = r.date || '';
+  if (!t) return;
+  const hits = [...t.matchAll(/(\d{1,2})\.\s*(\d{1,2})\s*(?:\(([^)]{1,3})\))?/g)];
+  if (!hits.length) return;
+  let trustworthy = true, pre = false, post = false;
+  hits.forEach(m => {
+    const d = new Date(2026, +m[1] - 1, +m[2]);
+    const dow = (m[3] || '').trim();
+    if (dow && (!_DOW.includes(dow) || _DOW[d.getDay()] !== dow)) trustworthy = false;
+    if (d < SUNEUNG_2027) pre = true; else post = true;
+  });
+  if (!trustworthy) return;             // 작년 일정 잔존 의심 → 판정 보류
+  r.examWhen = pre && !post ? 'pre' : (!pre && post ? 'post' : null);
+});
+
 ROWS.forEach(r => { const p = parseLeast(r.choejeo); r.leastN = p.n; r.leastSum = p.sum; r.leastType = p.type; });
 // N개 합별 슬라이더 범위(데이터 실측 min~max)
 const LEAST_BOUNDS = {};
@@ -132,6 +170,7 @@ const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semicon
 const S = {
   cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '',
   changes: new Set(), sort: 'impact', sortDir: -1,
+  examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
 
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut70' | 'cut90', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
@@ -198,6 +237,13 @@ function verdict(r) {
   // 2027 구조 변화 (수능최저)
   if (r.chKind === '강화' || r.chKind === '신설') { sig.push({ dir: 'good', t: `수능최저 ${r.chKind} → 지원 위축`, m: '최저' }); score += 2; }
   else if (r.chKind === '완화' || r.chKind === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKind} → 지원 증가`, m: '최저' }); score -= 2; }
+  // 수시 납치 — 합격하면 정시 지원이 막히므로 고사 시기가 회피 가능성을 가른다.
+  //   판정 근거·용어는 memory/ipsi-susi-napchi.md 참조. 점수(유불리)에는 반영하지 않는다 —
+  //   납치는 '합격 가능성'이 아니라 '합격했을 때의 기회비용' 문제라 성격이 다르다.
+  if (r.examWhen === 'pre') sig.push({ dir: 'warn', t: '수능 전 면접·논술 — 수시 납치 우려(수능 잘 봐도 정시 전환 불가)', m: '납치' });
+  else if (r.examWhen === 'post') sig.push({ dir: 'good', t: '수능 후 면접·논술 — 가채점 보고 응시 여부 선택 가능', m: '일정' });
+  else if (r.hasExam === false && r.date === '') sig.push({ dir: 'warn', t: '대학별고사 없음 — 합격 시 정시 지원 불가(납치 위험 최고)', m: '납치' });
+
   // 2026 vs 2025 결과 추이 (핵심)
   // 신설 전형은 위 디코드 단계에서 실적이 비워지므로 여기서 따로 거를 필요가 없다.
   const g = yoyGrade(r), c = yoyComp(r), ch = yoyChung(r);
@@ -277,6 +323,7 @@ function applyFilters() {
     if (S.minLeast === 'yes' && !r.hasChoejeo) return false;
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
     if (!passChange(r)) return false;
+    if (S.examWhen && r.examWhen !== S.examWhen) return false;
     // 수능최저 검색 — N개 합: 내 합(S.leastSum)으로 충족 가능한 전형(요구 합 ≥ 내 합) / '그 외': N합X 아닌 특이 최저
     if (S.leastN) {
       if (S.leastN === 'etc') { if (r.leastType !== 'etc') return false; }
@@ -337,6 +384,9 @@ function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderC
 // 입결 기준 버킷. 서로 다른 기준을 섞으면 '컷 이내' 필터가 왜곡되므로 분리해 둔다.
 // stage1(1단계합격자·지원자 평균)은 최종등록자보다 훨씬 넓은 풀이라 별도 취급한다.
 // 버킷별 보유 행 수. 0건인 기준은 라디오에 띄우지 않는다.
+// 고사 시기별 행 수 — 필터 라벨에 띄운다.
+const EXAM_COUNT = { pre: 0, post: 0 };
+ROWS.forEach(r => { if (r.examWhen) EXAM_COUNT[r.examWhen]++; });
 const STD_COUNT = {};
 ROWS.forEach(r => { if (r.stdK26 && r.g[0] != null) STD_COUNT[r.stdK26] = (STD_COUNT[r.stdK26] || 0) + 1; });
 const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut90: '90% 컷', stage1: '1단계 평균' };
@@ -365,7 +415,21 @@ function renderCutFilter() {
         <label for="cutGrade">등급 <b>${gLabel}</b></label>
         <input id="cutGrade" type="range" min="1.0" max="9.0" step="0.1" value="${g}" ${active ? '' : 'disabled'}>
       </div>
+    </div>
+    <div class="cf-row exam-row">
+      <span class="cf-title">🗓️ <b>대학별고사 시기</b></span>
+      <div class="cf-radios" role="radiogroup" aria-label="대학별고사 시기">
+        ${[['post', `수능 후 (${EXAM_COUNT.post.toLocaleString()})`], ['pre', `수능 전 (${EXAM_COUNT.pre.toLocaleString()})`]]
+          .map(([k, lab]) => `<label class="cf-radio${S.examWhen === k ? ' on' : ''}"><input type="radio" name="examWhen" value="${k}"${S.examWhen === k ? ' checked' : ''}> ${lab}</label>`).join('')}
+        <button class="cf-clear${S.examWhen ? '' : ' hidden'}" type="button" data-role="exam-clear" aria-label="고사 시기 필터 해제">해제</button>
+      </div>
+      <span class="cf-hint muted">수능(11/19) 후 고사는 가채점을 보고 응시 여부를 정할 수 있어 <b>수시 납치</b> 위험이 낮습니다</span>
     </div>`;
+  box.querySelectorAll('input[name="examWhen"]').forEach(el => el.onchange = () => {
+    S.examWhen = el.value; renderSoft(); track('exam_filter', { when: S.examWhen });
+  });
+  const ec = box.querySelector('[data-role="exam-clear"]');
+  if (ec) ec.onclick = () => { S.examWhen = ''; renderSoft(); };
   box.querySelectorAll('input[name="stdCut"]').forEach(el => el.onchange = () => {
     S.stdCut = el.value;
     if (S.cutGrade >= 9) S.cutGrade = 3.0;   // 기준 선택 시 합리적 기본값
@@ -623,7 +687,7 @@ function renderHighlights() {
     return `<div class="hl-card${medSub ? ' is-medical' : ''}" data-i="${r._i}" tabindex="0" role="button" aria-label="${medSub ? '메디컬 ' : ''}${esc(r.uni)} ${esc(deptDisp(r))}, 올해 ${v.label} — 상세 보기">
       <div class="hl-top">${medBadge}${semiBadge}<span class="hl-uni">${esc(r.uni)}</span><span class="impact-chip ${v.cls}" style="margin-left:auto">${v.label}</span></div>
       <div class="hl-dept">${esc(deptDisp(r))}</div>
-      <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)}${r.qual ? ` · <span class="qual-tag">${esc(r.qual)}</span>` : ''} · 모집 ${fmtInt(r.enroll)}명</div>
+      <div class="hl-jh">${esc(r.jhtype)} · ${esc(r.jhname)}${r.qual ? ` · <span class="qual-tag">${esc(r.qual)}</span>` : ''} · 모집 ${fmtInt(r.enroll)}명${examBadge(r)}</div>
       ${yoyHTML(r)}
       <div class="hl-tags">${tags.join('')}</div>
       <div class="hl-impact">${reasons || '<span class="muted">상세 보기</span>'}</div>
@@ -765,7 +829,7 @@ function renderTable() {
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
       <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}</td>
+      <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>
       <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>

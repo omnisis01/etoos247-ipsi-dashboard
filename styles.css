@@ -262,6 +262,15 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .dept-btn:hover{color:var(--primary-ink)}
 .jh-pill{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:var(--surface-2);
   border:1px solid var(--line);color:var(--text-soft);white-space:nowrap}
+/* 대학별고사 시기 배지 — 수시 납치 판단용.
+   '수능 전'은 경고색(회피 불가), '수능 후'는 안전색(불참으로 회피 가능). */
+.exam-tag{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;
+  white-space:nowrap;margin-left:4px}
+.exam-tag.pre{background:var(--bad-soft);color:var(--bad)}
+.exam-tag.post{background:var(--good-soft);color:var(--good)}
+.exam-row{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);flex-wrap:wrap;gap:8px}
+.exam-row .cf-title{font-size:12.5px}
+
 /* 권역 구분자 — 같은 대학·학과·전형이 권역별로 쪼개진 경우에만 붙는다(app.js의 r.qual). */
 .qual-tag{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;
   background:var(--primary-soft);color:var(--primary-ink);white-space:nowrap;margin-top:3px}
