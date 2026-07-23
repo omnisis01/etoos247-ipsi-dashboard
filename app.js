@@ -222,7 +222,10 @@ function yoyGrade(r) {
 function yoyComp(r) { // 경쟁률: 하락 = 유리
   const a = r.c[1], b = r.c[0]; if (a == null || b == null) return null;
   const ratio = a ? b / a : 1, d = b - a;
-  return { y25: a, y26: b, d, dir: ratio <= 0.9 ? 'down' : ratio >= 1.1 ? 'up' : 'flat' };
+  // 전형유형별 내부 잣대(표기하지 않음): 논술은 기본 경쟁률이 수십:1이라
+  // ±10% 밴드로는 노이즈까지 신호로 잡힌다 → ±15%로 완화. 그 외는 ±10% 유지.
+  const band = r.jhtype === '논술' ? 0.15 : 0.10;
+  return { y25: a, y26: b, d, dir: ratio <= 1 - band ? 'down' : ratio >= 1 + band ? 'up' : 'flat' };
 }
 function yoyChung(r) { // 추합(충원): 증가 = 실질 문턱↓ = 유리
   const a = numOr(r.chung[1]), b = numOr(r.chung[0]); if (a == null || b == null) return null;
@@ -261,7 +264,10 @@ function verdict(r) {
   }
   if (c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
   if (ch) { const cu = chungUnit(r), c1 = fmtChung(r, ch.y25), c2 = fmtChung(r, ch.y26);
-    if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${c1}→${c2}${cu}`, m: '충원' }); score += 1; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${c1}→${c2}${cu}`, m: '충원' }); score -= 1; } }
+    // 전형유형별 내부 잣대(표기하지 않음): 교과전형은 추합이 모집인원의 100~300%까지 도는
+    // 실질 문턱의 핵심 변수라 ±2, 종합·논술·실기는 추합 규모가 작아 ±1 유지.
+    const chW = r.jhtype === '학생부교과' ? 2 : 1;
+    if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${c1}→${c2}${cu}`, m: '충원' }); score += chW; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${c1}→${c2}${cu}`, m: '충원' }); score -= chW; } }
   let cls, label;
   if (score >= 2) { cls = 'good'; label = '유리'; }
   else if (score <= -2) { cls = 'bad'; label = '불리'; }
