@@ -78,10 +78,12 @@ input{font-family:inherit}
 .cat-item .cat-n{flex:none;margin-left:auto;font-size:11.5px;font-weight:700;color:var(--text-mute);
   background:var(--surface-2);padding:2px 8px;border-radius:20px}
 .cat-item.has-sub .cat-n{margin-left:auto}
-.cat-toggle{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;
+.cat-toggle{flex:none;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
+  border:1px solid var(--line);background:var(--surface-2);font-size:10px;
   color:var(--text-mute);font-size:11px;font-weight:900;margin-left:4px;transition:transform .16s,background .12s,color .12s}
 .cat-toggle:hover{background:var(--surface-2);color:var(--text)}
-.cat-toggle.open{transform:rotate(90deg);color:var(--text-soft)}
+.cat-toggle{transform:rotate(-90deg)}
+.cat-toggle.open{transform:rotate(0deg);color:var(--text-soft)}
 .cat-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
 .cat-item.active .cat-n{background:var(--surface);color:var(--primary-ink)}
 .cat-item.all .cat-dot{background:conic-gradient(from 0deg,#3a5bd9,#0891b2,#16a34a,#d97706,#e11d48,#3a5bd9)}
@@ -279,6 +281,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .delta.up{background:var(--good-soft);color:var(--good)}
 .delta.down{background:var(--bad-soft);color:var(--bad)}
 .delta.new{background:var(--new-soft);color:var(--new)}
+.delta.tighten,.tag.tighten{background:var(--bad-soft);color:var(--bad)}
+.delta.ease,.tag.ease{background:rgba(59,130,246,.14);color:#3b82f6}
 .delta.neu{background:var(--neutral-soft);color:var(--neutral)}
 .grade-val{font-weight:800;font-variant-numeric:tabular-nums}
 .spark{display:inline-block;vertical-align:middle}
@@ -344,7 +348,7 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   display:flex;justify-content:space-between;align-items:center;z-index:2}
 .drawer-head h3{font-size:18px;font-weight:800}
 .cmp-table{width:100%;border-collapse:collapse;font-size:12.5px}
-.cmp-table th,.cmp-table td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.cmp-table th,.cmp-table td{padding:14px 16px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .cmp-table thead th{position:sticky;top:69px;background:var(--surface-2);font-weight:800;z-index:1}
 .cmp-table td.rowlab{font-weight:800;color:var(--text-soft);background:var(--surface-2);white-space:nowrap}
 .cmp-rm{font-size:11px;color:var(--bad);font-weight:700;margin-top:4px}
@@ -563,7 +567,7 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 /* ============ PDF 저장 (인쇄) ============ */
 #printArea{display:none}
 @media print{
-  @page{size:A4;margin:12mm}
+  @page{size:A4 portrait;margin:12mm}
   /* 화면 UI 전부 숨기고 인쇄 문서만 노출 */
   body.printing #app,body.printing #modal,body.printing #favDrawer,body.printing #compareDrawer,
   body.printing #insightView,body.printing .skip-link{display:none!important}
@@ -593,6 +597,11 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .uni-panel{padding:14px 16px}
 .uni-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
 .uni-col h3{font-size:13px;margin:0 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.uni-col h3.uni-type{cursor:pointer;border-radius:8px;padding:5px 8px;border:1px solid var(--line)}
+.uni-col h3.uni-type:hover{background:var(--surface-2)}
+.uni-col h3.uni-type.on{background:var(--primary);color:#fff}
+.uni-col h3.uni-type.on .muted{color:rgba(255,255,255,.8)}
+.tbl-region{max-width:130px;margin-right:8px}
 .uni-jh{margin:4px 0;font-size:12.5px}
 .uni-jh summary{cursor:pointer;padding:3px 2px;border-radius:6px}
 .uni-jh summary:hover{background:var(--surface-2)}

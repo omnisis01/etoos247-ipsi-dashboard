@@ -129,6 +129,20 @@ ROWS.forEach(r => {
     : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
     : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
     : (r.date ? '고사' : '');
+  // 최저 '변경'의 방향 판정. ⚠️ N합M은 집합 포함관계가 성립할 때만 판정한다(합 숫자만 비교 금지).
+  //   1개3→2합6: 2합6 충족자는 반드시 1개3 충족(역은 불성립) → 요건이 좁아짐 = 강화.
+  //   탐구 2과목→1과목 반영: 2과목 기준 충족자는 상위 1과목 기준도 충족 → 완화.
+  //   그 외(탐 필수→수 필수, 교과반영 변화 등)는 방향 단정이 부정직 → '변경' 유지.
+  r.chKindShow = r.chKind;
+  if (r.chKind === '변경') {
+    const ch = (r.change || '').replace(/\s/g, '');
+    if (/1개3→2합6/.test(ch)) r.chKindShow = '강화';
+    else if (/2합6→1개3/.test(ch)) r.chKindShow = '완화';
+    else if (/과탐?2→1과?목?/.test(ch) || /과\(2\)→과?1/.test(ch)) r.chKindShow = '완화';
+  }
+  // N수불가: 자격이 '졸업예정자'로만 한정된 경우(졸업(예정)자 형태 제외). 재수생 지원 불가.
+  const jag = (r.jagyeok || '').replace(/\s/g, '');
+  r.nsuNo = /졸업예정/.test(jag) && !/[(（]예정/.test(jag) && !/졸업\(/.test(jag);
   const t = r.date || '';
   if (!t) return;
   const hits = [...t.matchAll(/(\d{1,2})\.\s*(\d{1,2})\s*(?:\(([^)]{1,3})\))?/g)];
@@ -244,8 +258,8 @@ function verdict(r) {
   else if (r.dkind === 'merge') sig.push({ dir: 'warn', t: '모집단위 통합(인원·경쟁 재편)', m: '변동' });
   else if (r.dkind === 'changed') sig.push({ dir: 'warn', t: '전형 변경(개편·개명) — 전년 대비 인원 비교 불가', m: '변경' });
   // 2027 구조 변화 (수능최저)
-  if (r.chKind === '강화' || r.chKind === '신설') { sig.push({ dir: 'good', t: `수능최저 ${r.chKind} → 지원 위축`, m: '최저' }); score += 2; }
-  else if (r.chKind === '완화' || r.chKind === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKind} → 지원 증가`, m: '최저' }); score -= 2; }
+  if (r.chKindShow === '강화' || r.chKindShow === '신설') { sig.push({ dir: 'good', t: `수능최저 ${r.chKindShow} → 지원 위축`, m: '최저' }); score += 2; }
+  else if (r.chKindShow === '완화' || r.chKindShow === '폐지') { sig.push({ dir: 'bad', t: `수능최저 ${r.chKindShow} → 지원 증가`, m: '최저' }); score -= 2; }
   // 수시 납치 — 합격하면 정시 지원이 막히므로 고사 시기가 회피 가능성을 가른다.
   //   판정 근거·용어는 memory/ipsi-susi-napchi.md 참조. 점수(유불리)에는 반영하지 않는다 —
   //   납치는 '합격 가능성'이 아니라 '합격했을 때의 기회비용' 문제라 성격이 다르다.
@@ -321,8 +335,8 @@ function passChange(row) {
     if (c === 'up' && row.dkind === 'up') return true;
     if (c === 'down' && row.dkind === 'down') return true;
     if (c === 'changed' && row.dkind === 'changed') return true;
-    if (c === 'ease' && row.chKind === '완화') return true;
-    if (c === 'tighten' && (row.chKind === '강화' || row.chKind === '신설')) return true;
+    if (c === 'ease' && (row.chKindShow === '완화' || row.chKindShow === '폐지')) return true;
+    if (c === 'tighten' && (row.chKindShow === '강화' || row.chKindShow === '신설')) return true;
   }
   return false;
 }
@@ -486,7 +500,7 @@ function renderCatList() {
     const b = el('button', 'cat-item' + (subs ? ' has-sub' : '') + (S.cat === c.key ? ' active' : ''));
     if (S.cat === c.key) b.setAttribute('aria-current', 'true');
     b.innerHTML = `<span class="cat-dot" style="background:${c.color}" aria-hidden="true"></span><span class="cat-name">${esc(c.label)}</span><span class="cat-n">${c.count.toLocaleString()}</span>` +
-      (subs ? `<span class="cat-toggle${open ? ' open' : ''}" data-toggle="${c.key}" role="button" tabindex="0" aria-label="${esc(c.label)} 세부 ${open ? '접기' : '펼치기'}" aria-expanded="${open}">▸</span>` : '');
+      (subs ? `<span class="cat-toggle${open ? ' open' : ''}" data-toggle="${c.key}" role="button" tabindex="0" aria-label="${esc(c.label)} 세부 ${open ? '접기' : '펼치기'}" aria-expanded="${open}">▾</span>` : '');
     b.title = c.desc;
     b.onclick = e => { if (e.target.closest('[data-toggle]')) return; select(c.key); };
     box.appendChild(b);
@@ -617,13 +631,21 @@ function uniPanelHTML(uni, rows) {
       <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
     <div class="uni-cols">${typeKeys.map(t => {
       const jhs = Object.entries(byType[t]).sort((a, b) => sumE(b[1]) - sumE(a[1]));
-      return `<div class="uni-col"><h3>${esc(t)} <span class="muted">${jhs.reduce((s, [, rs]) => s + sumE(rs), 0).toLocaleString()}명</span></h3>
+      return `<div class="uni-col"><h3 class="uni-type${S.jhtypes.has(t) ? ' on' : ''}" data-jt="${esc(t)}" role="button" tabindex="0" title="클릭하면 아래 표를 이 전형유형으로 거릅니다">${esc(t)} <span class="muted">${jhs.reduce((s, [, rs]) => s + sumE(rs), 0).toLocaleString()}명</span></h3>
         ${jhs.map(([jh, rs]) => `<details class="uni-jh"><summary><b>${esc(jh)}</b> <span class="muted">${rs.length}개 단위 · ${sumE(rs).toLocaleString()}명</span></summary>
           <ul>${rs.slice().sort((a, b) => (b.enroll || 0) - (a.enroll || 0)).map(r =>
             `<li>${esc(deptDisp(r)).replace(/\n/g, ' ')} <span class="muted">${r.enroll != null ? r.enroll + '명' : ''}</span></li>`).join('')}</ul>
         </details>`).join('')}</div>`;
     }).join('')}</div>`;
 }
+// 유형 헤더 클릭 → 전형유형 필터와 연동(위임 — 패널은 renderAll마다 다시 그려진다)
+document.addEventListener('click', e => {
+  const h = e.target.closest && e.target.closest('#uniPanel .uni-type');
+  if (!h) return;
+  const t = h.dataset.jt;
+  S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t);
+  renderFilters(); renderSoft();
+});
 const sumE = rs => rs.reduce((s, r) => s + (r.enroll || 0), 0);
 
 /* ----- KPIs ----- */
@@ -632,8 +654,8 @@ function renderKPIs() {
   const nNew = f.filter(r => r.dkind === 'new').length;
   const nUp = f.filter(r => r.dkind === 'up').length;
   const nDown = f.filter(r => r.dkind === 'down').length;
-  const nTighten = f.filter(r => r.chKind === '강화' || r.chKind === '신설').length;
-  const nEase = f.filter(r => r.chKind === '완화' || r.chKind === '폐지').length;
+  const nTighten = f.filter(r => r.chKindShow === '강화' || r.chKindShow === '신설').length;
+  const nEase = f.filter(r => r.chKindShow === '완화' || r.chKindShow === '폐지').length;
   const avgG = avg(f.map(r => r.g[0]));
   const avgC = avg(f.map(r => r.c[0]));
   const nUni = new Set(f.map(r => r.uni)).size;
@@ -695,8 +717,8 @@ function renderHighlights() {
   const nong = S.hlFilter === 'nong';
   const hd = $('#heroDesc');
   if (hd) hd.innerHTML = nong
-    ? '<b>농어촌학생전형</b>만 모아 봅니다 — 큐레이션 없이 <b>전 대학</b> 대상으로, 2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 추정</b>입니다. 카드를 누르면 근거를 볼 수 있어요.'
-    : '2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 추정</b>입니다. <b>메디컬·상위권 본교(SKY·서성한·중경외시·건동홍)</b>만 선별합니다. 카드를 누르면 근거를 볼 수 있어요.';
+    ? '<b>농어촌학생전형</b>만 모아 봅니다 — 큐레이션 없이 <b>전 대학</b> 대상으로, 2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>AI분석결과</b>입니다. 카드를 누르면 상세 내용을 볼 수 있어요.'
+    : '2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>AI분석결과</b>입니다. <b>메디컬·상위권 본교(SKY·서성한·중경외시·건동홍)</b>까지만 선별합니다. 카드를 누르면 상세 내용을 볼 수 있어요.';
   let pool = FILTERED.filter(r => {
     const v = V(r);
     if (!v.sig.length) return false;
@@ -745,7 +767,7 @@ function renderHighlights() {
     else if (r.dkind === 'down') tags.push(`<span class="tag down">감원 ${d.txt}</span>`);
     else if (r.dkind === 'split') tags.push('<span class="tag new">분리</span>');
     else if (r.dkind === 'merge') tags.push('<span class="tag new">통합</span>');
-    if (r.chKind) { const cls = (r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'; tags.push(`<span class="tag ${cls}">최저 ${r.chKind}</span>`); }
+    if (r.chKindShow) { const cls = (r.chKindShow === '강화' || r.chKindShow === '신설') ? 'tighten' : (r.chKindShow === '변경') ? 'neu' : 'ease'; tags.push(`<span class="tag ${cls}">최저 ${r.chKindShow}</span>`); }
     const reasons = v.sig.slice(0, 2).map(s => {
       const ico = s.dir === 'good' ? '<span class="dot-good">▲</span>' : s.dir === 'bad' ? '<span class="dot-bad">▼</span>' : '<span class="dot-new">✦</span>';
       return `<div class="imp-line">${ico}<span>${esc(s.t)}</span></div>`;
@@ -864,6 +886,15 @@ function renderTable() {
     th.onclick = doSort;
     th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doSort(); } };
   });
+  // 표 상단 지역 필터(사이드바와 동일 상태 공유) — 표만 보는 사용자를 위한 진입점
+  const ph = $('#sortSeg').parentElement;
+  let rs = ph.querySelector('#tblRegion');
+  if (!rs) {
+    rs = document.createElement('select'); rs.id = 'tblRegion'; rs.className = 'f-select tbl-region';
+    ph.insertBefore(rs, $('#sortSeg'));
+    rs.onchange = () => { S.region = rs.value; renderFilters(); renderSoft(); };
+  }
+  rs.innerHTML = '<option value="">지역: 전국</option>' + REGIONS.map(x => `<option value="${esc(x)}" ${S.region === x ? 'selected' : ''}>${esc(x)}</option>`).join('');
   // sort segment quick
   const ss = $('#sortSeg');
   // 입결 높은순 = 등급 숫자 작은(1.0) 순 = grade 오름차순(dir 1); 낮은순 = grade 내림차순(dir -1)
@@ -994,9 +1025,9 @@ function openModal(i) {
       <div class="msec"><div class="kv">
         <dt>전형</dt><dd>${esc(r.jhtype)} · ${esc(r.jhname)}</dd>
         <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${r.dkind === 'changed' ? '전형 변경(개편·개명)' : esc(r.prev || '-')})</span></dd>
-        <dt>지원자격</dt><dd>${esc(r.jagyeok) || '–'}</dd>
+        <dt>지원자격</dt><dd>${esc(r.jagyeok) || '–'}${r.nsuNo ? ' <span class="delta tighten" title="졸업예정자(현 고3)만 지원 가능 — 재수생 이상 지원 불가">N수불가</span>' : ''}</dd>
         <dt>전형방법</dt><dd>${esc(r.method) || '–'}</dd>
-        <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKind ? `<span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}">최저 ${r.chKind}</span>` : ''}</dd>
+        <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKindShow ? `<span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'tighten' : (r.chKindShow === '변경') ? 'neu' : 'ease'}">최저 ${r.chKindShow}</span>` : ''}</dd>
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
         ${r.careerSubj ? `<dt>진로선택</dt><dd>${esc(r.careerSubj)}</dd>` : ''}
@@ -1023,7 +1054,7 @@ function openModal(i) {
         </tbody></table>
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
-      ${r.note ? `<div class="msec"><h4>💡 지원 시 유의사항</h4><div class="change-box" style="background:var(--surface-2);color:var(--text-soft);border-color:var(--line)">${esc(r.note)}</div></div>` : ''}
+      ${r.note ? `<div class="msec"><h4>💡 지원 시 유의사항</h4><div class="change-box" style="background:var(--surface-2);color:var(--text-soft);border-color:var(--line)">${expandNote(r)}</div></div>` : ''}
       <div class="msec"><h4>🗂️ 지원카드에 담기 <span class="muted">지원희망 또는 상향을 선택</span></h4>
         <div class="modal-actions">
           <button class="ghost-btn fav-pick ${bk === 'hope' ? 'on' : ''}" id="modalFavHope">${bk === 'hope' ? '✓ 지원희망에 담김' : '🎯 지원희망으로'} <span class="muted">${S.fav.hope.length}/6</span></button>
@@ -1185,6 +1216,24 @@ $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer
 $('#favBtn').onclick = openFav;
 
 /* ----- PDF 저장 (인쇄) — 지원카드·비교함을 A4 인쇄용 문서로 렌더 후 window.print() ----- */
+/* 원자료 비고(note)는 한 줄 메모라 학생에겐 불친절하다 — 자주 나오는 패턴을 풀어쓴 해설로 확장한다.
+   패턴에 없으면 원문 + 공통 안내를 붙인다. 원문은 항상 보존한다(자의적 대체 금지). */
+const NOTE_RULES = [
+  [/환산점수로.*비교/, '이 대학 입결은 원점수 등급이 아니라 대학 자체 환산점수 기준입니다. 단순 내신 평균등급으로 비교하면 오판할 수 있으니, 대학 입학처의 환산점수 계산기로 본인 점수를 산출해 전년 입결과 비교하세요.'],
+  [/환산등급으로 판단|대?식 환산등급|입결은 .*식 (평균 )?등급/, '이 대학 입결은 대학 자체 환산식으로 산출한 등급입니다. 학교 내신 평균등급과 산식이 달라 직접 비교하면 오판할 수 있으니, 해당 대학 환산식 기준으로 본인 등급을 다시 계산해 비교하세요.'],
+  [/환산등급으로 26학년만 비교/, '2026학년도부터 입결 산출 기준이 바뀌어 그 이전 연도 입결과의 직접 비교는 의미가 없습니다. 2026 값만 참고하고, 이전 연도는 추세 확인 용도로만 쓰세요.'],
+  [/입결은 전\s?과목 등급|전교과 등급 평균/, '표기된 입결은 반영교과가 아닌 전 과목 평균등급 기준입니다. 본인의 전 과목 평균과 비교해야 하며, 반영교과만 계산한 등급과 혼동하면 실제보다 유리하게 오판할 수 있습니다.'],
+  [/서류평가는 과목 선택 위주/, '서류평가에서 전공 관련 과목의 선택·이수 여부를 비중 있게 봅니다. 지원 학과와 관련된 교과 이수 내역과 세부능력특기사항 기록을 미리 점검하고, 부족하면 지원 전략을 재고하세요.'],
+  [/교과이수기준|핵심권장과목/, '이 모집단위는 교과이수기준과 핵심권장과목 이수 여부를 확인합니다. 미이수 시 평가에서 불리하거나 지원 자체가 제한될 수 있으니, 모집요강의 권장과목 표와 본인 이수 내역을 대조하세요.'],
+  [/본캠.*학적부? 이동.*불가능/, '입학 후 본캠퍼스로의 학적 이동(캠퍼스 간 전과)은 사실상 불가능합니다. 소속 캠퍼스를 확인하고, 캠퍼스가 다른 동일 학과와 혼동하지 않도록 주의하세요.'],
+  [/일반고:?면접형/, '고교 유형별 합격 비율이 전형에 따라 다릅니다. 표기된 비율은 일반고 출신 합격자 비중으로, 본인 고교 유형에서의 실질 경쟁 구도를 가늠하는 참고 지표로 활용하세요.'],
+];
+function expandNote(r) {
+  const note = r.note || '';
+  for (const [re, tip] of NOTE_RULES) if (re.test(note)) return `<b>${esc(note)}</b><br><span style="display:block;margin-top:6px">${esc(tip)}</span>`;
+  return `<b>${esc(note)}</b><br><span style="display:block;margin-top:6px">위 내용은 원자료의 비고를 옮긴 것입니다. 세부 조건과 예외는 반드시 해당 대학의 2027학년도 수시 모집요강 원문에서 확인하세요.</span>`;
+}
+
 function printDoc(title, subtitle, bodyHTML) {
   const host = $('#printArea');
   const stamp = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1375,7 +1424,7 @@ $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? clos
 
 /* ----- init ----- */
 $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.nRows.toLocaleString()}건 · 대학 ${D.meta.nUni}곳`;
-$('#footNote').innerHTML = `<b>이투스247학원</b> · 본 대시보드는 <b>${esc(D.meta.source)}</b> 자료를 가공한 참고용입니다. '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
+$('#footNote').innerHTML = `<b>이투스247학원</b> &nbsp; '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트
 updateCompareBtn(); updateFavBtn();
 renderCatList(); renderFilters(); renderAll(); renderInsightBanner();
