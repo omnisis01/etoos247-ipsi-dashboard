@@ -380,6 +380,18 @@ function sortFiltered() {
     }
     return (x - y) * dir;
   });
+  // 메디컬 표시 서열: 같은 대학 안에서는 의 > 치 > 한 > 수의 > 약 순으로 고정(사용자 지정).
+  // 유불리 점수와 무관한 서열이라 정렬을 바꾸지 않고, 해당 행들이 차지한 자리 안에서만 재배치한다.
+  const MED_RANK = { med_med: 0, med_dent: 1, med_oriental: 2, med_vet: 3, med_pharm: 4 };
+  const mrank = r => { for (const c of r.cats || []) if (c in MED_RANK) return MED_RANK[c]; return null; };
+  const medByUni = {};
+  FILTERED.forEach((r, i) => { if (mrank(r) != null) (medByUni[r.uni] = medByUni[r.uni] || []).push(i); });
+  for (const idxs of Object.values(medByUni)) {
+    if (idxs.length < 2) continue;
+    const rows = idxs.map(i => FILTERED[i]);
+    rows.sort((a, b) => mrank(a) - mrank(b));   // 안정 정렬 — 같은 서열끼리는 기존 순서 유지
+    idxs.forEach((i, k) => { FILTERED[i] = rows[k]; });
+  }
 }
 
 /* ============================================================
