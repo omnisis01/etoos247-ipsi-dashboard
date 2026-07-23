@@ -634,7 +634,7 @@ function renderKPIs() {
   let nGood = 0, nBad = 0;
   f.forEach(r => { const v = V(r); if (v.label === '유리') nGood++; else if (v.label === '불리') nBad++; });
   const cards = [
-    { cls: 'primary', label: '📑 전형 수', val: f.length.toLocaleString(), sub: `${nUni}개 대학` },
+    { cls: 'primary', label: '📑 검색결과', val: f.length.toLocaleString(), sub: `${nUni}개 대학` },
     { cls: 'good', label: '🟢 올해 유리', val: nGood.toLocaleString(), sub: '2026↔2025 + 변화 종합' },
     { cls: 'bad', label: '🔴 올해 불리', val: nBad.toLocaleString(), sub: '2026↔2025 + 변화 종합' },
     { cls: 'new', label: '✨ 신설', val: nNew.toLocaleString(), sub: '첫해 입결 주목' },
