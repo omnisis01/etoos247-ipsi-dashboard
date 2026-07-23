@@ -180,7 +180,7 @@ const S = {
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
 
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut70' | 'cut90', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
-  page: 1, perPage: 60, hlFilter: 'all', chartMetric: 'grade',
+  page: 1, perPage: 60, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
@@ -677,6 +677,12 @@ function renderHighlights() {
     seg.innerHTML = [['all', '전체'], ['good', '유리'], ['bad', '불리'], ['new', '신설'], ['nong', '농어촌']]
       .map(([k, l]) => `<button data-k="${k}" class="${S.hlFilter === k ? 'on' : ''}">${l}</button>`).join('');
     seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.hlFilter = b.dataset.k; [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.hlFilter)); renderHighlights(); };
+    // 전형유형 필터(사용자 요청): 유불리 카드도 교과/종합/논술/실기별로 골라 본다.
+    const seg2 = el('div', 'seg hl-jhseg');
+    seg2.innerHTML = [['', '전형 전체'], ['학생부교과', '교과'], ['학생부종합', '종합'], ['논술', '논술'], ['실기/실적', '실기']]
+      .map(([k, l]) => `<button data-j="${k}" class="${(S.hlJhtype || '') === k ? ' on' : ''}">${l}</button>`).join('');
+    seg2.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.hlJhtype = b.dataset.j; [...seg2.children].forEach(c => c.classList.toggle('on', c.dataset.j === (S.hlJhtype || ''))); renderHighlights(); };
+    seg.parentElement.appendChild(seg2);
   } else {
     [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.hlFilter));
   }
@@ -689,6 +695,7 @@ function renderHighlights() {
     const v = V(r);
     if (!v.sig.length) return false;
     // 농어촌만 보기: 큐레이션(메디컬·상위권) 우회 — 전 대학의 농어촌학생전형을 유불리와 함께
+    if (S.hlJhtype && r.jhtype !== S.hlJhtype) return false;   // 전형유형 필터
     if (nong) return r.jhname.includes('농어촌');
     if (!isPickWorthy(r)) return false;        // 메디컬·상위권 본교 한정
     if (S.hlFilter === 'good') return v.label === '유리';
