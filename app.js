@@ -594,16 +594,20 @@ const JHTYPE_ORDER = ['학생부교과', '학생부종합', '논술', '실기/�
 function renderUniPanel() {
   const box = $('#uniPanel');
   if (!box) return;
-  const unis = new Set(FILTERED.map(r => r.uni));
-  if (unis.size !== 1 || FILTERED.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  const uni = FILTERED[0].uni;
+  const unis = [...new Set(FILTERED.map(r => r.uni))];
+  // 본교+분교(예: 고려대/고려대(세종))가 함께 잡히는 경우가 흔해 2개 대학까지 허용한다.
+  if (unis.length < 1 || unis.length > 2 || FILTERED.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.innerHTML = unis.map(u => uniPanelHTML(u, FILTERED.filter(r => r.uni === u))).join('');
+  box.style.display = '';
+}
+function uniPanelHTML(uni, rows) {
   const byType = {};
-  FILTERED.forEach(r => {
+  rows.forEach(r => {
     const t = JHTYPE_ORDER.includes(r.jhtype) ? r.jhtype : '기타';
     ((byType[t] = byType[t] || {})[r.jhname] = byType[t][r.jhname] || []).push(r);
   });
   const typeKeys = [...JHTYPE_ORDER, '기타'].filter(t => byType[t]);
-  box.innerHTML = `<div class="panel-head"><h2>🏫 ${esc(uni)} 전형별 학과 한눈에</h2>
+  return `<div class="panel-head"><h2>🏫 ${esc(uni)} 전형별 학과 한눈에</h2>
       <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
     <div class="uni-cols">${typeKeys.map(t => {
       const jhs = Object.entries(byType[t]).sort((a, b) => sumE(b[1]) - sumE(a[1]));
@@ -613,7 +617,6 @@ function renderUniPanel() {
             `<li>${esc(deptDisp(r)).replace(/\n/g, ' ')} <span class="muted">${r.enroll != null ? r.enroll + '명' : ''}</span></li>`).join('')}</ul>
         </details>`).join('')}</div>`;
     }).join('')}</div>`;
-  box.style.display = '';
 }
 const sumE = rs => rs.reduce((s, r) => s + (r.enroll || 0), 0);
 
