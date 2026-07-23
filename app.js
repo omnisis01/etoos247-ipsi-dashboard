@@ -123,6 +123,12 @@ ROWS.forEach(r => {
   r.examWhen = null;                    // 'pre' | 'post' | null(판정 불가)
   const hasExam = /면접|논술|실기|실적/.test(r.method || '');
   r.hasExam = hasExam;
+  // 고사 종류. 논술은 전형 자체가 별도라 문구에서 섞지 않는다(사용자 피드백) —
+  // 면접·실기 전형에만 종류를 명기하고, 그 외(인적성 등)는 '고사'로 둔다.
+  r.examKind = /논술/.test(r.jhtype + (r.jhname || '')) ? '논술'
+    : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
+    : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
+    : (r.date ? '고사' : '');
   const t = r.date || '';
   if (!t) return;
   const hits = [...t.matchAll(/(\d{1,2})\.\s*(\d{1,2})\s*(?:\(([^)]{1,3})\))?/g)];
@@ -240,8 +246,8 @@ function verdict(r) {
   // 수시 납치 — 합격하면 정시 지원이 막히므로 고사 시기가 회피 가능성을 가른다.
   //   판정 근거·용어는 memory/ipsi-susi-napchi.md 참조. 점수(유불리)에는 반영하지 않는다 —
   //   납치는 '합격 가능성'이 아니라 '합격했을 때의 기회비용' 문제라 성격이 다르다.
-  if (r.examWhen === 'pre') sig.push({ dir: 'warn', t: '수능 전 면접·논술 — 납치 위험 있음(수능 잘 봐도 정시 전환 불가)', m: '납치' });
-  else if (r.examWhen === 'post') sig.push({ dir: 'good', t: '수능 후 면접·논술 — 가채점 보고 응시 여부 선택 가능', m: '일정' });
+  if (r.examWhen === 'pre') sig.push({ dir: 'warn', t: `수능 전 ${r.examKind} — 납치 위험 있음(수능 잘 봐도 정시 전환 불가)`, m: '납치' });
+  else if (r.examWhen === 'post') sig.push({ dir: 'good', t: `수능 후 ${r.examKind} — 가채점 보고 응시 여부 선택 가능`, m: '일정' });
   // 대학별고사 없는 전형(교과100 등)은 별도 신호를 내지 않는다 — 수시 합격 시 정시 불가는
   // 모든 수시의 공통 규칙이라 전형마다 반복하면 소음이다(사용자 피드백).
 
@@ -935,7 +941,7 @@ function openModal(i) {
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
         ${r.careerSubj ? `<dt>진로선택</dt><dd>${esc(r.careerSubj)}</dd>` : ''}
-        ${r.date ? `<dt>대학별고사</dt><dd>${esc(r.date)}</dd>` : ''}
+        ${r.date ? `<dt>대학별고사</dt><dd>${esc(r.date)}${r.examKind && r.examKind !== '논술' ? ` ${r.examKind}` : ''}</dd>` : ''}
       </div></div>
       <div class="msec hero-sec"><h4>🎯 올해 입시 유불리 예상 <span class="muted">2026 vs 2025 + 2027 변화 종합 · 자동 추정</span></h4>
         <div class="verdict-head"><span class="verdict-big ${v.cls}">${v.label}</span>
