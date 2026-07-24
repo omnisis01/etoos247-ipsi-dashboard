@@ -3,7 +3,7 @@
 import openpyxl, re, json, os, html
 
 # 원천 폴더가 '입결' → '입결 및 인사이트'로 개명됨(원천 xlsx 이동). 개명 시 이 경로도 갱신.
-SRC = os.path.join(os.path.dirname(__file__), '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V7.15_부산동아의대 지역의사제 최저오류.xlsx')
+SRC = os.path.join(os.path.dirname(__file__), '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V7.24_포스텍과기원 입결 추가_대입상담프로그램비공식.xlsx')
 OUT_DIR = os.path.dirname(__file__)
 
 # ---------------------------------------------------------------- load
@@ -736,7 +736,7 @@ payload = {
     'meta': {
         'title': '2027학년도 수시지원 대시보드',
         'subtitle': '2026 대비 변화 · 입결 영향 · 3개년 추이',
-        'source': '2027학년도 수시지원의 모든 것 V7.15 (제작: 훈장 김민철)',
+        'source': '2027학년도 수시지원의 모든 것 V7.24 (제작: 훈장 김민철)',
         'years': {'cur': 2027, 'result': [2026, 2025, 2024]},
         'nRows': len(rows), 'nUni': len(order['uni']),
     },
