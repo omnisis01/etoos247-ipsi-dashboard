@@ -246,7 +246,23 @@ function yoyComp(r) { // 경쟁률: 하락 = 유리
 }
 function yoyChung(r) { // 추합(충원): 증가 = 실질 문턱↓ = 유리
   const a = numOr(r.chung[1]), b = numOr(r.chung[0]); if (a == null || b == null) return null;
-  const d = b - a; return { y25: a, y26: b, d, dir: d > 0 ? 'up' : d < 0 ? 'down' : 'flat' };
+  const d = b - a;
+  let dir = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  // ⚠️ 추합을 절대값으로만 비교하면 모집인원이 함께 변할 때 왜곡된다.
+  //    모집 10명에 추합 5명(50%)과 모집 100명에 추합 5명(5%)은 실질 문턱이 전혀 다르다.
+  //    실측: 추합 변화 15,148행 중 26.4%가 증감 동반, 그중 394행은 절대값↔비율 판정이 뒤집힌다.
+  //    그 394행의 75%(296)가 '증감폭 20% 이상' 구간에 몰려 있어 그 구간만 비율로 재판정한다.
+  //    ※ 배수형(chungRatio)은 이미 정규화된 지표라 손대지 않는다.
+  //    ※ 2025 모집인원이 없어 (2027모집 − 전년대비증감)으로 근사한다 — 방향 판정 용도로만 쓴다.
+  const dn = r.dn || 0, e26 = r.enroll;
+  if (!r.chungRatio && dn && e26 > 0 && Math.abs(dn) / e26 >= 0.2) {
+    const e25 = e26 - dn;
+    if (e25 > 0) {
+      const q26 = b / e26, q25 = a / e25;
+      dir = q26 > q25 ? 'up' : q26 < q25 ? 'down' : 'flat';
+    }
+  }
+  return { y25: a, y26: b, d, dir };
 }
 
 /* ---- 올해(2027) 입시 유불리 예상: 2026 vs 2025 결과 추이 + 2027 구조 변화 ---- */
