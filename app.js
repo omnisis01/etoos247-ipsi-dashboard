@@ -211,6 +211,66 @@ function migrateFav(v) {
 function load(k, def) { try { return JSON.parse(localStorage.getItem('ipsi_' + k)) ?? def; } catch (e) { return def; } }
 function save(k, v) { try { localStorage.setItem('ipsi_' + k, JSON.stringify(v)); } catch (e) {} }
 
+/* ---------- 공유 URL ----------
+   ⚠️ 저장은 ROWS 인덱스(_i)로 하지만 링크에 인덱스를 실으면 안 된다.
+      원천 엑셀이 갱신되면(V7.15→V7.24처럼 행이 추가·삭제됨) 인덱스가 밀려
+      같은 링크가 전혀 다른 학과를 가리킨다 — 조용히 틀리는 최악의 유형이다.
+      그래서 (대학|학과|전형유형|전형명)을 해시한 안정 키를 쓴다.
+      실측: 26,416행 → 고유키 26,269 · 해시 충돌 0. 같은 키가 여럿인 34종(지역의사 권역 분할)은
+      순번을 붙여 구분한다(예: 'abc12.1'). */
+const hashKey = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return x.toString(36); };
+const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
+let _CODE_TO_I = null, _I_TO_CODE = null;
+function buildCodeMaps() {
+  if (_CODE_TO_I) return;
+  _CODE_TO_I = new Map(); _I_TO_CODE = new Map();
+  const seen = new Map();
+  ROWS.forEach(r => {
+    const base = rowKey(r);
+    const n = seen.get(base) || 0; seen.set(base, n + 1);
+    const code = n ? `${base}.${n}` : base;      // 첫 행은 순번 생략(링크 짧게)
+    _CODE_TO_I.set(code, r._i); _I_TO_CODE.set(r._i, code);
+  });
+}
+const codeOf = i => { buildCodeMaps(); return _I_TO_CODE.get(i) || ''; };
+const indexOfCode = c => { buildCodeMaps(); const v = _CODE_TO_I.get(c); return v === undefined ? null : v; };
+
+function buildShareURL(kind) {
+  const p = new URLSearchParams();
+  if (kind === 'fav') {
+    if (S.fav.hope.length) p.set('h', S.fav.hope.map(codeOf).filter(Boolean).join(','));
+    if (S.fav.reach.length) p.set('r', S.fav.reach.map(codeOf).filter(Boolean).join(','));
+  } else {
+    const c = [...S.compare].map(codeOf).filter(Boolean);
+    if (c.length) p.set('c', c.join(','));
+  }
+  return location.origin + location.pathname + '?' + p.toString();
+}
+/** 주소창의 공유 파라미터를 읽어 지원카드·비교함에 복원한다. 없으면 아무것도 하지 않는다. */
+function applyShareURL() {
+  const p = new URLSearchParams(location.search);
+  const pick = k => (p.get(k) || '').split(',').map(s => s.trim()).filter(Boolean)
+    .map(indexOfCode).filter(v => v !== null);
+  const h = pick('h'), r = pick('r'), c = pick('c');
+  if (!h.length && !r.length && !c.length) return null;
+  if (h.length || r.length) { S.fav = { hope: h.slice(0, FAV_HOPE_MAX), reach: r.slice(0, FAV_REACH_MAX) }; saveFav(); }
+  if (c.length) { S.compare = new Set(c.slice(0, 6)); save('cmp', [...S.compare]); }
+  history.replaceState(null, '', location.origin + location.pathname);   // 주소창 정리
+  return { fav: h.length + r.length, cmp: c.length };
+}
+async function copyShare(kind, btn) {
+  const url = buildShareURL(kind);
+  const done = ok => { if (!btn) return; const t = btn.textContent; btn.textContent = ok ? '✓ 링크 복사됨' : '복사 실패'; setTimeout(() => { btn.textContent = t; }, 1600); };
+  try { await navigator.clipboard.writeText(url); done(true); }
+  catch (e) {                                    // 클립보드 권한이 없는 브라우저 대비
+    const ta = document.createElement('textarea'); ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) {}
+    document.body.removeChild(ta);
+    if (!ok) prompt('아래 주소를 복사하세요', url); else done(true);
+  }
+}
+
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
@@ -1122,7 +1182,7 @@ function openCompare() {
   } else {
     const rowM = (lab, fn) => `<tr><td class="rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
     inner.innerHTML = `<div class="drawer-head"><h3>전형 비교 <span class="muted">${items.length}개</span></h3>
-      <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
+      <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpShare">🔗 링크 복사</button><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
       <div style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
         `<th>${esc(r.uni)}<div class="muted">${esc(r.dept.slice(0, 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
         ${rowM('🎯 올해 유불리', r => `<span class="impact-chip ${V(r).cls}">${V(r).label}</span>`)}
@@ -1143,6 +1203,7 @@ function openCompare() {
   $('#cmpClose').setAttribute('aria-label', '비교함 닫기');
   $('#cmpClose').onclick = closeCompareDrawer;
   const cp = $('#cmpPrint'); if (cp) cp.onclick = printCompare;
+  const cs = $('#cmpShare'); if (cs) cs.onclick = () => copyShare('cmp', cs);
   const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); save('cmp', []); updateCompareBtn(); renderTable(); openCompare(); };
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); save('cmp', [...S.compare]); updateCompareBtn(); renderTable(); openCompare(); });
 }
@@ -1222,7 +1283,7 @@ function openFav() {
   const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
   inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/9</span></h3>
       <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
-    <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
+    <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favShare">🔗 링크 복사</button><button class="ghost-btn" id="favPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
     <div class="fav-wrap">
       <div class="fav-group-label hope">🎯 지원희망 (수시 6장) <span class="muted">${S.fav.hope.length}/6</span></div>
       ${mk('hope', FAV_HOPE_MAX)}
@@ -1235,6 +1296,7 @@ function openFav() {
   $('#favClose').setAttribute('aria-label', '지원카드 닫기');
   $('#favClose').onclick = closeFavDrawer;
   const fp = $('#favPrint'); if (fp) fp.onclick = printFav;
+  const fs2 = $('#favShare'); if (fs2) fs2.onclick = () => copyShare('fav', fs2);
   const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = { hope: [], reach: [] }; saveFav(); renderTable(); openFav(); } };
   inner.querySelectorAll('[data-up]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.up.split(':'); moveFav(bk, +p, -1); });
   inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.dn.split(':'); moveFav(bk, +p, 1); });
@@ -1457,6 +1519,9 @@ $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? clos
 $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.nRows.toLocaleString()}건 · 대학 ${D.meta.nUni}곳`;
 $('#footNote').innerHTML = `<b>이투스247학원</b> &nbsp; '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트
+// 공유 링크로 들어온 경우: 지원카드·비교함을 복원하고 해당 서랍을 열어 바로 보여준다.
+const _shared = applyShareURL();
 updateCompareBtn(); updateFavBtn();
 renderCatList(); renderFilters(); renderAll(); renderInsightBanner();
+if (_shared) setTimeout(() => { if (_shared.fav) openFav(); else if (_shared.cmp) openCompare(); }, 60);
 })();
