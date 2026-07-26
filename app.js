@@ -59,6 +59,9 @@ function examBadge(r) {
 const deptDisp = r => !isJisaje(r) ? r.dept
   : r.dept.endsWith(')') ? r.dept.slice(0, -1) + '·지사제)'
   : r.dept + '(지사제)';
+// 통합·계열 단위 모집(개별 학과가 아님). 원천이 '서울캠퍼스'·'전 모집단위'·'통합모집' 등으로
+// 학과 칸에 묶음 단위를 넣는 경우가 있어, 상세 카드에 '통합모집' 라벨로 성격을 알려준다.
+const isIntegrated = d => /캠퍼스$|^전\s*모집단위|통합모집|전공\s*개방|전공개방/.test(String(d || '').replace(/\n/g, ''));
 
 /* ---------- 권역 구분자(qual) ----------
    지역의사제처럼 같은 대학·학과·전형을 권역별로 쪼개 1명씩 뽑는 전형이 있다.
@@ -1018,14 +1021,14 @@ function openModal(i) {
   $('#modalCard').innerHTML = `
     <div class="modal-head"><div class="mh-top"><div>
       <div class="mh-uni">${esc(r.uni)} · ${esc(r.region)} ${esc(r.sigun)}</div>
-      <h3>${esc(deptDisp(r))}</h3>
+      <h3>${esc(deptDisp(r))}${isIntegrated(r.dept) ? ' <span class="qual-tag" title="개별 학과가 아닌 통합·계열 단위 모집입니다">통합모집</span>' : ''}</h3>
       <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${cats}</div>
     </div><button class="modal-close" id="modalClose">✕</button></div></div>
     <div class="modal-body">
       <div class="msec"><div class="kv">
         <dt>전형</dt><dd>${esc(r.jhtype)} · ${esc(r.jhname)}</dd>
         <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${r.dkind === 'changed' ? '전형 변경(개편·개명)' : esc(r.prev || '-')})</span></dd>
-        <dt>지원자격</dt><dd>${esc(r.jagyeok) || '–'}${r.nsuNo ? ' <span class="delta tighten" title="졸업예정자(현 고3)만 지원 가능 — 재수생 이상 지원 불가">N수불가</span>' : ''}</dd>
+        <dt>지원자격</dt><dd>${r.jagyeok ? esc(r.jagyeok) : '<span class="muted">전형명 참조 · 세부 자격은 대학 요강에서 확인하세요</span>'}${r.nsuNo ? ' <span class="delta tighten" title="졸업예정자(현 고3)만 지원 가능 — 재수생 이상 지원 불가">N수불가</span>' : ''}</dd>
         <dt>전형방법</dt><dd>${esc(r.method) || '–'}</dd>
         <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKindShow ? `<span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'tighten' : (r.chKindShow === '변경') ? 'neu' : 'ease'}">최저 ${r.chKindShow}</span>` : ''}</dd>
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
