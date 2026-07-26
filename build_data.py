@@ -703,23 +703,53 @@ for r in raw:
 # 요강 모집단위표에 있으나 원본 엑셀(V7.15)이 누락한 행(예: 부산대 스포츠과학과 농어촌 1명, 요강 p33).
 # 신규 유입 모집단위라 3개년 경쟁률·입결 이력이 없다 → 비교 필드는 공란/None(사실대로). prev '-'(중립).
 _ADDED_ROWS = _CORR['add']
+# 추가 행은 원천에 없던 행이라 전형 공통정보(전형방법·수능최저·지원자격·고사일)가 비어 있었다.
+# 상세 카드에서 '전형방법 –'로 보이는 문제가 있어(감사 30행), 같은 대학·전형의 기존 행에서 상속한다.
+# 전형 공통정보는 모집단위와 무관하게 동일한 것이 원칙이므로 안전하다.
+# ⚠️ 다수결이 아니라 '유일값일 때만' 상속한다. 모집단위별로 값이 갈리면(예: 계열별 상이) 비워 둔다.
+_IDX_METHOD, _IDX_CHOEJEO, _IDX_JAG, _IDX_DATE, _IDX_HAS_CJ = 28, 13, 7, 30, 14
+def _inherit(u, jt, jn):
+    """같은 (대학, 전형유형, 전형명) 기존 행들의 공통 필드를 상속한다.
+    유일값이면 그대로, 값이 갈리면 '80% 이상 다수값'만 채택한다(예: 우석 교과100 25행 vs
+    군사학과 체력측정 2행 → 교과100 상속). 그마저 애매하면 비워 둔다 — 틀린 정보보다 공란이 낫다."""
+    from collections import Counter
+    # 전형명 매칭은 '(외)' 표기를 무시한다. 정원 외를 별도 전형명으로 추가한 경우
+    # (예: 경일대 조기취업계약학과전형 / 〃(외)) 전형방법은 정원 내와 동일하다.
+    _base = jn.replace('(외)', '').strip()
+    _cands = {dicts['jhname'].get(k) for k in (jn, _base) if dicts['jhname'].get(k) is not None}
+    got = {}
+    for _r in rows:
+        if dicts['uni'].get(u) != _r[2] or _r[5] != jt or _r[6] not in _cands:
+            continue
+        for key, idx in (('method', _IDX_METHOD), ('choejeo', _IDX_CHOEJEO),
+                         ('jagyeok', _IDX_JAG), ('date', _IDX_DATE), ('hasCj', _IDX_HAS_CJ)):
+            got.setdefault(key, []).append(_r[idx])
+    out = {}
+    for key, vals in got.items():
+        cnt = Counter(vals)
+        top, n = cnt.most_common(1)[0]
+        if len(cnt) == 1 or n / len(vals) >= 0.8:
+            out[key] = top
+    return out
+
 for _a in _ADDED_ROWS:
     _u, _d, _jt, _jn, _e = _a['uni'], _a['dept'], _a['jht'], _a['jhn'], _a['e']
     _cats = _a['cats']
+    _inh = _inherit(_u, _jt, _jn)
     for _t in _cats:
         cat_counter[_t] = cat_counter.get(_t, 0) + 1
         audit.setdefault(_t, {}).setdefault((_u, _d), 0)
         audit[_t][(_u, _d)] += 1
     rows.append([
         intern('region', _a['region']), intern('sigun', _a['sigun']), intern('uni', _u), _a['gye'],
-        intern('dept', _d), _jt, intern('jhname', _jn), intern('jagyeok', ''),
+        intern('dept', _d), _jt, intern('jhname', _jn), _inh.get('jagyeok', intern('jagyeok', '')),
         _e, '-', 'none', 0,
-        intern('change', ''), intern('choejeo', ''), 0, '',
+        intern('change', ''), _inh.get('choejeo', intern('choejeo', '')), _inh.get('hasCj', 0), '',
         0, 0, 0,
         None, None, None,
         0, 0, 0,
         '', '', '',
-        intern('method', ''), intern('note', ''), intern('date', ''),
+        _inh.get('method', intern('method', '')), intern('note', ''), _inh.get('date', intern('date', '')),
         intern('gradeRatio', ''), intern('subjects', ''), intern('careerSubj', ''),
         _cats,
         intern('std', ''), std_kind(''), intern('std', ''),
