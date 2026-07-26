@@ -535,9 +535,14 @@ for _c in _CORR.get('date', []):
 _date_fixed = set()
 
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
+# ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
+#    캠퍼스에 있을 때(경상대 진주/통영, 유원대 영동/아산 등) 멀쩡한 행까지 덮어써 버린다.
+#    실제로 그 사고를 내고 되돌렸다 — from_region/from_sigun 없는 항목은 받지 않는다.
 _REGION_CORR = {}
 for _c in _CORR.get('region', []):
-    _REGION_CORR[(_c['uni'], _c['dept'])] = (_c['region'], _c['sigun'])
+    if 'from_region' not in _c or 'from_sigun' not in _c:
+        raise SystemExit(f"[중단] region 교정에 from_region/from_sigun 누락: {_c.get('uni')} {_c.get('dept')}")
+    _REGION_CORR[(_c['uni'], _c['dept'], _c['from_region'], _c['from_sigun'])] = (_c['region'], _c['sigun'])
 _region_fixed = set()
 
 cat_counter = {}
@@ -613,8 +618,9 @@ for r in raw:
         audit[t][(uni, dept)] += 1
 
     _reg, _sig = r[0], r[1]
-    if (uni, dept) in _REGION_CORR:
-        _reg, _sig = _REGION_CORR[(uni, dept)]; _region_fixed.add((uni, dept))
+    _rk = (uni, dept, _reg, _sig)
+    if _rk in _REGION_CORR:
+        _reg, _sig = _REGION_CORR[_rk]; _region_fixed.add(_rk)
     rows.append([
         intern('region', _reg), intern('sigun', _sig), intern('uni', uni), gye[:2],
         intern('dept', dept), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
