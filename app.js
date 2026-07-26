@@ -300,7 +300,14 @@ function verdict(r) {
     // 전형유형별 내부 잣대(표기하지 않음): 교과전형은 추합이 모집인원의 100~300%까지 도는
     // 실질 문턱의 핵심 변수라 ±2, 종합·논술·실기는 추합 규모가 작아 ±1 유지.
     const chW = r.jhtype === '학생부교과' ? 2 : 1;
-    if (ch.dir === 'up') { sig.push({ dir: 'good', t: `추합 증가 ${c1}→${c2}${cu}`, m: '충원' }); score += chW; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t: `추합 감소 ${c1}→${c2}${cu}`, m: '충원' }); score -= chW; } }
+    // 비율 재판정(모집 증감 20% 이상)이 걸리면 절대값 증감과 방향이 어긋날 수 있다.
+    // 그때 '추합 증가 14→12명'처럼 모순돼 보이므로, 실제 근거인 '모집 대비 비율'을 문구로 쓴다.
+    const absUp = ch.d > 0, mismatch = (ch.dir === 'up') !== absUp && ch.d !== 0;
+    const lab = ch.dir === 'up' ? '증가' : '감소';
+    const t = mismatch
+      ? `추합 비율 ${lab} ${c1}→${c2}${cu} (모집 ${fmtInt(r.enroll - (r.dn || 0))}→${fmtInt(r.enroll)}명 대비)`
+      : `추합 ${lab} ${c1}→${c2}${cu}`;
+    if (ch.dir === 'up') { sig.push({ dir: 'good', t, m: '충원' }); score += chW; } else if (ch.dir === 'down') { sig.push({ dir: 'bad', t, m: '충원' }); score -= chW; } }
   let cls, label;
   if (score >= 2) { cls = 'good'; label = '유리'; }
   else if (score <= -2) { cls = 'bad'; label = '불리'; }
