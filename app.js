@@ -346,6 +346,7 @@ function passChange(row) {
 let FILTERED = [];
 function applyFilters() {
   const q = S.search.trim().toLowerCase();
+  const SEARCH_TOKENS = q ? q.split(/\s+/).filter(Boolean) : [];
   FILTERED = ROWS.filter(r => {
     if (S.cat !== 'all' && !r.cats.includes(S.cat)) return false;
     if (S.jhtypes.size && !S.jhtypes.has(r.jhtype)) return false;
@@ -365,8 +366,12 @@ function applyFilters() {
       if (S.cutGrade < 9 && !(r.g[0] != null && r.g[0] <= S.cutGrade)) return false;
     }
     if (q) {
-      const hay = (r.uni + ' ' + r.dept + ' ' + r.jhname + ' ' + r.region + ' ' + r.jhtype).toLowerCase();
-      if (!hay.includes(q)) return false;
+      // 복합 검색: 공백으로 끊어 전부 포함(AND)해야 통과한다.
+      //   '고려대 의예' → 대학명과 학과명이 원문에서 떨어져 있어 통짜 includes로는 0건이었다.
+      //   토큰 1개면 기존 동작과 완전히 같고, 순서는 무관해진다('의예 고려대'도 동일).
+      const hay = (r.uni + ' ' + r.dept + ' ' + r.jhname + ' ' + r.region + ' ' + r.jhtype
+                   + ' ' + r.sigun + ' ' + r.gye).toLowerCase();
+      if (!SEARCH_TOKENS.every(t => hay.includes(t))) return false;
     }
     return true;
   });
