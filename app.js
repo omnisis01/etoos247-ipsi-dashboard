@@ -178,7 +178,7 @@ const CAT_ICON = {
   language: '🗣️', lang_kor: '📖', lang_eng: '🔤', lang_asia: '🏯', lang_etc: '🌐',
   language: '🗣️', humanities_core: '📜', non_business_humanities: '🏛️', social_science: '🌐',
   statistics: '📈', semiconductor: '💾', semiconductor_contract: '🔗', contract_other: '🤝',
-  military: '🎖️', teaching: '🍎', primary_ed: '✏️', ist: '🧪', free_major: '🧭',
+  military: '🎖️', teaching: '🍎', primary_ed: '✏️', ist: '🧪', free_major: '🧭', integrated: '🧩',
 };
 const CATS = D.cats;
 const CAT_BY = {}; CATS.forEach(c => CAT_BY[c.key] = c);

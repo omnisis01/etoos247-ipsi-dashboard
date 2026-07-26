@@ -341,6 +341,69 @@ def categorize(uni, gye, dept, jhname, jagyeok):
     if any(k in d for k in FREE):
         tags.add('free_major')
 
+    # ---------------------------------------------------------------- 미분류 보강
+    # 카테고리 감사에서 1,783행(모집 21,260명·8.4%)이 어느 계열에도 안 잡혀 사이드바 탐색에서
+    # 통째로 빠지는 문제가 확인됐다. 아래는 그 유형별 보강 규칙이다.
+    #  ⚠️ 아래 블록은 '보강'이라 기존 태그를 지우지 않는다(중복 태깅 허용 구조).
+
+    # 소방·재난안전 — 공학(그 외)으로. '안전'만으로는 보건환경안전 등이 섞여 소방/재난과 함께 쓰일 때만.
+    if has('소방') or (has('재난') and has('안전')):
+        tags.add('eng_etc'); tags.add('engineering')
+
+    # 의류·패션 / 뷰티·미용·화장품 — 의류패션은 예체능(디자인)과 생활과학에 걸치나
+    # 학생 탐색 관점에서 '미술'(디자인)로 묶는 것이 실용적이다. 뷰티·미용은 별도 계열이 없어 보건 인접.
+    if has('의류', '패션', '섬유'):
+        tags.add('art_college')
+    if has('뷰티', '미용', '화장품', '메이크업', '헤어'):
+        tags.add('art_college')
+
+    # 항공 — 운항·정비·무인기는 공학(기계·항공), 서비스·관광은 상경(관광)으로 이미 분리돼 있다.
+    if '항공' in d and not any(x in d for x in ['서비스', '관광', '호텔', '승무', '경영', '외국어']):
+        tags.add('eng_mech'); tags.add('engineering')
+
+    # 반려동물·동물보건 — 농림·식품·동물(자연) 하위로.
+    if has('반려', '애견', '동물', '펫') and not has('동물자원생명', '동물바이오'):
+        tags.add('nat_agri'); tags.add('natural')
+
+    # 웹툰·만화·애니메이션·게임그래픽 — 미술(예체능)로. 단 게임'공학'·게임소프트웨어는 공학이라 제외.
+    if has('웹툰', '만화', '애니메이션') or ('게임' in d and not has('공학', '소프트웨어', 'SW', '테크')):
+        tags.add('art_college')
+
+    # 영화·영상·사진·방송 — 미술(예체능 영상)로. 미디어커뮤니케이션(사회과학)과는 이미 구분된다.
+    if has('영화', '영상', '사진', '방송', '연극', '공연'):
+        tags.add('art_college')
+
+    # 수산·해양생명 — 농림·수산(자연). 해양'공학'·조선은 공학이라 제외.
+    if has('수산', '해양') and not has('공학', '토목', '조선', '플랜트'):
+        tags.add('nat_agri'); tags.add('natural')
+
+    # AI·SW — 기존 ENG 목록의 '인공지능'은 붙여쓴 형태만 잡혀 'AI학과'·'AI.SW학'류가 샜다.
+    # ⚠️ \bAI\b 는 한글과 붙은 'AI학과'에서 단어경계가 성립하지 않아 못 잡는다(실측). 대문자 AI를 직접 본다.
+    if 'AI' in dept.upper().replace('MAI', '').replace('CHAI', '') or '인공지능' in d:
+        tags.add('eng_cs'); tags.add('engineering')
+
+    # 항해·해기·기관 — 해양대 계열. 선박 운항이라 기계·운송 공학으로.
+    if has('항해', '해기', '해상운송', '기관시스템', '항만물류'):
+        tags.add('eng_mech'); tags.add('engineering')
+
+    # 철도 — 차량·운전·인프라는 기계·건설 공학.
+    if '철도' in d and not has('경영', '서비스'):
+        tags.add('eng_mech'); tags.add('engineering')
+
+    # 도시계획·조경 — 건설·건축·환경(공학).
+    if has('도시계획', '도시공학', '조경', '국토'):
+        tags.add('eng_civil'); tags.add('engineering')
+
+    # 스마트팜·농업기계 — 농림(자연).
+    if has('스마트팜', '농업시스템', '농기계', '식물의학'):
+        tags.add('nat_agri'); tags.add('natural')
+
+    # 통합·묶음 모집 — 개별 학과가 아니라 '전 모집단위'·'단일계열'·'계열N' 형태로 묶여 있어
+    # 계열 지정이 원천적으로 불가하다. 누락으로 두지 말고 별도 카테고리로 노출한다.
+    if re.search(r'전\s*모집단위|단일계열|^계열\s*\d|그\s*외\s*모집단위|모집단위\s*전체|인터칼리지|'
+                 r'미래융합학부|통합선발|자연계열학부|첨단융합계열|글로컬인재학부|창의융합학부', d):
+        tags.add('integrated')
+
     return tags
 
 # 유불리 판정(score/reasons)과 입결·경쟁률 추세(gtrend/ctrend)는 여기서 계산하지 않는다.
@@ -736,6 +799,7 @@ CATS = [
     ('primary_ed','교대','교육대·초등교육','#15803d',False,''),
     ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777',False,''),
     ('free_major','자유전공','자율·무전공','#ea580c',False,''),
+    ('integrated','통합모집','전 모집단위·단일계열 등 묶음 선발','#64748b',False,''),
 ]
 
 payload = {
