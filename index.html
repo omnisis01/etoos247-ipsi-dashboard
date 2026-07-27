@@ -69,6 +69,8 @@
         <button id="insightBtn" class="ghost-btn insight-btn" aria-label="대학별 변화 인사이트 열기"><span aria-hidden="true">📰</span> <span class="btn-label">변화 인사이트</span></button>
         <button id="favBtn" class="ghost-btn fav-btn" aria-label="지원카드 열기"><span aria-hidden="true">🗂️</span> <span class="btn-label">지원카드</span> <span id="favCount" class="badge">0</span><span class="fav-max">/9</span></button>
         <button id="compareBtn" class="ghost-btn" aria-label="비교함 열기"><span aria-hidden="true">⇄</span> <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
+        <!-- 베타: ?beta=1 로 들어온 경우에만 보인다(app.js가 hidden 해제) -->
+        <button id="advisorBtn" class="ghost-btn hidden" aria-label="성적 맞춤 추천 열기"><span aria-hidden="true">🧭</span> <span class="btn-label">맞춤 추천</span> <span class="badge beta-badge">BETA</span></button>
         <button id="themeBtn" class="icon-btn" aria-label="다크/라이트 테마 전환"></button>
       </div>
     </header>
@@ -141,6 +143,11 @@
   <!-- Favorites (지원카드) drawer -->
   <div id="favDrawer" class="drawer hidden">
     <div class="drawer-inner" id="favInner"></div>
+  </div>
+
+  <!-- 맞춤 추천(베타) drawer -->
+  <div id="advisorDrawer" class="drawer hidden">
+    <div class="drawer-inner" id="advisorInner"></div>
   </div>
 
   <!-- 변화 인사이트 overlay -->

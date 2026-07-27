@@ -201,6 +201,7 @@ const S = {
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
+  advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '' }, load('advisor', {})),
 };
 const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
 function migrateFav(v) {
@@ -1308,6 +1309,131 @@ function closeFavDrawer() { if ($('#favDrawer').classList.contains('hidden')) re
 $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer(); };
 $('#favBtn').onclick = openFav;
 
+/* ============================================================
+   맞춤 추천 (BETA) — 내신·수능최저로 지원 가능권을 추려 준다.
+   ⚠️ 설계 원칙 세 가지. 이 기능은 학생의 진로 결정에 영향을 주므로 과신을 유도하면 안 된다.
+     ① 입결 '기준'이 5종 섞여 있다(cut70 12,000·avg 5,460·cut90·cut50·stage1).
+        같은 2.5등급도 기준이 다르면 의미가 다르므로 **결과에 기준을 반드시 표기**한다.
+     ② 입결이 있는 행은 69%뿐이다. 나머지는 판정 대상에서 빼고 그 사실을 알린다.
+     ③ 합격 '가능성'을 확률로 말하지 않는다. 등급 차이라는 관측값만 보여준다.
+   ============================================================ */
+// ⚠️ '안정'에 상한(1.5)을 둔다. 상한이 없으면 내신 1.2 기준 안정이 17,254개나 잡히는데
+//    그중 85%(14,696)가 여유 1.5등급 이상의 과도한 하향이라 목록으로서 무의미하고,
+//    "이만큼 안정권이 많다"는 착시로 과신을 유도한다(시나리오 테스트에서 확인).
+const ADVISOR_BANDS = [
+  { key: 'safe',   label: '안정',      desc: '내 등급이 입결보다 0.5~1.5등급 우수',   min: 0.5,   max: 1.5,   cls: 'good' },
+  { key: 'fit',    label: '적정',      desc: '입결과 ±0.5등급 이내',                 min: -0.5,  max: 0.5,   cls: 'neu'  },
+  { key: 'reach',  label: '도전',      desc: '내 등급이 입결보다 0.5~1.5등급 부족',   min: -1.5,  max: -0.5,  cls: 'bad'  },
+];
+/** 내신 등급(myGrade)과 각 행의 입결을 비교해 밴드로 분류한다.
+ *  등급은 숫자가 작을수록 우수하므로 diff = 입결 − 내등급 (양수면 내가 더 우수). */
+function advisorPick(opts) {
+  const { grade, leastN, leastSum, cat, region } = opts;
+  const out = { safe: [], fit: [], reach: [] };
+  let noGrade = 0, filtered = 0;
+  ROWS.forEach(r => {
+    if (cat && cat !== 'all' && !r.cats.includes(cat)) return;
+    if (region && r.region !== region) return;
+    // 수능최저: 입력했으면 '충족 가능'한 전형만(요구 합 ≥ 내 합). 최저 없는 전형은 항상 통과.
+    if (leastN && r.hasChoejeo) {
+      if (!(r.leastN === +leastN && r.leastSum != null && r.leastSum >= leastSum)) return;
+    }
+    filtered++;
+    const g = r.g[0];
+    if (g == null) { noGrade++; return; }          // 입결 미공개·신설 → 판정 불가
+    const diff = g - grade;
+    const b = ADVISOR_BANDS.find(x => diff >= x.min && diff < x.max);
+    if (b) out[b.key].push({ r, diff });
+  });
+  // 각 밴드는 '유불리 + 등급 여유' 순으로 정렬해 상위만 보여준다.
+  for (const k of Object.keys(out)) {
+    out[k].sort((a, b) => (V(b.r).score - V(a.r).score) || (b.diff - a.diff));
+  }
+  return { out, noGrade, filtered };
+}
+function renderAdvisor() {
+  const inner = $('#advisorInner');
+  const st = S.advisor;
+  const chips = (name, items, cur) => items.map(([v, l]) =>
+    `<button class="chip${String(cur) === String(v) ? ' on' : ''}" data-adv="${name}" data-v="${esc(v)}">${esc(l)}</button>`).join('');
+  const res = st.grade ? advisorPick(st) : null;
+
+  const card = (o) => {
+    const r = o.r, v = V(r), std = CUT_LABELS[r.stdK26] || r.std26 || '기준 미표기';
+    return `<div class="adv-card" data-open="${r._i}">
+      <div class="adv-top"><b>${esc(r.uni)}</b> <span class="muted">${esc(r.region)}</span>
+        <span class="impact-chip ${v.cls}">${v.label}</span></div>
+      <div class="adv-dept">${esc(deptDisp(r))}</div>
+      <div class="muted">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
+      <div class="adv-grade">입결 <b>${fmt(r.g[0])}</b> <span class="adv-std">${esc(std)}</span>
+        <span class="adv-diff ${o.diff >= 0 ? 'good' : 'bad'}">${o.diff >= 0 ? '여유 ' : '부족 '}${Math.abs(o.diff).toFixed(2)}등급</span></div>
+      ${r.hasChoejeo ? `<div class="muted">최저 ${esc(r.choejeo)}</div>` : '<div class="muted">수능최저 없음</div>'}
+    </div>`;
+  };
+
+  inner.innerHTML = `<div class="drawer-head">
+      <div><h3>🧭 맞춤 추천 <span class="badge beta-badge">BETA</span></h3>
+      <div class="muted">내신과 수능최저로 지원 가능권을 추립니다. 참고용이며 합격을 보장하지 않습니다.</div></div>
+      <button class="modal-close" id="advClose">✕</button></div>
+    <div class="adv-body">
+      <div class="adv-form">
+        <div class="adv-row"><span class="adv-label">내신 등급</span>
+          <input type="number" id="advGrade" min="1" max="9" step="0.01" placeholder="예: 2.35"
+                 value="${st.grade ?? ''}" class="adv-input"> <span class="muted">1.00 ~ 9.00</span></div>
+        <div class="adv-row"><span class="adv-label">수능최저</span>
+          <div class="chip-row">${chips('leastN', [['', '입력 안 함'], ['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합']], st.leastN)}</div></div>
+        ${st.leastN ? `<div class="adv-row"><span class="adv-label">내 등급 합</span>
+          <input type="number" id="advSum" min="2" max="36" step="1" placeholder="예: 7" value="${st.leastSum ?? ''}" class="adv-input">
+          <span class="muted">${esc(st.leastN)}개 영역 합계 — 이 합으로 충족 가능한 전형만 보여줍니다</span></div>` : ''}
+        <div class="adv-row"><span class="adv-label">계열</span>
+          <div class="chip-row">${chips('cat', [['all', '전체'], ['medical', '메디컬'], ['engineering', '공학'], ['natural', '자연'], ['business', '상경'], ['nursing_health', '간호·보건'], ['teaching', '사범']], st.cat)}</div></div>
+        <div class="adv-row"><span class="adv-label">지역</span>
+          <div class="chip-row">${chips('region', [['', '전국']].concat(REGIONS.slice(0, 8).map(x => [x, x])), st.region)}</div></div>
+      </div>
+      ${!st.grade ? `<div class="empty-state"><div class="es-ico">🧭</div>내신 등급을 입력하면 안정·적정·도전으로 나눠 보여드립니다.</div>`
+      : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
+           ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}</div>
+         ${ADVISOR_BANDS.map(b => {
+        const list = res.out[b.key];
+        return `<div class="adv-band"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
+            <span class="muted">${b.desc} · ${fmtInt(list.length)}개</span></h4>
+          ${list.length ? `<div class="adv-grid">${list.slice(0, 12).map(card).join('')}</div>
+            ${list.length > 12 ? `<div class="muted" style="padding:4px 2px">상위 12개만 표시 · 전체 ${fmtInt(list.length)}개</div>` : ''}`
+            : '<div class="muted" style="padding:6px 2px">해당 구간에 전형이 없습니다.</div>'}</div>`;
+      }).join('')}`}
+    </div>`;
+
+  const wasOpen = !$('#advisorDrawer').classList.contains('hidden');
+  $('#advisorDrawer').classList.remove('hidden');
+  if (!wasOpen) openDialog($('#advisorInner'), '맞춤 추천');
+  $('#advClose').onclick = closeAdvisor;
+  inner.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => {
+    const k = b.dataset.adv, v = b.dataset.v;
+    S.advisor[k] = v;
+    if (k === 'leastN' && !v) S.advisor.leastSum = null;
+    save('advisor', S.advisor); renderAdvisor();
+  });
+  const gi = $('#advGrade');
+  if (gi) gi.oninput = () => {
+    const v = parseFloat(gi.value);
+    S.advisor.grade = (v >= 1 && v <= 9) ? v : null;
+    save('advisor', S.advisor);
+    clearTimeout(gi._t); gi._t = setTimeout(() => { renderAdvisor(); $('#advGrade')?.focus(); }, 400);
+  };
+  const si = $('#advSum');
+  if (si) si.oninput = () => {
+    const v = parseInt(si.value, 10);
+    S.advisor.leastSum = Number.isFinite(v) ? v : null;
+    save('advisor', S.advisor);
+    clearTimeout(si._t); si._t = setTimeout(() => { renderAdvisor(); $('#advSum')?.focus(); }, 400);
+  };
+  inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => {
+    if (e.target.closest('button')) return;
+    closeAdvisor(); openModal(+c.dataset.open);
+  });
+}
+function closeAdvisor() { if ($('#advisorDrawer').classList.contains('hidden')) return; $('#advisorDrawer').classList.add('hidden'); closeDialog(); }
+
 /* ----- PDF 저장 (인쇄) — 지원카드·비교함을 A4 인쇄용 문서로 렌더 후 window.print() ----- */
 /* 원자료 비고(note)는 한 줄 메모라 학생에겐 불친절하다 — 자주 나오는 패턴을 풀어쓴 해설로 확장한다.
    패턴에 없으면 원문 + 공통 안내를 붙인다. 원문은 항상 보존한다(자의적 대체 금지). */
@@ -1507,7 +1633,17 @@ function applyTheme(t) {
   save('theme', t);
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeInsight(); closeSidebar(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeAdvisor(); closeInsight(); closeSidebar(); } });
+/* 맞춤 추천은 사용성 검증 전까지 베타로 숨긴다. ?beta=1 로 한 번 들어오면 이후 계속 노출된다. */
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (q.get('beta') === '1') save('beta', 1);
+  if (q.get('beta') === '0') { try { localStorage.removeItem('ipsi_beta'); } catch (e) {} }
+  if (!load('beta', 0)) return;
+  const b = $('#advisorBtn'); if (!b) return;
+  b.classList.remove('hidden');
+  b.onclick = renderAdvisor;
+})();
 
 const scrim = el('div', 'scrim'); document.body.appendChild(scrim);
 scrim.onclick = closeSidebar;
