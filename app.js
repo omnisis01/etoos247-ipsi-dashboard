@@ -201,7 +201,7 @@ const S = {
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
-  advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '' }, load('advisor', {})),
+  advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '', school: '' }, load('advisor', {})),
 };
 const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
 function migrateFav(v) {
@@ -1327,13 +1327,30 @@ const ADVISOR_BANDS = [
 ];
 /** 내신 등급(myGrade)과 각 행의 입결을 비교해 밴드로 분류한다.
  *  등급은 숫자가 작을수록 우수하므로 diff = 입결 − 내등급 (양수면 내가 더 우수). */
+/** 학교유형으로 지원 자체가 막히는 전형을 걸러낸다.
+ *  판별 근거는 전형명·지원자격이며, 원천에 근거가 없으면 '막지 않는다'(과다 차단이 더 나쁘다).
+ *   · 특성화고 전용(1,094행·3,744명): 일반고 학생은 지원 불가
+ *   · 일반고 전용(194행·4,984명): 특성화고 학생은 지원 불가
+ *   · N수불가(졸업예정자 한정): 졸업생(N수) 지원 불가 — 기존 r.nsuNo 재사용 */
+function schoolTypeBlocked(r, type) {
+  if (!type) return false;
+  const jn = r.jhname || '', jag = r.jagyeok || '';
+  const isVocOnly = /특성화고|특성화 고|동일계|마이스터/.test(jn);
+  const isGenOnly = /일반고/.test(jn) || /일반고,\s*특목고/.test(jag);
+  if (type === 'voc') return isGenOnly;                    // 특성화고 학생 → 일반고 전용 차단
+  if (type === 'gen') return isVocOnly;                    // 일반고 학생 → 특성화고 전용 차단
+  if (type === 'grad') return isVocOnly || r.nsuNo;        // 졸업생(N수) → 특성화 전용·N수불가 차단
+  if (type === 'ged') return isVocOnly || isGenOnly || r.nsuNo || /검정.*불가|검정고시 지원 불가/.test(jag);
+  return false;
+}
 function advisorPick(opts) {
-  const { grade, leastN, leastSum, cat, region } = opts;
+  const { grade, leastN, leastSum, cat, region, school } = opts;
   const out = { safe: [], fit: [], reach: [] };
-  let noGrade = 0, filtered = 0;
+  let noGrade = 0, filtered = 0, blocked = 0;
   ROWS.forEach(r => {
     if (cat && cat !== 'all' && !r.cats.includes(cat)) return;
     if (region && r.region !== region) return;
+    if (schoolTypeBlocked(r, school)) { blocked++; return; }
     // 수능최저: 입력했으면 '충족 가능'한 전형만(요구 합 ≥ 내 합). 최저 없는 전형은 항상 통과.
     if (leastN && r.hasChoejeo) {
       if (!(r.leastN === +leastN && r.leastSum != null && r.leastSum >= leastSum)) return;
@@ -1349,7 +1366,7 @@ function advisorPick(opts) {
   for (const k of Object.keys(out)) {
     out[k].sort((a, b) => (V(b.r).score - V(a.r).score) || (b.diff - a.diff));
   }
-  return { out, noGrade, filtered };
+  return { out, noGrade, filtered, blocked };
 }
 function renderAdvisor() {
   const inner = $('#advisorInner');
@@ -1380,6 +1397,8 @@ function renderAdvisor() {
         <div class="adv-row"><span class="adv-label">내신 등급</span>
           <input type="number" id="advGrade" min="1" max="9" step="0.01" placeholder="예: 2.35"
                  value="${st.grade ?? ''}" class="adv-input"> <span class="muted">1.00 ~ 9.00</span></div>
+        <div class="adv-row"><span class="adv-label">학교 유형</span>
+          <div class="chip-row">${chips('school', [['', '선택 안 함'], ['gen', '일반고·자율고'], ['voc', '특성화고·마이스터'], ['grad', '졸업생(N수)'], ['ged', '검정고시']], st.school)}</div></div>
         <div class="adv-row"><span class="adv-label">수능최저</span>
           <div class="chip-row">${chips('leastN', [['', '입력 안 함'], ['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합']], st.leastN)}</div></div>
         ${st.leastN ? `<div class="adv-row"><span class="adv-label">내 등급 합</span>
@@ -1392,7 +1411,8 @@ function renderAdvisor() {
       </div>
       ${!st.grade ? `<div class="empty-state"><div class="es-ico">🧭</div>내신 등급을 입력하면 안정·적정·도전으로 나눠 보여드립니다.</div>`
       : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
-           ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}</div>
+           ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}
+           ${res.blocked ? `학교 유형으로 지원 불가한 <b>${fmtInt(res.blocked)}건</b>을 제외했습니다.` : ''}</div>
          ${ADVISOR_BANDS.map(b => {
         const list = res.out[b.key];
         return `<div class="adv-band"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
