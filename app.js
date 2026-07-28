@@ -196,7 +196,7 @@ const S = {
   examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
 
-  stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut70' | 'cut90', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
+  stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut50' | 'cut70' | 'cut80' | 'cut90' | 'stage1', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
   page: 1, perPage: 60, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
@@ -521,7 +521,7 @@ const EXAM_COUNT = { pre: 0, post: 0 };
 ROWS.forEach(r => { if (r.examWhen) EXAM_COUNT[r.examWhen]++; });
 const STD_COUNT = {};
 ROWS.forEach(r => { if (r.stdK26 && r.g[0] != null) STD_COUNT[r.stdK26] = (STD_COUNT[r.stdK26] || 0) + 1; });
-const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut90: '90% 컷', stage1: '1단계 평균' };
+const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut80: '75~85% 컷', cut90: '90% 컷', stage1: '1단계 평균' };
 function renderCutFilter() {
   const box = document.querySelector('#cutFilter');
   if (!box) return;
@@ -540,7 +540,7 @@ function renderCutFilter() {
     </div>
     <div class="cf-row">
       <div class="cf-radios" role="radiogroup" aria-label="입결 컷 기준">
-        ${['avg', 'cut50', 'cut70', 'cut90', 'stage1'].filter(k => STD_COUNT[k]).map(k => `<label class="cf-radio${active === k ? ' on' : ''}"><input type="radio" name="stdCut" value="${k}"${active === k ? ' checked' : ''}> ${CUT_LABELS[k]}</label>`).join('')}
+        ${['avg', 'cut50', 'cut70', 'cut80', 'cut90', 'stage1'].filter(k => STD_COUNT[k]).map(k => `<label class="cf-radio${active === k ? ' on' : ''}"><input type="radio" name="stdCut" value="${k}"${active === k ? ' checked' : ''}> ${CUT_LABELS[k]}</label>`).join('')}
         <button class="cf-clear${active ? '' : ' hidden'}" type="button" aria-label="컷 필터 해제">해제</button>
       </div>
       <div class="cf-slider ${active ? '' : 'is-disabled'}">
