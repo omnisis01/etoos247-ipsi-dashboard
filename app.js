@@ -1320,6 +1320,17 @@ $('#favBtn').onclick = openFav;
 // ⚠️ '안정'에 상한(1.5)을 둔다. 상한이 없으면 내신 1.2 기준 안정이 17,254개나 잡히는데
 //    그중 85%(14,696)가 여유 1.5등급 이상의 과도한 하향이라 목록으로서 무의미하고,
 //    "이만큼 안정권이 많다"는 착시로 과신을 유도한다(시나리오 테스트에서 확인).
+/* 지역 칩. 가나다순 앞 8개만 자르면 서울(모집 42,923명 1위)·경기(2위)가 빠지고
+   '강원/경기'처럼 깨진 표기가 칩을 차지한다(사용자 지적). 규모·상담 빈도 순으로 고정하고
+   '수도권'은 서울+경기+인천을 한 번에 거는 묶음으로 둔다. */
+const ADVISOR_REGIONS = [
+  ['', '전국'], ['__metro', '수도권(서울·경기·인천)'],
+  ['서울', '서울'], ['경기', '경기'], ['인천', '인천'],
+  ['부산', '부산'], ['대구', '대구'], ['광주', '광주'], ['대전', '대전'], ['울산', '울산'],
+  ['충남', '충남'], ['충북', '충북'], ['전남', '전남'], ['전북', '전북'],
+  ['경남', '경남'], ['경북', '경북'], ['강원', '강원'], ['제주', '제주'], ['세종', '세종'],
+];
+const METRO = new Set(['서울', '경기', '인천']);
 const ADVISOR_BANDS = [
   { key: 'safe',   label: '안정',      desc: '내 등급이 입결보다 0.5~1.5등급 우수',   min: 0.5,   max: 1.5,   cls: 'good' },
   { key: 'fit',    label: '적정',      desc: '입결과 ±0.5등급 이내',                 min: -0.5,  max: 0.5,   cls: 'neu'  },
@@ -1349,7 +1360,8 @@ function advisorPick(opts) {
   let noGrade = 0, filtered = 0, blocked = 0;
   ROWS.forEach(r => {
     if (cat && cat !== 'all' && !r.cats.includes(cat)) return;
-    if (region && r.region !== region) return;
+    if (region === '__metro') { if (!METRO.has(r.region)) return; }
+    else if (region && r.region !== region) return;
     if (schoolTypeBlocked(r, school)) { blocked++; return; }
     // 수능최저: 입력했으면 '충족 가능'한 전형만(요구 합 ≥ 내 합). 최저 없는 전형은 항상 통과.
     if (leastN && r.hasChoejeo) {
@@ -1407,7 +1419,7 @@ function renderAdvisor() {
         <div class="adv-row"><span class="adv-label">계열</span>
           <div class="chip-row">${chips('cat', [['all', '전체'], ['medical', '메디컬'], ['engineering', '공학'], ['natural', '자연'], ['business', '상경'], ['nursing_health', '간호·보건'], ['teaching', '사범']], st.cat)}</div></div>
         <div class="adv-row"><span class="adv-label">지역</span>
-          <div class="chip-row">${chips('region', [['', '전국']].concat(REGIONS.slice(0, 8).map(x => [x, x])), st.region)}</div></div>
+          <div class="chip-row">${chips('region', ADVISOR_REGIONS, st.region)}</div></div>
       </div>
       ${!st.grade ? `<div class="empty-state"><div class="es-ico">🧭</div>내신 등급을 입력하면 안정·적정·도전으로 나눠 보여드립니다.</div>`
       : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
