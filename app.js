@@ -1374,9 +1374,12 @@ function advisorPick(opts) {
     const b = ADVISOR_BANDS.find(x => diff >= x.min && diff < x.max);
     if (b) out[b.key].push({ r, diff });
   });
-  // 각 밴드는 '유불리 + 등급 여유' 순으로 정렬해 상위만 보여준다.
+  // 정렬: **입결이 좋은(등급 숫자가 작은) 순**이 먼저다.
+  //   유불리 점수 순으로 두면 내신 1.2 학생의 '안정' 상위에 입결 2.3대 학교가 올라오고
+  //   정작 입결이 더 좋은 곳은 뒤로 밀린다(사용자 지적). 상담에서는 '내가 갈 수 있는 곳 중
+  //   가장 좋은 곳'부터 보는 것이 자연스럽다. 동률이면 유불리 점수로 가른다.
   for (const k of Object.keys(out)) {
-    out[k].sort((a, b) => (V(b.r).score - V(a.r).score) || (b.diff - a.diff));
+    out[k].sort((a, b) => (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
   }
   return { out, noGrade, filtered, blocked };
 }
