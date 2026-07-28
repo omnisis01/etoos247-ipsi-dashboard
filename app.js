@@ -201,7 +201,7 @@ const S = {
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
-  advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '', school: '' }, load('advisor', {})),
+  advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '', school: '', width: 'normal' }, load('advisor', {})),
 };
 const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
 function migrateFav(v) {
@@ -1317,25 +1317,25 @@ $('#favBtn').onclick = openFav;
      ② 입결이 있는 행은 69%뿐이다. 나머지는 판정 대상에서 빼고 그 사실을 알린다.
      ③ 합격 '가능성'을 확률로 말하지 않는다. 등급 차이라는 관측값만 보여준다.
    ============================================================ */
-// ⚠️ '안정'에 상한(1.5)을 둔다. 상한이 없으면 내신 1.2 기준 안정이 17,254개나 잡히는데
-//    그중 85%(14,696)가 여유 1.5등급 이상의 과도한 하향이라 목록으로서 무의미하고,
-//    "이만큼 안정권이 많다"는 착시로 과신을 유도한다(시나리오 테스트에서 확인).
-/* 지역 칩. 가나다순 앞 8개만 자르면 서울(모집 42,923명 1위)·경기(2위)가 빠지고
-   '강원/경기'처럼 깨진 표기가 칩을 차지한다(사용자 지적). 규모·상담 빈도 순으로 고정하고
-   '수도권'은 서울+경기+인천을 한 번에 거는 묶음으로 둔다. */
-const ADVISOR_REGIONS = [
-  ['', '전국'], ['__metro', '수도권(서울·경기·인천)'],
-  ['서울', '서울'], ['경기', '경기'], ['인천', '인천'],
-  ['부산', '부산'], ['대구', '대구'], ['광주', '광주'], ['대전', '대전'], ['울산', '울산'],
-  ['충남', '충남'], ['충북', '충북'], ['전남', '전남'], ['전북', '전북'],
-  ['경남', '경남'], ['경북', '경북'], ['강원', '강원'], ['제주', '제주'], ['세종', '세종'],
-];
-const METRO = new Set(['서울', '경기', '인천']);
-const ADVISOR_BANDS = [
-  { key: 'safe',   label: '안정',      desc: '내 등급이 입결보다 0.5~1.5등급 우수',   min: 0.5,   max: 1.5,   cls: 'good' },
-  { key: 'fit',    label: '적정',      desc: '입결과 ±0.5등급 이내',                 min: -0.5,  max: 0.5,   cls: 'neu'  },
-  { key: 'reach',  label: '도전',      desc: '내 등급이 입결보다 0.5~1.5등급 부족',   min: -1.5,  max: -0.5,  cls: 'bad'  },
-];
+/* 밴드 폭(정밀도). 고정 폭만으로는 부족하다 — 입결 밀도가 성적대마다 달라
+   (1.0등급대 68개 vs 3.5등급대 570개) 같은 ±0.5도 상위권과 중위권에서 8배 차이가 난다.
+   그래서 기준을 화면에 명시하되 사용자가 조절할 수 있게 3단계로 둔다.
+   ⚠️ '안정'에 상한이 필요하다. 상한이 없으면 내신 1.2에서 안정이 17,254개나 잡히는데
+      85%가 과도한 하향이라 "안정권이 이렇게 많다"는 착시를 준다(시나리오 테스트). */
+const ADVISOR_WIDTHS = {
+  tight:  { label: '정밀', fit: 0.2, safe: 0.6, reach: 0.6 },
+  normal: { label: '보통', fit: 0.3, safe: 0.8, reach: 0.8 },
+  wide:   { label: '넓게', fit: 0.5, safe: 1.2, reach: 1.2 },
+};
+/** 폭 설정으로 밴드 경계를 만든다. diff = 입결 − 내등급 (양수면 내가 우수). */
+function advisorBands(w) {
+  const W = ADVISOR_WIDTHS[w] || ADVISOR_WIDTHS.normal, f = W.fit;
+  return [
+    { key: 'safe',  label: '안정', desc: `입결보다 ${f}~${W.safe}등급 우수`,  min: f,            max: W.safe, cls: 'good' },
+    { key: 'fit',   label: '적정', desc: `입결과 ±${f}등급 이내`,             min: -f,           max: f,      cls: 'neu'  },
+    { key: 'reach', label: '도전', desc: `입결보다 ${f}~${W.reach}등급 부족`, min: -W.reach,     max: -f,     cls: 'bad'  },
+  ];
+}
 /** 내신 등급(myGrade)과 각 행의 입결을 비교해 밴드로 분류한다.
  *  등급은 숫자가 작을수록 우수하므로 diff = 입결 − 내등급 (양수면 내가 더 우수). */
 /** 학교유형으로 지원 자체가 막히는 전형을 걸러낸다.
@@ -1355,7 +1355,8 @@ function schoolTypeBlocked(r, type) {
   return false;
 }
 function advisorPick(opts) {
-  const { grade, leastN, leastSum, cat, region, school } = opts;
+  const { grade, leastN, leastSum, cat, region, school, width } = opts;
+  const BANDS = advisorBands(width);
   const out = { safe: [], fit: [], reach: [] };
   let noGrade = 0, filtered = 0, blocked = 0;
   ROWS.forEach(r => {
@@ -1371,7 +1372,7 @@ function advisorPick(opts) {
     const g = r.g[0];
     if (g == null) { noGrade++; return; }          // 입결 미공개·신설 → 판정 불가
     const diff = g - grade;
-    const b = ADVISOR_BANDS.find(x => diff >= x.min && diff < x.max);
+    const b = BANDS.find(x => diff >= x.min && diff < x.max);
     if (b) out[b.key].push({ r, diff });
   });
   // 정렬: **입결이 좋은(등급 숫자가 작은) 순**이 먼저다.
@@ -1381,7 +1382,7 @@ function advisorPick(opts) {
   for (const k of Object.keys(out)) {
     out[k].sort((a, b) => (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
   }
-  return { out, noGrade, filtered, blocked };
+  return { out, noGrade, filtered, blocked, bands: BANDS };
 }
 function renderAdvisor() {
   const inner = $('#advisorInner');
@@ -1412,6 +1413,9 @@ function renderAdvisor() {
         <div class="adv-row"><span class="adv-label">내신 등급</span>
           <input type="number" id="advGrade" min="1" max="9" step="0.01" placeholder="예: 2.35"
                  value="${st.grade ?? ''}" class="adv-input"> <span class="muted">1.00 ~ 9.00</span></div>
+        <div class="adv-row"><span class="adv-label">구간 폭</span>
+          <div class="chip-row">${chips('width', Object.entries(ADVISOR_WIDTHS).map(([k, v]) => [k, `${v.label} (±${v.fit})`]), st.width)}</div>
+          <span class="muted">적정 구간을 얼마나 좁게 볼지</span></div>
         <div class="adv-row"><span class="adv-label">학교 유형</span>
           <div class="chip-row">${chips('school', [['', '선택 안 함'], ['gen', '일반고·자율고'], ['voc', '특성화고·마이스터'], ['grad', '졸업생(N수)'], ['ged', '검정고시']], st.school)}</div></div>
         <div class="adv-row"><span class="adv-label">수능최저</span>
@@ -1428,7 +1432,7 @@ function renderAdvisor() {
       : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
            ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}
            ${res.blocked ? `학교 유형으로 지원 불가한 <b>${fmtInt(res.blocked)}건</b>을 제외했습니다.` : ''}</div>
-         ${ADVISOR_BANDS.map(b => {
+         ${res.bands.map(b => {
         const list = res.out[b.key];
         return `<div class="adv-band"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
             <span class="muted">${b.desc} · ${fmtInt(list.length)}개</span></h4>
