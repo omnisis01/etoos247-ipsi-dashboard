@@ -634,3 +634,14 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .adv-diff{font-size:11px;font-weight:800;padding:1px 7px;border-radius:6px}
 .adv-diff.good{background:var(--good-soft);color:var(--good)}
 .adv-diff.bad{background:var(--bad-soft);color:var(--bad)}
+
+/* 입결 기준 태그 — 대학마다 발표 기준이 달라 숫자만으로는 비교가 안 된다.
+   경고형(warn)은 최종 등록자 지표가 아닌 것(1단계 평균). */
+.std-tag{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:6px;
+  font-size:10px;font-weight:700;line-height:1.5;white-space:nowrap;vertical-align:middle;
+  background:var(--chip-bg,rgba(127,127,127,.14));color:var(--muted)}
+.std-tag.warn{background:rgba(234,88,12,.16);color:#c2410c}
+[data-theme="dark"] .std-tag.warn{background:rgba(251,146,60,.18);color:#fdba74}
+
+/* 차트 제목에 붙는 '어느 기준으로 집계했는지' 표기 */
+.chart-basis{font-size:11px;font-weight:600;color:var(--muted);margin-left:6px}

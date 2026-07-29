@@ -279,6 +279,17 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&am
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '–' : Number(v).toFixed(d);
 const fmtInt = v => (v == null || isNaN(v)) ? '–' : Math.round(v).toLocaleString();
 function avg(arr) { const a = arr.filter(x => x != null && !isNaN(x)); return a.length ? a.reduce((s, x) => s + x, 0) / a.length : null; }
+/* 입결 평균은 '같은 기준'끼리만 내야 한다. 대학마다 발표 기준이 달라서(70%컷·평균·80%컷·
+   90%컷·최저·1단계) 섞어 평균하면 순위가 뒤집힌다 — 실측 cut70 3.73 vs lowest 4.80으로
+   1등급 넘게 벌어진다. 그래서 집계는 '가장 많은 기준' 하나만 쓰고, 무엇을 썼고 몇 건을
+   뺐는지 화면에 밝힌다. 컷 필터가 켜져 있으면 자연히 그 기준 하나만 남는다. */
+function dominantStd(rows) {
+  const c = {};
+  rows.forEach(r => { if (r.g[0] != null && r.stdK26) c[r.stdK26] = (c[r.stdK26] || 0) + 1; });
+  let best = null, n = 0, tot = 0;
+  for (const k in c) { tot += c[k]; if (c[k] > n) { n = c[k]; best = k; } }
+  return { std: best, kept: n, dropped: tot - n };
+}
 function track(name, params) { try { if (typeof gtag === 'function') gtag('event', name, params || {}); } catch (e) {} }
 
 function numOr(s) { if (s == null) return null; const m = String(s).match(/-?\d+\.?\d*/); return m ? parseFloat(m[0]) : null; }
@@ -522,6 +533,11 @@ ROWS.forEach(r => { if (r.examWhen) EXAM_COUNT[r.examWhen]++; });
 const STD_COUNT = {};
 ROWS.forEach(r => { if (r.stdK26 && r.g[0] != null) STD_COUNT[r.stdK26] = (STD_COUNT[r.stdK26] || 0) + 1; });
 const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut80: '75~85% 컷', cut90: '90% 컷', lowest: '최저(등록자 끝단)', stage1: '1단계 평균' };
+// 표·카드에 숫자 옆에 붙는 짧은 라벨. 대학마다 발표 기준이 달라 같은 숫자라도 뜻이 다르다
+// (cut70 평균 3.73 vs lowest 4.80 — 1등급 넘게 벌어진다). 숫자만 보여주면 오해한다.
+const CUT_SHORT = { avg: '평균', cut50: '50%', cut70: '70%', cut80: '75~85%', cut90: '90%', lowest: '최저', stage1: '1단계' };
+// 최종 등록자 지표가 아닌 기준 — 1단계 합격자는 최종보다 훨씬 넓은 풀이라 낙관 편향을 만든다.
+const STD_NOT_FINAL = new Set(['stage1']);
 function renderCutFilter() {
   const box = document.querySelector('#cutFilter');
   if (!box) return;
@@ -748,7 +764,8 @@ function renderKPIs() {
   const nDown = f.filter(r => r.dkind === 'down').length;
   const nTighten = f.filter(r => r.chKindShow === '강화' || r.chKindShow === '신설').length;
   const nEase = f.filter(r => r.chKindShow === '완화' || r.chKindShow === '폐지').length;
-  const avgG = avg(f.map(r => r.g[0]));
+  const dom = dominantStd(f);
+  const avgG = dom.std ? avg(f.filter(r => r.stdK26 === dom.std).map(r => r.g[0])) : null;
   const avgC = avg(f.map(r => r.c[0]));
   const nUni = new Set(f.map(r => r.uni)).size;
   let nGood = 0, nBad = 0;
@@ -762,7 +779,8 @@ function renderKPIs() {
     { cls: 'bad', label: '▼ 감원', val: nDown.toLocaleString(), sub: '합격선 상승 가능' },
     { cls: 'good', label: '🔒 최저 강화·신설', val: nTighten.toLocaleString(), sub: '지원 위축→유리' },
     { cls: 'bad', label: '🔓 최저 완화·폐지', val: nEase.toLocaleString(), sub: '지원 증가→경쟁↑' },
-    { cls: '', label: '🎯 평균 입결(2026)', val: avgG == null ? '–' : avgG.toFixed(2), sub: '등급, 낮을수록 우수' },
+    { cls: '', label: '🎯 평균 입결(2026)', val: avgG == null ? '–' : avgG.toFixed(2),
+      sub: dom.std ? `${CUT_LABELS[dom.std]} 기준 ${fmtInt(dom.kept)}건` + (dom.dropped ? ` · 다른 기준 ${fmtInt(dom.dropped)}건 제외` : '') : '등급, 낮을수록 우수' },
     { cls: '', label: '🔥 평균 경쟁률(2026)', val: avgC == null ? '–' : avgC.toFixed(1) + ':1', sub: '지원자/모집' },
   ];
   $('#kpis').innerHTML = cards.map(c =>
@@ -889,17 +907,26 @@ function renderCharts() {
     seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.chartMetric = b.dataset.k; [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.chartMetric)); renderCharts(); };
   }
   // aggregate by university
+  // 입결은 기준이 섞이면 대학 간 순위가 왜곡되므로 지배 기준 행만으로 평균한다.
+  const domA = dominantStd(FILTERED);
   const byU = {};
   FILTERED.forEach(r => { (byU[r.uni] = byU[r.uni] || []).push(r); });
   let arr = Object.entries(byU).map(([uni, rs]) => ({
-    uni, n: rs.length, grade: avg(rs.map(r => r.g[0])), comp: avg(rs.map(r => r.c[0])),
+    uni, n: rs.length, comp: avg(rs.map(r => r.c[0])),
+    grade: domA.std ? avg(rs.filter(r => r.stdK26 === domA.std).map(r => r.g[0])) : null,
+    gn: domA.std ? rs.filter(r => r.stdK26 === domA.std && r.g[0] != null).length : 0,
   }));
   const metric = S.chartMetric;
-  if (metric === 'grade') { arr = arr.filter(a => a.grade != null).sort((a, b) => a.grade - b.grade); }
+  // 표본 하한. 기준을 하나로 좁히면 대학당 행수가 줄어 1~2건짜리가 상위에 올라온다
+  // (실측: 서울교대 1건이 2위). 3건 미만은 대학 평균으로 보기 어려워 뺀다.
+  if (metric === 'grade') { arr = arr.filter(a => a.grade != null && a.gn >= 3).sort((a, b) => a.grade - b.grade); }
   else if (metric === 'comp') { arr = arr.filter(a => a.comp != null).sort((a, b) => b.comp - a.comp); }
   else { arr.sort((a, b) => b.n - a.n); }
   arr = arr.slice(0, 22);
-  $('#chartTitleA').textContent = metric === 'grade' ? '대학별 평균 입결등급 (낮을수록 상위) · 상위 22' : metric === 'comp' ? '대학별 평균 경쟁률 (높은 순) · 상위 22' : '대학별 전형 수 · 상위 22';
+  $('#chartTitleA').innerHTML = metric === 'grade'
+    ? `대학별 평균 입결등급 (낮을수록 상위) · 상위 22` +
+      (domA.std ? ` <span class="chart-basis">${CUT_LABELS[domA.std]} 기준${domA.dropped ? ` · 다른 기준 ${fmtInt(domA.dropped)}건 제외` : ''}</span>` : '')
+    : metric === 'comp' ? '대학별 평균 경쟁률 (높은 순) · 상위 22' : '대학별 전형 수 · 상위 22';
   const catColor = S.cat === 'all' ? 'var(--primary)' : CAT_BY[S.cat].color;
   if (!arr.length) { $('#chartA').innerHTML = '<div class="no-data" style="padding:20px">데이터 없음</div>'; }
   else {
@@ -915,7 +942,7 @@ function renderCharts() {
       const inside = w >= 26;
       return `<div class="bar-row"><div class="bl" data-uni="${esc(a.uni)}" title="${esc(a.uni)}">${esc(a.uni)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${w.toFixed(1)}%;background:${catColor}">${inside ? label : ''}</div>${inside ? '' : `<span class="bar-val-out">${label}</span>`}</div>
-        <div class="bn">${a.n}개</div></div>`;
+        <div class="bn">${metric === 'grade' ? a.gn : a.n}개</div></div>`;
     }).join('');
     $('#chartA').querySelectorAll('.bl').forEach(b => b.onclick = () => { $('#search').value = b.dataset.uni; S.search = b.dataset.uni; renderAll(); });
   }
@@ -925,7 +952,10 @@ function renderCharts() {
 function renderTrendChart() {
   const f = FILTERED;
   const yearsLab = ['2024', '2025', '2026'];
-  const gradeY = [avg(f.map(r => r.g[2])), avg(f.map(r => r.g[1])), avg(f.map(r => r.g[0]))];
+  // 추이도 같은 기준끼리만. 연도 사이에 기준이 바뀐 행(std26≠std25)은 추세가 아니라 지표 변경이므로 뺀다.
+  const domT = dominantStd(f);
+  const gf = domT.std ? f.filter(r => r.stdK26 === domT.std && (!r.std26 || !r.std25 || nzStd(r.std26) === nzStd(r.std25))) : [];
+  const gradeY = [avg(gf.map(r => r.g[2])), avg(gf.map(r => r.g[1])), avg(gf.map(r => r.g[0]))];
   const compY = [avg(f.map(r => r.c[2])), avg(f.map(r => r.c[1])), avg(f.map(r => r.c[0]))];
   const W = 320, H = 190, padL = 38, padR = 38, padT = 18, padB = 26;
   const x = i => padL + i / 2 * (W - padL - padR);
@@ -1021,7 +1051,7 @@ function renderTable() {
       <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td>${least}</td>
-      <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
+      <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
       <td><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
       <td><span class="impact-chip ${v.cls}">${v.label}</span></td>
       <td><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
@@ -1369,7 +1399,7 @@ function advisorPick(opts) {
   const { grade, leastN, leastSum, cat, region, school, width } = opts;
   const BANDS = advisorBands(width);
   const out = { safe: [], fit: [], reach: [] };
-  let noGrade = 0, filtered = 0, blocked = 0;
+  let noGrade = 0, filtered = 0, blocked = 0, notFinal = 0;
   ROWS.forEach(r => {
     if (cat && cat !== 'all' && !r.cats.includes(cat)) return;
     if (region === '__metro') { if (!METRO.has(r.region)) return; }
@@ -1382,6 +1412,10 @@ function advisorPick(opts) {
     filtered++;
     const g = r.g[0];
     if (g == null) { noGrade++; return; }          // 입결 미공개·신설 → 판정 불가
+    // ⚠️ 1단계 합격자 평균은 최종 등록자 지표가 아니다. 1단계 풀은 최종보다 훨씬 넓고
+    //    성적이 나빠서, 이 값을 최종 입결처럼 밴드에 넣으면 실제보다 쉬워 보인다(낙관 편향).
+    //    내신 3.0 기준 안정 74건·적정 63건이 여기 해당했다. 판정에서 뺀다.
+    if (STD_NOT_FINAL.has(r.stdK26)) { notFinal++; return; }
     const diff = g - grade;
     const b = BANDS.find(x => diff >= x.min && diff < x.max);
     if (b) out[b.key].push({ r, diff });
@@ -1393,7 +1427,7 @@ function advisorPick(opts) {
   for (const k of Object.keys(out)) {
     out[k].sort((a, b) => (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
   }
-  return { out, noGrade, filtered, blocked, bands: BANDS };
+  return { out, noGrade, filtered, blocked, notFinal, bands: BANDS };
 }
 function renderAdvisor() {
   const inner = $('#advisorInner');
@@ -1409,7 +1443,7 @@ function renderAdvisor() {
         <span class="impact-chip ${v.cls}">${v.label}</span></div>
       <div class="adv-dept">${esc(deptDisp(r))}</div>
       <div class="muted">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
-      <div class="adv-grade">입결 <b>${fmt(r.g[0])}</b> <span class="adv-std">${esc(std)}</span>
+      <div class="adv-grade">입결 <b>${fmt(r.g[0])}</b> <span class="adv-std${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}">${esc(std)}</span>
         <span class="adv-diff ${o.diff >= 0 ? 'good' : 'bad'}">${o.diff >= 0 ? '여유 ' : '부족 '}${Math.abs(o.diff).toFixed(2)}등급</span></div>
       ${r.hasChoejeo ? `<div class="muted">최저 ${esc(r.choejeo)}</div>` : '<div class="muted">수능최저 없음</div>'}
     </div>`;
@@ -1442,7 +1476,8 @@ function renderAdvisor() {
       ${!st.grade ? `<div class="empty-state"><div class="es-ico">🧭</div>내신 등급을 입력하면 안정·적정·도전으로 나눠 보여드립니다.</div>`
       : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
            ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}
-           ${res.blocked ? `학교 유형으로 지원 불가한 <b>${fmtInt(res.blocked)}건</b>을 제외했습니다.` : ''}</div>
+           ${res.blocked ? `학교 유형으로 지원 불가한 <b>${fmtInt(res.blocked)}건</b>을 제외했습니다.` : ''}
+           ${res.notFinal ? `입결이 <b>1단계 합격자 평균</b>으로만 공개된 <b>${fmtInt(res.notFinal)}건</b>은 최종 등록자 성적이 아니라 제외했습니다.` : ''}</div>
          ${res.bands.map(b => {
         const list = res.out[b.key];
         return `<div class="adv-band"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
