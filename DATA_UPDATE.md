@@ -56,3 +56,14 @@ cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
 - diff 재사용 — V6.29 갱신 때 즉석 diff 스크립트를 두 번 짠 낭비를 `--diff` 로 굳힘.
 - 최저 방향 — `3합8→2합5`를 합만 보고 강화로 오판(91전형, 유불리 판정이 반대) → `least_direction()` 집합 비교 + 검증 규칙.
 - 인사이트 합계 — 권역별로 쪼갠 행 하나를 전형 총원으로 오기(경북대 지역의사 8 ← 26) → `verify_insights.py` 는 스코프 후 **합계**로만 비교.
+
+## 배포 전 필수 — 캐시 버스팅
+
+```bash
+python3 stamp_assets.py   # index.html의 styles.css·app.js·data.js 참조에 ?v=<해시> 부여
+```
+
+⚠️ **이걸 빼먹으면 배포해도 기존 사용자는 옛 화면을 본다.** index.html이 버전 없이
+참조하면 브라우저가 옛 CSS·JS를 계속 쓴다. 실제로 QA 중 서버는 새 파일을 주는데
+화면은 옛 CSS로 렌더돼 "수정이 반영 안 된다"고 한참 헤맸다.
+해시가 바뀐 파일만 갱신하므로 매번 돌려도 안전하다.

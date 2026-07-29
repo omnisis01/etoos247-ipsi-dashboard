@@ -639,7 +639,7 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
    경고형(warn)은 최종 등록자 지표가 아닌 것(1단계 평균). */
 .std-tag{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:6px;
   font-size:10px;font-weight:700;line-height:1.5;white-space:nowrap;vertical-align:middle;
-  background:var(--chip-bg,rgba(127,127,127,.14));color:var(--muted)}
+  background:var(--surface-2);color:var(--text-mute);border:1px solid var(--line)}
 .std-tag.warn{background:rgba(234,88,12,.16);color:#c2410c}
 [data-theme="dark"] .std-tag.warn{background:rgba(251,146,60,.18);color:#fdba74}
 

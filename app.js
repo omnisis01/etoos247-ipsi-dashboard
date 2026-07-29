@@ -536,6 +536,12 @@ const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut80: '
 // 표·카드에 숫자 옆에 붙는 짧은 라벨. 대학마다 발표 기준이 달라 같은 숫자라도 뜻이 다르다
 // (cut70 평균 3.73 vs lowest 4.80 — 1등급 넘게 벌어진다). 숫자만 보여주면 오해한다.
 const CUT_SHORT = { avg: '평균', cut50: '50%', cut70: '70%', cut80: '75~85%', cut90: '90%', lowest: '최저', stage1: '1단계' };
+/** 입결 숫자 옆에 붙일 기준 배지. 숫자만 보여주면 서로 다른 지표를 같은 잣대로 읽는다. */
+function stdTag(r, cls) {
+  const k = CUT_SHORT[r.stdK26];
+  if (!k || r.g[0] == null) return '';
+  return `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}${cls ? ' ' + cls : ''}" title="${esc(r.std26 || '')}">${k}</span>`;
+}
 // 최종 등록자 지표가 아닌 기준 — 1단계 합격자는 최종보다 훨씬 넓은 풀이라 낙관 편향을 만든다.
 const STD_NOT_FINAL = new Set(['stage1']);
 function renderCutFilter() {
@@ -1159,7 +1165,7 @@ function openModal(i) {
         <div class="verdict-head"><span class="verdict-big ${v.cls}">${v.label}</span>
           <span class="muted">${v.cls === 'good' ? '합격선이 낮아질 신호가 우세합니다.' : v.cls === 'bad' ? '합격선이 높아질 신호가 우세합니다.' : v.cls === 'new' ? '신설로 입결이 미형성되어 변동성이 큽니다.' : '뚜렷한 방향성이 약합니다.'}</span></div>
         <table class="trend-table yoy-table"><thead><tr><th>지표</th><th>2025</th><th>2026</th><th>전년비</th><th>해석</th></tr></thead><tbody>
-          ${yoyCmp('입결(등급)', v.g, x => x.toFixed(2), dir => dir === 'easier')}
+          ${yoyCmp(`입결(등급) ${stdTag(r)}`, v.g, x => x.toFixed(2), dir => dir === 'easier')}
           ${yoyCmp('경쟁률', v.c, x => x.toFixed(1) + ':1', dir => dir === 'down')}
           ${yoyCmp(`추합(충원, ${chungUnit(r)})`, v.ch, x => fmtChung(r, x), dir => dir === 'up')}
         </tbody></table>
@@ -1169,7 +1175,7 @@ function openModal(i) {
       ${r.change ? `<div class="msec"><h4>📝 2026 대비 변경사항(2027)</h4><div class="change-box">${esc(r.change)}</div></div>` : ''}
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
         <table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
-          ${trendRow('입결(등급)', [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
+          ${trendRow(`입결(등급) ${stdTag(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
           ${trendRow('입결(환산)', [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
@@ -1221,7 +1227,7 @@ function openCompare() {
         ${rowM('전형', r => esc(r.jhtype) + '<br><span class="muted">' + esc(r.jhname) + '</span>')}
         ${rowM('모집인원(전년대비)', r => `<b>${fmtInt(r.enroll)}</b> <span class="delta ${deltaInfo(r).cls}">${deltaInfo(r).txt}</span>`)}
         ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) + (r.chKind ? ` <span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}">${r.chKind}</span>` : '') : '<span class="muted">없음</span>')}
-        ${rowM('입결 2025→2026', r => { const g = yoyGrade(r); return `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + (g && g.dir !== 'flat' ? ` <span class="ycell ${g.dir === 'easier' ? 'good' : 'bad'}">${g.dir === 'easier' ? '유리' : '불리'}</span>` : ''); })}
+        ${rowM('입결 2025→2026', r => { const g = yoyGrade(r); return `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + stdTag(r) + (g && g.dir !== 'flat' ? ` <span class="ycell ${g.dir === 'easier' ? 'good' : 'bad'}">${g.dir === 'easier' ? '유리' : '불리'}</span>` : ''); })}
         ${rowM('입결 추이', r => sparkline(r.g, { invert: true, color: 'var(--primary)', w: 70 }))}
         ${rowM('경쟁률 2025→2026', r => { const c = yoyComp(r); return (r.c[1] == null ? '–' : r.c[1].toFixed(1)) + ' → <b>' + (r.c[0] == null ? '–' : r.c[0].toFixed(1)) + ':1</b>' + (c && c.dir !== 'flat' ? ` <span class="ycell ${c.dir === 'down' ? 'good' : 'bad'}">${c.dir === 'down' ? '유리' : '불리'}</span>` : ''); })}
         ${rowM('경쟁률 추이', r => sparkline(r.c, { color: 'var(--new)', w: 70 }))}
@@ -1302,7 +1308,7 @@ function favSlotCard(i, bucket, pos, lastIdx) {
       <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div>
       <div class="fav-dept">${esc(deptDisp(r))}</div>
       <div class="fav-meta"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span> 모집 ${fmtInt(r.enroll)} <span class="delta ${d.cls}">${d.txt}</span>
-        · 입결 <b>${fmt(r.g[0])}</b> · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
+        · 입결 <b>${fmt(r.g[0])}</b>${stdTag(r)} · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
       ${yoyHTML(r)}
     </div>
     <div class="fav-ctrl"><button data-up="${bucket}:${pos}" ${pos === 0 ? 'disabled' : ''} title="위로">▲</button><button data-dn="${bucket}:${pos}" ${pos === lastIdx ? 'disabled' : ''} title="아래로">▼</button>
@@ -1562,7 +1568,7 @@ function printFav() {
       <td>${esc(r.jhtype)}<br><span class="pr-mut">${esc(r.jhname)}</span></td>
       <td class="pr-c">${fmtInt(r.enroll)}<br><span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span></td>
       <td class="pr-c">${r.hasChoejeo ? esc(r.choejeo) : '<span class="pr-mut">없음</span>'}</td>
-      <td class="pr-c"><b>${fmt(r.g[0])}</b><br><span class="pr-mut">${r.g[1] == null ? '' : fmt(r.g[1]) + '→'} ${dirTxt(g)}</span></td>
+      <td class="pr-c"><b>${fmt(r.g[0])}</b>${CUT_SHORT[r.stdK26] && r.g[0] != null ? ` <span class="pr-mut">(${CUT_SHORT[r.stdK26]})</span>` : ''}<br><span class="pr-mut">${r.g[1] == null ? '' : fmt(r.g[1]) + '→'} ${dirTxt(g)}</span></td>
       <td class="pr-c">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1<br><span class="pr-mut">${dirTxt(c)}</span></td>
       <td class="pr-c pr-vd ${v.cls}">${v.label}</td></tr>`;
   };
@@ -1586,7 +1592,7 @@ function printCompare() {
       ${rowM('전형', r => esc(r.jhtype) + '<br><span class="pr-mut">' + esc(r.jhname) + '</span>')}
       ${rowM('모집(전년대비)', r => `${fmtInt(r.enroll)} <span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span>`)}
       ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) : '없음')}
-      ${rowM('입결 2025→2026', r => `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>`)}
+      ${rowM('입결 2025→2026', r => `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + (CUT_SHORT[r.stdK26] && r.g[0] != null ? ` <span class="pr-mut">(${CUT_SHORT[r.stdK26]})</span>` : ''))}
       ${rowM('경쟁률 2025→2026', r => `${r.c[1] == null ? '–' : r.c[1].toFixed(1)} → <b>${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1</b>`)}
       ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
     </tbody></table>`;
