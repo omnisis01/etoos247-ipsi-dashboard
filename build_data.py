@@ -662,6 +662,11 @@ for r in raw:
         std26 = _STD_CORR[(uni, std26)]; _std_fixed.add((uni, s(r[21])))
     stdK = std_kind(std26)
     std25 = s(r[26])
+    # ⚠️ 2025 기준 원문도 같이 교정한다. 안 하면 std26만 바뀌어 app.js가 '기준이 달라졌다'로
+    #    오판하고 추세 표시를 차단한다(실제로 6교 704행이 이 회귀로 막혔다).
+    #    원문이 같은 문자열이면 같은 발표 형식이라는 뜻이다 — 중부대 2025 자료로 확인했다.
+    if (uni, std25) in _STD_CORR:
+        std25 = _STD_CORR[(uni, std25)]
 
     if is_changed_track(uni, s(r[4]), jhname, prev):
         delta_kind, delta_n = 'changed', 0
