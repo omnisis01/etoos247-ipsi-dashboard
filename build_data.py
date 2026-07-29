@@ -32,7 +32,7 @@ def vgrade(v):
     return v if (v is not None and 1.0 <= v <= 9.0) else None
 
 def std_kind(k):
-    """대학이 발표한 입결 기준을 버킷으로 정규화: avg / cut50 / cut70 / cut90 / stage1 / 기타.
+    """대학이 발표한 입결 기준을 버킷으로 정규화: avg / cut50 / cut70 / cut80 / cut90 / lowest / stage1 / 기타.
        ⚠️ 서로 다른 기준을 한 버킷에 넣으면 필터가 왜곡된다. 실제로 세 건이 섞여 있었다.
         · 50%컷(132행: 서울대·전남대·홍익대)이 cut70에 편입돼 있었다. 50%컷은 70%컷보다
           확실히 낮은(좋은) 값이라 같은 버킷이면 '70%컷 이내' 필터가 과대 포함된다 → cut50 분리.
@@ -58,7 +58,7 @@ def std_kind(k):
         if pct <= 55: return 'cut50'
         if pct >= 75: return 'cut80'  # 75·80·85% — 70%컷보다 확실히 뒤라 섞으면 필터가 왜곡된다
         return 'cut70'
-    if '최저' in z: return 'cut90'
+    if '최저' in z: return 'lowest'   # 최종등록자 최저 = 사실상 100%컷. 90%컷보다도 뒤다.
     if '컷' in z: return 'cut70'
     return ''
 
@@ -602,6 +602,14 @@ for _c in _CORR.get('date', []):
     _DATE_CORR[(_c['uni'], _c['jhn'], _c['old'])] = _c['new']
 _date_fixed = set()
 
+# 입결 기준(std) 원문 교정. 원천 엑셀이 '최종등록자컷'처럼 퍼센트 없이 적은 대학을
+# 입학처 공식 발표로 확정해 실제 기준으로 바꾼다. 원문만 바꾸면 std_kind()가 버킷을 다시 잡는다.
+# ⚠️ 값(g26)은 건드리지 않는다 — 값은 대학 공식값이 맞고 라벨만 틀렸다.
+_STD_CORR = {}
+for _c in _CORR.get('std', []):
+    _STD_CORR[(_c['uni'], _c['from'])] = _c['to']
+_std_fixed = set()
+
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
 # ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
 #    캠퍼스에 있을 때(경상대 진주/통영, 유원대 영동/아산 등) 멀쩡한 행까지 덮어써 버린다.
@@ -649,7 +657,10 @@ for r in raw:
     # 입결 '기준'은 연도별로 따로 있다(col21=2026, col26=2025, col30=2024). 대학이 해마다 기준을
     # 바꾸기도 해서(예: 2025 평균 → 2026 70%컷) 기준이 다른 두 해의 등급을 비교하면 의미가 없다.
     # 실제로 이 비교 때문에 가짜 입결 추세 신호가 983건 발생했다 → std25도 실어 보내 app.js에서 막는다.
-    std26 = s(r[21]); stdK = std_kind(std26)
+    std26 = s(r[21])
+    if (uni, std26) in _STD_CORR:
+        std26 = _STD_CORR[(uni, std26)]; _std_fixed.add((uni, s(r[21])))
+    stdK = std_kind(std26)
     std25 = s(r[26])
 
     if is_changed_track(uni, s(r[4]), jhname, prev):
@@ -772,6 +783,10 @@ if len(_date_fixed) != len(_DATE_CORR):
     _miss = sorted(set(_DATE_CORR) - _date_fixed)
     raise SystemExit(f"[중단] 일자교정 미적용 {len(_miss)}건 — 엑셀이 갱신됐다면 data_corrections.json 'date'에서 제거할 것: {_miss}")
 print(f"[일자교정] date {len(_date_fixed)}/{len(_DATE_CORR)}건")
+if len(_std_fixed) != len(_STD_CORR):
+    _miss_std = sorted(set(_STD_CORR) - _std_fixed)
+    raise SystemExit(f"[중단] 입결기준교정 미적용 {len(_miss_std)}건 — 엑셀이 갱신됐다면 data_corrections.json 'std'에서 제거할 것: {_miss_std}")
+print(f"[기준교정] std {len(_std_fixed)}/{len(_STD_CORR)}건")
 if len(_region_fixed) != len(_REGION_CORR):
     raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")

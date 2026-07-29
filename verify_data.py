@@ -139,7 +139,7 @@ def verify(d):
         iK = col(sch, 'stdK26')
         # 버킷은 build_data.py의 std_kind()와 app.js의 CUT_LABELS 셋이 함께 움직인다.
         # 하나만 늘리면 여기서 걸린다 — 실제로 cut50/stage1 분리 때 492건으로 잡혔다.
-        allowed = {'', 'avg', 'cut50', 'cut70', 'cut80', 'cut90', 'stage1'}
+        allowed = {'', 'avg', 'cut50', 'cut70', 'cut80', 'cut90', 'lowest', 'stage1'}
         bad_k = sum(1 for r in rows if r[iK] not in allowed)
         if bad_k:
             fails.append(f"stdK26에 정의되지 않은 값 {bad_k}건 — std_kind() 확인")
