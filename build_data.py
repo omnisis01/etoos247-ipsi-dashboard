@@ -610,6 +610,18 @@ for _c in _CORR.get('std', []):
     _STD_CORR[(_c['uni'], _c['from'])] = _c['to']
 _std_fixed = set()
 
+# 2026 경쟁률(c26) 교정. 어디가 경쟁률과 대조해 어긋난 건 중, **2026 모집인원 산술로 방향이
+# 판정된 것만** 넣는다 — '경쟁률 × 모집인원 = 지원자(정수)' 제약에서 대시보드는 부적합인데
+# 어디가는 정합인 경우다. 판정 규약은 qa_comp_ratio.py와 동일하게 맞춘다.
+# ⚠️ 두 값의 소수 자릿수가 다르면 판정이 비대칭이다 — 자릿수가 낮은 쪽은 구간이 넓어
+#    무조건 통과한다(영남대 7.745 vs 어디가 7.8이 실제로 그랬고, 31/4=7.75라 대시보드가
+#    더 정확했다). **양쪽 자릿수가 같을 때만 판정에 쓴다.**
+# ⚠️ '두 학과 값이 정확히 뒤바뀌었다'는 것만으로는 방향을 못 가른다 — _note_ipgyeol 참조.
+_COMP_CORR = {}
+for _c in _CORR.get('comp', []):
+    _COMP_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c['old'], _c['new'])
+_comp_fixed = set()
+
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
 # ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
 #    캠퍼스에 있을 때(경상대 진주/통영, 유원대 영동/아산 등) 멀쩡한 행까지 덮어써 버린다.
@@ -641,6 +653,11 @@ for r in raw:
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [num(r[18]), num(r[19]), num(r[20])]
+    _ck = (uni, dept, jhtype, jhname)
+    if _ck in _COMP_CORR:
+        _cold, _cnew = _COMP_CORR[_ck]
+        if comp[0] is not None and abs(comp[0] - _cold) < 1e-9:
+            comp[0] = _cnew; _comp_fixed.add(_ck)
     grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
     _gk = (uni, dept, jhtype, jhname)
     if _gk in _GRADE_CORR:
@@ -792,6 +809,9 @@ if len(_std_fixed) != len(_STD_CORR):
     _miss_std = sorted(set(_STD_CORR) - _std_fixed)
     raise SystemExit(f"[중단] 입결기준교정 미적용 {len(_miss_std)}건 — 엑셀이 갱신됐다면 data_corrections.json 'std'에서 제거할 것: {_miss_std}")
 print(f"[기준교정] std {len(_std_fixed)}/{len(_STD_CORR)}건")
+if len(_comp_fixed) != len(_COMP_CORR):
+    raise SystemExit(f"[중단] 경쟁률교정 미적용 {sorted(set(_COMP_CORR) - _comp_fixed)} — 엑셀 갱신 시 data_corrections.json 'comp'에서 제거할 것")
+print(f"[경쟁률교정] c26 {len(_comp_fixed)}/{len(_COMP_CORR)}건")
 if len(_region_fixed) != len(_REGION_CORR):
     raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
