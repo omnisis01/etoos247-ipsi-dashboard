@@ -196,6 +196,7 @@ const S = {
   examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
 
+  cutOpen: null,   // 입결 컷 필터 펼침. null=미결정(모바일이면 접힘). 기준이 7종으로 늘어 모바일에서 373px를 먹었다
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut50' | 'cut70' | 'cut80' | 'cut90' | 'stage1', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
   page: 1, perPage: 60, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
@@ -555,10 +556,15 @@ function renderCutFilter() {
   const hint = active
     ? `<span class="cf-count">${matched.toLocaleString()}건 매치</span>`
     : `<span class="cf-hint muted">기준을 선택하면 내 성적으로 컷 이내 전형만 봅니다</span>`;
+  // 모바일에서는 기본 접어둔다 — 기준 7종 + 슬라이더 + 고사시기까지 세로로 쌓이면
+  // 화면의 절반을 먹어 상단 KPI·유불리 카드가 밀린다. 한 번 펼치면 그 선택을 유지한다.
+  const open = S.cutOpen === null ? !window.matchMedia('(max-width:620px)').matches : S.cutOpen;
+  box.classList.toggle('collapsed', !open);
   box.innerHTML = `
     <div class="cf-head">
       <span class="cf-title">🎯 <b>입결 컷 등급</b>으로 좁혀보기</span>
       ${hint}
+      <button class="cf-toggle" type="button" aria-expanded="${open}" aria-controls="cutFilter">${open ? '접기 ▲' : '펼치기 ▼'}</button>
     </div>
     <div class="cf-row">
       <div class="cf-radios" role="radiogroup" aria-label="입결 컷 기준">
@@ -584,6 +590,8 @@ function renderCutFilter() {
   });
   const ec = box.querySelector('[data-role="exam-clear"]');
   if (ec) ec.onclick = () => { S.examWhen = ''; renderSoft(); };
+  const tg = box.querySelector('.cf-toggle');
+  if (tg) tg.onclick = () => { S.cutOpen = !open; renderCutFilter(); };
   box.querySelectorAll('input[name="stdCut"]').forEach(el => el.onchange = () => {
     S.stdCut = el.value;
     if (S.cutGrade >= 9) S.cutGrade = 3.0;   // 기준 선택 시 합리적 기본값
