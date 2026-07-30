@@ -692,6 +692,12 @@ for r in raw:
     _dkk = (uni, dept, jhtype, jhname)
     if _dkk in _DKIND_CORR and delta_kind == _DKIND_CORR[_dkk][0]:
         delta_kind = _DKIND_CORR[_dkk][1]; delta_n = 0; _dkind_fixed.add(_dkk)
+        # ⚠️ prev(전년대비 원문)도 함께 맞춘다. app.js의 표·카드는 dkind로 그리지만
+        #    **인쇄물(printFav)과 비교함은 r.prev를 직접 찍는다** — 여기만 '신설'이 남으면
+        #    화면에는 '–'인데 PDF에는 '신설'로 나와 서로 어긋난다.
+        #    'changed'는 app.js가 '전형변경'으로 대체 출력하므로 건드리지 않는다.
+        if delta_kind == 'none':
+            prev = '-'
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
 
