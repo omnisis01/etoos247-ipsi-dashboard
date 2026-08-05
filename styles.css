@@ -698,3 +698,36 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   .cf-clear{min-height:36px}
   .pager button{min-width:40px;min-height:40px}
 }
+
+/* 모바일 표 — 8열이 1029px라 화면(390px)의 2/3가 가로 스크롤 밖으로 밀렸다.
+   학생이 목록에서 필요한 건 '어느 학교·학과인가 / 입결 얼마인가 / 유불리 어떤가'다.
+   모집·수능최저·경쟁률 3열은 접고, 행을 누르면 모달에서 전부 볼 수 있게 한다. */
+.grid-hint{display:none;margin:0 0 8px;font-size:12px;color:var(--text-mute);font-weight:500}
+@media(max-width:620px){
+  .grid-hint{display:block}
+  #grid .col-enroll,#grid .col-least,#grid .col-comp{display:none}
+  #grid td,#grid th{padding-left:8px;padding-right:8px}
+  /* ⚠️ #grid의 min-width:920px는 8열 기준 값이다. 열을 접어도 이게 남으면 가로 스크롤이
+     그대로 생긴다(실측: 5열인데 여전히 920px). 모바일에서는 화면 폭에 맞춘다. */
+  #grid{min-width:0;font-size:12.5px;table-layout:fixed;width:100%}
+  #grid thead th{padding:10px 6px;font-size:10.5px;line-height:1.3}
+  #grid td{padding-left:6px;padding-right:6px;word-break:keep-all;overflow-wrap:anywhere}
+  #grid .grade-val,#grid .ybadge,#grid .std-tag,#grid .impact-chip{white-space:nowrap}
+  #grid .col-grade .cell-top{display:flex;flex-wrap:wrap;gap:3px;align-items:center;row-gap:2px}
+  /* 비교함(⇄)은 나란히 놓고 보는 기능이라 좁은 화면에서는 뺀다 — 상세 모달에서 담을 수 있다 */
+  #grid .col-add .row-add{display:none}
+  #grid .col-add .row-fav{width:34px;height:34px;font-size:14px}
+  /* 고정 레이아웃 + 퍼센트 폭이라야 화면 폭에 확실히 들어간다(auto는 콘텐츠가 600px를 만든다) */
+  #grid .col-uni{width:36%}
+  #grid .col-jh{width:18%}
+  #grid .col-grade{width:22%}
+  #grid .col-impact{width:13%}
+  #grid .col-add{width:11%}
+  .table-scroll{overflow-x:visible}
+  /* 스파크라인은 좁은 폭에서 의미가 없다 — 숨겨 세로 공간을 아낀다 */
+  #grid .spark{display:none}
+}
+
+/* 표 헤더 라벨 — 데스크톱은 전체, 모바일은 축약 */
+.lb-short{display:none}
+@media(max-width:620px){ .lb-full{display:none} .lb-short{display:inline} }

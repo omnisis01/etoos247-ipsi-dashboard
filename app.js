@@ -1008,14 +1008,15 @@ function renderTrendChart() {
 
 /* ----- table ----- */
 const COLS = [
-  { k: 'uni', label: '대학 / 모집단위', sort: 'uni' },
-  { k: 'jh', label: '전형', sort: 'jh' },
-  { k: 'enroll', label: '모집(전년대비)', sort: 'enroll' },
-  { k: 'least', label: '수능최저', sort: null },
-  { k: 'grade', label: '입결 2026 (전년비)', sort: 'grade' },
-  { k: 'comp', label: '경쟁률 2026 (전년비)', sort: 'comp' },
-  { k: 'impact', label: '올해 유불리', sort: 'impact' },
-  { k: 'add', label: '담기', sort: null },
+  // short: 모바일(≤620px)에서 쓰는 짧은 라벨. 긴 라벨은 좁은 화면에서 열을 넓혀 표를 밀어낸다.
+  { k: 'uni', label: '대학 / 모집단위', short: '대학·학과', sort: 'uni' },
+  { k: 'jh', label: '전형', short: '전형', sort: 'jh' },
+  { k: 'enroll', label: '모집(전년대비)', short: '모집', sort: 'enroll' },
+  { k: 'least', label: '수능최저', short: '최저', sort: null },
+  { k: 'grade', label: '입결 2026 (전년비)', short: '입결', sort: 'grade' },
+  { k: 'comp', label: '경쟁률 2026 (전년비)', short: '경쟁률', sort: 'comp' },
+  { k: 'impact', label: '올해 유불리', short: '유불리', sort: 'impact' },
+  { k: 'add', label: '담기', short: '담기', sort: null },
 ];
 function yoyBadge(r, kind) {
   if (kind === 'grade') { const g = yoyGrade(r); if (!g || g.dir === 'flat') return ''; const cls = g.dir === 'easier' ? 'good' : 'bad'; const ar = g.dir === 'harder' ? '▲' : '▼';
@@ -1026,7 +1027,7 @@ function yoyBadge(r, kind) {
 }
 function renderTable() {
   $('#gridHead').innerHTML = '<tr>' + COLS.map(c =>
-    `<th scope="col" data-sort="${c.sort || ''}" class="${c.sort === S.sort ? 'sorted' : ''}"${c.sort ? ` role="button" tabindex="0" aria-sort="${c.sort === S.sort ? (S.sortDir < 0 ? 'descending' : 'ascending') : 'none'}"` : ''}>${c.label}${c.sort ? `<span class="sort-ar" aria-hidden="true">${c.sort === S.sort ? (S.sortDir < 0 ? '▼' : '▲') : '▽'}</span>` : ''}</th>`
+    `<th scope="col" data-sort="${c.sort || ''}" class="col-${c.k}${c.sort === S.sort ? ' sorted' : ''}"${c.sort ? ` role="button" tabindex="0" aria-sort="${c.sort === S.sort ? (S.sortDir < 0 ? 'descending' : 'ascending') : 'none'}"` : ''}><span class="lb-full">${c.label}</span><span class="lb-short">${c.short || c.label}</span>${c.sort ? `<span class="sort-ar" aria-hidden="true">${c.sort === S.sort ? (S.sortDir < 0 ? '▼' : '▲') : '▽'}</span>` : ''}</th>`
   ).join('') + '</tr>';
   $('#gridHead').querySelectorAll('th').forEach(th => {
     const sk = th.dataset.sort; if (!sk) return;
@@ -1073,14 +1074,14 @@ function renderTable() {
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
-      <td><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
-      <td class="enroll-cell">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
-      <td>${least}</td>
-      <td><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
-      <td><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
-      <td><span class="impact-chip ${v.cls}">${v.label}</span></td>
-      <td><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
+      <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
+      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
+      <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
+      <td class="col-least">${least}</td>
+      <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
+      <td class="col-comp"><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
+      <td class="col-impact"><span class="impact-chip ${v.cls}">${v.label}</span></td>
+      <td class="col-add"><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
     </tr>`;
   }).join('');
   $('#gridBody').querySelectorAll('tr').forEach(tr => {
