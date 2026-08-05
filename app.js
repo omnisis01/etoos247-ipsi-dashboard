@@ -37,6 +37,18 @@ const ROWS = D.rows.map((r, i) => ({
 ROWS.forEach(r => {
   r.chungRatio = r.chung.some(v => v != null && /^\d+\.\d+$/.test(String(v).trim()));
 });
+/* 짧은 알림. 브라우저 alert()는 페이지를 멈춰 세우고 모바일에서 특히 거슬린다 —
+   '지원희망 최대 6장'처럼 학생이 자주 마주치는 안내에는 흐름을 끊지 않는 토스트를 쓴다. */
+let _toastT = null;
+function toast(msg, kind) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.className = 'toast show' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  el.setAttribute('role', 'status');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => { el.className = 'toast'; }, 2600);
+}
 const chungUnit = r => (r.chungRatio ? '배' : '명');
 const fmtChung = (r, v) => (r.chungRatio ? Number(v).toFixed(2) : String(Math.round(v)));
 
@@ -1214,7 +1226,7 @@ $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 /* ----- compare ----- */
 function toggleCompare(i) {
   if (S.compare.has(i)) S.compare.delete(i);
-  else { if (S.compare.size >= 6) { alert('최대 6개까지 비교할 수 있습니다.'); return; } S.compare.add(i); }
+  else { if (S.compare.size >= 6) { toast('비교함은 최대 6개까지 담을 수 있습니다.'); return; } S.compare.add(i); }
   save('cmp', [...S.compare]);
   updateCompareBtn(); renderTable();
 }
@@ -1267,7 +1279,7 @@ function updateFavBtn() { $('#favCount').textContent = favCount(); }
 function addFav(i, bucket) {
   const cur = favBucket(i);
   if (cur === bucket) { removeFav(i); return; }                 // 같은 버킷 다시 누르면 토글 해제
-  if (S.fav[bucket].length >= BUCKET_MAX[bucket]) { alert(`${BUCKET_NAME[bucket]}은(는) 최대 ${BUCKET_MAX[bucket]}장까지 담을 수 있습니다.`); return; }
+  if (S.fav[bucket].length >= BUCKET_MAX[bucket]) { toast(`${BUCKET_NAME[bucket]}은(는) 최대 ${BUCKET_MAX[bucket]}장까지 담을 수 있습니다.`); return; }
   if (cur) S.fav[cur].splice(S.fav[cur].indexOf(i), 1);         // 다른 버킷이면 이동
   S.fav[bucket].push(i);
   track('add_favorite', { uni: ROWS[i].uni, dept: ROWS[i].dept, bucket });
@@ -1281,7 +1293,7 @@ function removeFav(i) {
 function switchBucket(i) {
   const cur = favBucket(i); if (!cur) return;
   const other = cur === 'hope' ? 'reach' : 'hope';
-  if (S.fav[other].length >= BUCKET_MAX[other]) { alert(`${BUCKET_NAME[other]}은(는) 최대 ${BUCKET_MAX[other]}장입니다.`); return; }
+  if (S.fav[other].length >= BUCKET_MAX[other]) { toast(`${BUCKET_NAME[other]}은(는) 최대 ${BUCKET_MAX[other]}장입니다.`); return; }
   S.fav[cur].splice(S.fav[cur].indexOf(i), 1); S.fav[other].push(i);
   saveFav(); renderTable(); openFav();
 }
@@ -1566,7 +1578,7 @@ function printDoc(title, subtitle, bodyHTML) {
   window.print();
 }
 function printFav() {
-  if (!favCount()) { alert('지원카드가 비어 있습니다. 표의 ☆에서 먼저 담아주세요.'); return; }
+  if (!favCount()) { toast('지원카드가 비어 있습니다. 표의 ☆에서 먼저 담아주세요.'); return; }
   const card = (i, label) => {
     const r = ROWS[i], v = V(r), d = deltaInfo(r), g = yoyGrade(r), c = yoyComp(r);
     const dirTxt = x => x == null ? '' : x.basisMismatch ? '기준상이' : ({ easier: '유리', harder: '불리', flat: '유지', down: '유리', up: '불리' }[x.dir] || '');
@@ -1591,7 +1603,7 @@ function printFav() {
 }
 function printCompare() {
   const items = [...S.compare].map(i => ROWS[i]);
-  if (!items.length) { alert('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
+  if (!items.length) { toast('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
   const rowM = (lab, fn) => `<tr><td class="pr-rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
   const body = `<table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
       `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(r.dept.slice(0, 18))}</span></th>`).join('')}</tr></thead><tbody>
@@ -1752,6 +1764,31 @@ $('#menuToggle').onclick = () => $('#sidebar').classList.contains('open') ? clos
 
 /* ----- init ----- */
 $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.nRows.toLocaleString()}건 · 대학 ${D.meta.nUni}곳`;
+/* 수시 원서접수 일정 안내. 지원 시점이 코앞인데 대시보드 어디에도 접수일이 없었다.
+   ⚠️ 날짜는 2027학년도 대입전형 기본사항(대교협) 기준으로 고정한다 — 명지대 2027 전형계획
+   '2026. 9. 7.(월) ~ 11.(금) 중 3일 이상', 유원대 2027 요강 '2026. 09. 07.(월) ~ 09. 11.(금)'로 확인.
+   접수 기간·마감 후로 문구가 자동으로 바뀌므로 시점이 지나도 어긋나지 않는다. */
+(function applySchedule() {
+  const box = $('#applyBar'); if (!box) return;
+  const S1 = new Date(2026, 8, 7), E1 = new Date(2026, 8, 11, 23, 59);   // 9/7 ~ 9/11
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const dday = Math.ceil((S1 - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / day);
+  let txt, cls;
+  if (now < S1) {
+    txt = `<b>2027 수시 원서접수</b>까지 <b class="ab-d">D-${dday}</b> · 2026.9.7(월)~9.11(금) <span class="ab-sub">대학마다 이 기간 중 3일 이상 접수 — 대학별 일정은 각 입학처 확인</span>`;
+    cls = 'soon';
+  } else if (now <= E1) {
+    txt = `<b class="ab-d">원서접수 진행 중</b> · 2026.9.7(월)~9.11(금) <span class="ab-sub">대학마다 마감일이 다릅니다 — 각 입학처 일정을 반드시 확인하세요</span>`;
+    cls = 'now';
+  } else {
+    txt = `2027 수시 원서접수 마감(2026.9.11) <span class="ab-sub">이후 일정은 대학별고사·합격자 발표 — 각 입학처 공지를 확인하세요</span>`;
+    cls = 'done';
+  }
+  box.className = 'apply-bar ' + cls;
+  box.innerHTML = `<span class="ab-ico" aria-hidden="true">🗓️</span><span>${txt}</span>`;
+})();
+
 $('#footNote').innerHTML = `<b>이투스247학원</b> &nbsp; '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트
 // 공유 링크로 들어온 경우: 지원카드·비교함을 복원하고 해당 서랍을 열어 바로 보여준다.

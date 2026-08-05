@@ -656,3 +656,45 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   .cut-filter.collapsed{padding-bottom:9px}
   .cut-filter.collapsed .cf-head{margin-bottom:0}
 }
+
+/* 토스트 — alert() 대체. 흐름을 끊지 않고 잠깐 떴다 사라진다. */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);z-index:900;
+  max-width:min(92vw,420px);padding:11px 18px;border-radius:12px;
+  background:var(--text);color:var(--bg);font-size:13.5px;font-weight:700;line-height:1.45;
+  box-shadow:0 10px 30px rgba(0,0,0,.28);opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;text-align:center}
+.toast.show{opacity:.96;transform:translate(-50%,0)}
+@media(max-width:620px){.toast{bottom:16px;font-size:13px;padding:10px 15px}}
+
+/* 수시 원서접수 일정 바 — 지원 시점 안내. 접수 전/중/후로 색과 문구가 바뀐다. */
+.apply-bar{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 14px;
+  border-radius:12px;font-size:13.5px;line-height:1.5;border:1px solid var(--line);background:var(--surface)}
+.apply-bar:empty{display:none}
+.apply-bar .ab-ico{font-size:16px;flex:none}
+.apply-bar .ab-d{color:var(--primary-ink)}
+.apply-bar .ab-sub{display:block;font-size:12px;font-weight:500;color:var(--text-mute);margin-top:2px}
+.apply-bar.soon{background:var(--primary-soft);border-color:transparent}
+.apply-bar.now{background:rgba(234,88,12,.12);border-color:rgba(234,88,12,.3)}
+.apply-bar.now .ab-d{color:#c2410c}
+[data-theme="dark"] .apply-bar.now .ab-d{color:#fdba74}
+.apply-bar.done{opacity:.85}
+@media(max-width:620px){.apply-bar{font-size:12.5px;padding:9px 12px}}
+
+/* 모바일 터치 타깃 — 이전 44px 작업은 상단 버튼(.menu-toggle/.icon-btn/.ghost-btn)에만 걸려 있었다.
+   실사용 점검에서 정작 자주 누르는 담기 버튼(☆·⇄)이 26px, 필터 칩이 27px로 남아 있었다.
+   가로가 이미 넓은 요소(칩·라디오)는 세로만 키워 줄바꿈 증가를 억제한다. */
+@media(max-width:620px){
+  .row-fav,.row-add{width:40px;height:40px;font-size:15px}
+  .row-btns{gap:8px}
+  .chip{padding:10px 13px;min-height:40px;display:inline-flex;align-items:center}
+  .lf-radio{padding:9px 12px;min-height:40px}
+  .cf-radio{min-height:40px;display:inline-flex;align-items:center}
+  .cat-item{padding:12px 10px;min-height:44px}
+  .cat-toggle{min-width:36px;min-height:36px}
+  /* 세그먼트(유리/불리·정렬·차트지표)와 나머지 조작 버튼 */
+  .seg button{min-height:40px;padding-left:12px;padding-right:12px}
+  .reset-btn{min-height:44px}
+  .cf-toggle{min-height:36px;padding:8px 12px}
+  .cf-clear{min-height:36px}
+  .pager button{min-width:40px;min-height:40px}
+}
