@@ -731,3 +731,13 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 /* 표 헤더 라벨 — 데스크톱은 전체, 모바일은 축약 */
 .lb-short{display:none}
 @media(max-width:620px){ .lb-full{display:none} .lb-short{display:inline} }
+
+/* 맞춤 추천 인앱 피드백 — 교사가 따로 연락하지 않아도 그 자리에서 남긴다 */
+.adv-fb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 2px 4px;
+  padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
+.adv-fb .fb-q{font-size:13px;font-weight:700;color:var(--text-soft)}
+.fb-btn{padding:7px 12px;border-radius:9px;font-size:12.5px;font-weight:700;
+  background:var(--surface);color:var(--text-soft);border:1px solid var(--line);cursor:pointer}
+.fb-btn:hover{border-color:var(--primary);color:var(--primary-ink)}
+.fb-input{flex:1;min-width:180px;font-size:13px}
+@media(max-width:620px){.adv-fb{gap:6px;padding:10px 12px}.fb-btn{min-height:40px}}

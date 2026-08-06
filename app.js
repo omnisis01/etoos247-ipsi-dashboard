@@ -1451,8 +1451,12 @@ function advisorPick(opts) {
   //   유불리 점수 순으로 두면 내신 1.2 학생의 '안정' 상위에 입결 2.3대 학교가 올라오고
   //   정작 입결이 더 좋은 곳은 뒤로 밀린다(사용자 지적). 상담에서는 '내가 갈 수 있는 곳 중
   //   가장 좋은 곳'부터 보는 것이 자연스럽다. 동률이면 유불리 점수로 가른다.
+  //   ⚠️ 다만 '적정·도전'까지 같은 잣대로 두면 밴드 경계값만 12개 뜬다 — 실측에서
+  //   내신 2.5의 '적정' 12개가 전부 2.20(=내 등급 −0.3)이었고 정작 2.5 근처는 안 보였다.
+  //   '적정'은 내 등급에 가까운 순, '도전'도 덜 무리한 순이 상담 맥락에 맞다.
   for (const k of Object.keys(out)) {
-    out[k].sort((a, b) => (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
+    if (k === 'safe') out[k].sort((a, b) => (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
+    else out[k].sort((a, b) => (Math.abs(a.diff) - Math.abs(b.diff)) || (a.r.g[0] - b.r.g[0]) || (V(b.r).score - V(a.r).score));
   }
   return { out, noGrade, filtered, blocked, notFinal, bands: BANDS };
 }
@@ -1507,30 +1511,68 @@ function renderAdvisor() {
            ${res.notFinal ? `입결이 <b>1단계 합격자 평균</b>으로만 공개된 <b>${fmtInt(res.notFinal)}건</b>은 최종 등록자 성적이 아니라 제외했습니다.` : ''}</div>
          ${res.bands.map(b => {
         const list = res.out[b.key];
-        return `<div class="adv-band"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
+        return `<div class="adv-band" data-band="${b.key}"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
             <span class="muted">${b.desc} · ${fmtInt(list.length)}개</span></h4>
           ${list.length ? `<div class="adv-grid">${list.slice(0, 12).map(card).join('')}</div>
             ${list.length > 12 ? `<div class="muted" style="padding:4px 2px">상위 12개만 표시 · 전체 ${fmtInt(list.length)}개</div>` : ''}`
             : '<div class="muted" style="padding:6px 2px">해당 구간에 전형이 없습니다.</div>'}</div>`;
       }).join('')}`}
+      ${res ? `<div class="adv-fb" id="advFb">
+        <span class="fb-q">이 추천이 도움이 됐나요?</span>
+        <button class="fb-btn" data-fb="up" aria-label="도움이 됐어요">👍 도움됨</button>
+        <button class="fb-btn" data-fb="down" aria-label="아쉬웠어요">👎 아쉬움</button>
+      </div>` : ''}
     </div>`;
 
   const wasOpen = !$('#advisorDrawer').classList.contains('hidden');
   $('#advisorDrawer').classList.remove('hidden');
-  if (!wasOpen) openDialog($('#advisorInner'), '맞춤 추천');
+  if (!wasOpen) { openDialog($('#advisorInner'), '맞춤 추천'); track('advisor_open'); }
+  /* 베타 계측 — 교사 피드백을 기다리는 동안 '쓰이는가·어디서 멈추는가'를 데이터로 본다.
+     성적을 넣기 전(res=null)과 넣은 뒤를 나눠 보면 이탈 지점이 드러난다. */
+  track('advisor_result', {
+    has_grade: res ? 1 : 0,
+    grade: st.grade ?? '',
+    cat: st.cat || 'all', region: st.region || '', school: st.school || '',
+    width: st.width || 'normal', least_n: st.leastN || '',
+    n_safe: res ? res.out.safe.length : 0,
+    n_fit: res ? res.out.fit.length : 0,
+    n_reach: res ? res.out.reach.length : 0,
+    empty: res && !(res.out.safe.length + res.out.fit.length + res.out.reach.length) ? 1 : 0,
+  });
   $('#advClose').onclick = closeAdvisor;
   inner.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => {
     const k = b.dataset.adv, v = b.dataset.v;
     S.advisor[k] = v;
     if (k === 'leastN' && !v) S.advisor.leastSum = null;
+    track('advisor_filter', { field: k, value: v || '(해제)' });
     save('advisor', S.advisor); renderAdvisor();
   });
+  /* 인앱 피드백. 교사가 따로 연락하지 않아도 그 자리에서 남길 수 있게 한다.
+     👎를 누르면 한 줄 이유를 받는다 — '왜 아쉬웠는지'가 개선의 실마리다. */
+  inner.querySelectorAll('[data-fb]').forEach(b => b.onclick = () => {
+    const v = b.dataset.fb, box = $('#advFb');
+    track('advisor_feedback', { vote: v, grade: st.grade ?? '', cat: st.cat || 'all' });
+    if (v === 'up') { box.innerHTML = '<span class="fb-q">고맙습니다. 의견이 전달됐어요.</span>'; return; }
+    box.innerHTML = `<span class="fb-q">어떤 점이 아쉬웠나요?</span>
+      <input id="advFbTxt" class="adv-input fb-input" maxlength="120" placeholder="예: 우리 학교 전형이 안 보여요">
+      <button class="fb-btn" id="advFbSend">보내기</button>`;
+    $('#advFbTxt').focus();
+    $('#advFbSend').onclick = () => {
+      const t = ($('#advFbTxt').value || '').trim();
+      track('advisor_feedback_text', { text: t.slice(0, 100), grade: st.grade ?? '' });
+      box.innerHTML = '<span class="fb-q">고맙습니다. 의견이 전달됐어요.</span>';
+    };
+  });
+
   const gi = $('#advGrade');
   if (gi) gi.oninput = () => {
     const v = parseFloat(gi.value);
     S.advisor.grade = (v >= 1 && v <= 9) ? v : null;
     save('advisor', S.advisor);
-    clearTimeout(gi._t); gi._t = setTimeout(() => { renderAdvisor(); $('#advGrade')?.focus(); }, 400);
+    clearTimeout(gi._t); gi._t = setTimeout(() => {
+      track('advisor_grade', { grade: S.advisor.grade ?? '', valid: S.advisor.grade ? 1 : 0 });
+      renderAdvisor(); $('#advGrade')?.focus();
+    }, 400);
   };
   const si = $('#advSum');
   if (si) si.oninput = () => {
@@ -1541,6 +1583,8 @@ function renderAdvisor() {
   };
   inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => {
     if (e.target.closest('button')) return;
+    // 추천 카드를 실제로 눌러 상세까지 갔는지 — 추천이 '보기만 하는 기능'인지 가른다
+    track('advisor_card_open', { band: c.closest('.adv-band')?.dataset.band || '' });
     closeAdvisor(); openModal(+c.dataset.open);
   });
 }
