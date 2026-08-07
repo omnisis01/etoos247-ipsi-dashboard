@@ -996,7 +996,9 @@ function renderTrendChart() {
     return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
   }
   const gOk = gradeY.filter(v => v != null), cOk = compY.filter(v => v != null);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  // 장식이 아니라 데이터 차트다 — 숨기지 말고 스크린리더에 요약을 준다
+  const gLab = gradeY.map((v, i) => v == null ? '' : `${2024 + i}년 ${v.toFixed(2)}등급`).filter(Boolean).join(', ');
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="2024~2026 평균 입결·경쟁률 추이. 평균 입결 ${gLab || '데이터 없음'}">`;
   svg += `<line class="axis" x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}"/>`;
   yearsLab.forEach((l, i) => { svg += `<text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle" font-size="10.5" font-weight="700">${l}</text>`; });
   if (gOk.length) { const lo = Math.min(...gOk) - .3, hi = Math.max(...gOk) + .3; svg += series(gradeY, lo, hi, 'var(--primary)', v => v.toFixed(2), true, true); }
