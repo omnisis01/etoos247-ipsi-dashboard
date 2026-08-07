@@ -3,22 +3,60 @@
 새 원천 엑셀(`2027학년도 수시지원의 모든 것 V*.xlsx`)을 받았을 때 따르는 검증 루프.
 하네스 원칙 적용 — 매번 즉석 스크립트를 다시 짜지 말고 이 순서를 재사용한다.
 
-## 루프
+## 루프 (V7.24 기준 현행)
 
 ```
-1. 새 엑셀을 프로젝트의 `입결/` 폴더에 둔다.
-2. build_data.py 의 SRC 를 새 파일 경로로, meta.source 의 버전 라벨을 교체.
-   → 검증: 파일 경로 오타 없이 로드되는지
+1. 새 엑셀을 `../입결 및 인사이트/` 폴더에 둔다.
+2. 경로 교체 — 두 곳이다. 하나만 바꾸면 하네스가 구버전을 대조한다(실제로 V7.24 승격 때
+   verify_insights.py가 V7.15를 계속 보고 있었다).
+   · build_data.py 의 SRC + meta.source 버전 라벨
+   · verify_insights.py 의 SRC
 3. python3 build_data.py
-   → 검증: rows/uni/dept 수와 카테고리 카운트가 이전과 급변하지 않는지
-4. python3 verify_data.py
-   → 검증: 불변식 통과(exit 0). 실패하면 위반 항목 전부 수정 후 재빌드.
-5. git show HEAD:data.js > <scratchpad>/prev_data.js   # 커밋 전 현재 커밋본을 baseline 으로
+   → 검증: rows/uni 수·카테고리 카운트 급변 없는지 + 교정 리포트 전건 적용인지
+     [구분교정] [일자교정] [기준교정] [경쟁률교정] [지역교정] [입결교정] [enroll교정]
+   → "미적용 N건 — SystemExit"가 뜨면 아래 '가드가 중단시켰을 때' 절차.
+4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py
+   → verify_data: 불변식(stdK 버킷 화이트리스트 포함).
+   → qa_comp_ratio: 경쟁률 산술 래칫 — 신규 의심이 늘면 커밋 차단. 교정으로 기존 의심이
+     줄었다면 --save-baseline 으로 기준선 갱신(현재 30건).
+   → verify_insights: 인사이트 to(새 엑셀)·from(enroll26.json 스냅샷) 양쪽 대조.
+     ⚠️ enroll26.json 은 2026 확정 스냅샷이라 엑셀이 갱신돼도 바꾸지 않는다.
+5. git show HEAD:data.js > <scratchpad>/prev_data.js
    python3 verify_data.py --diff <scratchpad>/prev_data.js
-   → 검증: 변경 69행처럼 "의도한 수정"과 diff 가 일치하는지. 신규/삭제 행이 뜻밖이면 중단하고 원인 확인.
-6. 미리보기에서 대표 행 1~2개를 fetch 로 값 재확인(예: 부산대 치의예 최저).
-7. git commit (한 문장 요약 + 변경 대학·항목 목록) → git push.
+   → "의도한 수정"과 diff 가 일치하는지. 뜻밖의 신규/삭제 행이면 중단하고 원인 확인.
+6. 미리보기에서 대표 행 1~2개 값 재확인(예: 부산대 치의예 최저).
+7. python3 stamp_assets.py   # 캐시 버스팅 — 배포 전 필수(아래 절 참조)
+8. git commit → git push. (pre-commit hook 이 4번 하네스를 다시 강제한다)
 ```
+
+## 가드가 중단시켰을 때 ("미적용 N건 — SystemExit")
+
+교정은 전부 **old 값이 엑셀 원문과 일치할 때만 적용**되고, 미적용이 남으면 빌드가 멈춘다.
+이는 오류가 아니라 **엑셀이 그 값을 바꿨다는 신호**다. 항목별로 판정한다.
+- 엑셀이 우리 교정과 같은 값으로 고쳤다 → 교정 임무 완료. data_corrections.json 에서 그 항목 제거.
+- 엑셀이 또 다른 값으로 바꿨다 → 원 근거(why에 적힌 출처)로 재판정 후 old를 새 원문으로 갱신.
+- ⚠️ 가드를 지우거나 --no-verify 로 넘기지 마라. 부경대·공주대 오교정을 배포 전에 잡은 게 이 가드다.
+
+## 교정 타입 (data_corrections.json)
+
+| 타입 | 키 | 대상 | 비고 |
+|---|---|---|---|
+| enroll/drop/add/rename | (uni,dept,jht,jhn) | 2027 모집인원·행 | 112교 요강 전수 대조 유래 |
+| ipgyeol | (uni,dept,jht,jhn) | 2026 입결(g26) | 신설 행에 걸면 무효화 가드가 잡는다 |
+| dkind | (uni,dept,jht,jhn)+from | 전년대비 구분 | to='none'이면 prev도 자동 '-' 동기화(인쇄물이 prev를 직접 찍는다) |
+| date | (uni,jhn,old) | 대학별고사 일자 | 요일 검산 유래 |
+| region | (uni,dept,from_region,from_sigun) | 캠퍼스 | ⚠️ 4키 필수 — 2키 매칭은 멀쩡한 행을 덮는다 |
+| std | (uni,from) | 입결 기준 원문 | std26·std25 양쪽에 적용(한쪽만 하면 추세 차단 회귀) |
+| comp | (uni,dept,jht,jhn)+old | 2026 경쟁률 | 모집인원 산술로 방향 판정된 것만 |
+
+각 항목의 why에 근거를 반드시 남긴다. 근거 없는 교정은 넣지 않는다.
+
+## stdK 버킷 (입결 기준)
+
+`avg / cut50 / cut70 / cut80(75~85%) / cut90 / lowest(최저=사실상 100%컷) / stage1(1단계·최종지표 아님)`
+
+⚠️ 버킷을 추가·변경하면 **세 곳을 함께** 고친다 — 하나만 바꾸면 verify가 잡는다.
+1. build_data.py `std_kind()`  2. verify_data.py allowed 집합  3. app.js `CUT_LABELS`·`CUT_SHORT`·컷 필터 배열
 
 ## 불변식 (verify_data.py 가 강제)
 
@@ -56,6 +94,9 @@ cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
 - diff 재사용 — V6.29 갱신 때 즉석 diff 스크립트를 두 번 짠 낭비를 `--diff` 로 굳힘.
 - 최저 방향 — `3합8→2합5`를 합만 보고 강화로 오판(91전형, 유불리 판정이 반대) → `least_direction()` 집합 비교 + 검증 규칙.
 - 인사이트 합계 — 권역별로 쪼갠 행 하나를 전형 총원으로 오기(경북대 지역의사 8 ← 26) → `verify_insights.py` 는 스코프 후 **합계**로만 비교.
+- 인사이트 from — to(2027)만 검증하니 2026 오기 6건이 숨어 있었다(한양대 621←616 등) → from 축을 enroll26 스냅샷과 대조.
+- 기준 뭉개기 — 75·80·85%컷을 cut70에 합류시켜 어디가 대조에서 229건이 계통 불일치로 오인 → cut80 분리, 버킷 3곳 동기화 규칙.
+- 스왑 방향 — '두 값이 정확히 뒤바뀜'만으로 방향을 정했다가 청주대에서 반증(어디가 쪽이 뒤바뀜) → 방향은 모집인원 산술·대학 공식 자료 같은 제3의 근거로만.
 
 ## 배포 전 필수 — 캐시 버스팅
 

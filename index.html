@@ -25,6 +25,37 @@
 </script>
 <!-- ▲▲ Google Analytics 끝 ▲▲ -->
 
+<!-- 실사용 JS 에러 계측 — 학생 브라우저에서 스크립트가 죽어도 알 방법이 없었다.
+     GA 스텁(gtag)은 위에서 이미 정의돼 dataLayer 큐로 동작하므로, data.js·app.js 로드
+     실패까지 여기서 잡힌다. 세션당 5건 상한(폭주 방지). -->
+<script>
+(function () {
+  var sent = 0;
+  function report(kind, msg, src, line) {
+    if (sent >= 5 || typeof gtag !== 'function') return;
+    sent++;
+    gtag('event', 'js_error', {
+      kind: kind,
+      message: String(msg || '').slice(0, 150),
+      source: String(src || '').split('/').pop().slice(0, 80),
+      line: line || 0,
+      ua_mobile: /Mobi/.test(navigator.userAgent) ? 1 : 0
+    });
+  }
+  window.addEventListener('error', function (e) {
+    if (e.target && (e.target.src || e.target.href)) {   // 리소스 로드 실패(스크립트·CSS)
+      report('resource', 'load fail', e.target.src || e.target.href, 0);
+    } else {
+      report('error', e.message, e.filename, e.lineno);
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    report('promise', (r && (r.message || r)) || 'unhandled rejection', r && r.stack ? r.stack.split('\n')[1] : '', 0);
+  });
+})();
+</script>
+
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">

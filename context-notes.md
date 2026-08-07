@@ -1959,3 +1959,22 @@ prefers-reduced-motion 대응 추가.
 '흰색'으로 읽히는 유령 현상에 한참 헤맸다. **localStorage로 테마를 고정하고 새로 로드해서 재라.**
 ⚠️ `border-color:var(--good)`는 `color:var(--good)`를 부분 문자열로 포함한다 — 일괄 치환 시
 테두리도 잉크색으로 바뀐다. 같은 색군이라 수용했지만, 치환 전에 인지하고 결정할 것.
+
+## (61) 갱신 런북 현행화 + 실사용 JS 에러 계측 (2026-08-07)
+
+**① DATA_UPDATE.md가 V7.24 이전에 멈춰 있었다.** 원서접수(D-31) 직전에 제작자가 최종판
+엑셀을 낼 가능성이 높은데, 이번 세션에서 생긴 것들이 런북에 하나도 없었다. 반영한 것 —
+- 경로 교체가 **두 곳**임을 명시(build_data + verify_insights — 실제로 V7.24 승격 때
+  verify_insights만 V7.15를 계속 봤다)
+- 하네스 4종 통합(verify_data·qa_comp_ratio·verify_insights·stamp_assets)
+- **'가드가 중단시켰을 때' 절차** — 미적용 SystemExit는 오류가 아니라 엑셀이 그 값을
+  바꿨다는 신호. 엑셀이 우리 교정대로 고쳤으면 항목 제거(임무 완료), 다른 값이면 재판정.
+- 교정 타입 10종 표(키·대상·함정) + stdK 버킷 7종과 '3곳 동기화' 규칙
+- Ratchet 절에 이번 세션 유래 3건 추가(인사이트 from·기준 뭉개기·스왑 방향)
+
+**② JS 에러 계측이 0개였다.** 학생 브라우저에서 스크립트가 죽어도 알 방법이 없었다.
+index.html의 GA 스텁 **직후**에 핸들러를 둬서 data.js·app.js 로드 실패까지 잡는다
+(gtag는 dataLayer 큐라 원격 스크립트 로드 전에도 동작). 3종 — error(런타임)·
+promise(unhandledrejection)·resource(스크립트/CSS 로드 실패). 세션당 5건 상한.
+브라우저 실측: 3종 모두 포착, 10건 폭주 시 정확히 5건에서 멈춤, 정상 로드 잡음 0.
+GA에서 `js_error` 이벤트로 보면 된다(ua_mobile 플래그 포함).
