@@ -751,3 +751,11 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}
 }
+
+/* 대학별 원서접수 표기 — 조기마감(공통 9/11보다 이른 마감)은 놓치기 쉬운 함정이라 강조 */
+.uni-apply{margin:2px 0 12px;padding:9px 13px;border-radius:10px;font-size:13px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text-soft)}
+.uni-apply.early{background:var(--bad-soft);border-color:transparent}
+.uni-apply.early b{color:var(--bad-ink)}
+.fav-apply{font-size:11px;font-weight:700;color:var(--text-mute);margin-left:4px;white-space:nowrap}
+.fav-apply.early{color:var(--bad-ink)}

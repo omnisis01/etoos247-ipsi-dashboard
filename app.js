@@ -37,6 +37,20 @@ const ROWS = D.rows.map((r, i) => ({
 ROWS.forEach(r => {
   r.chungRatio = r.chung.some(v => v != null && /^\d+\.\d+$/.test(String(v).trim()));
 });
+/* 대학별 원서접수 기간 — apply_dates.js(fetch_apply_dates.py 생성). 없으면 조용히 비활성. */
+const APPLY = window.IPSI_APPLY || {};
+const _DOW_KO = ['일', '월', '화', '수', '목', '금', '토'];
+function applyInfo(uni) {
+  const a = APPLY[uni];
+  if (!a) return null;
+  const p = t => { const d = new Date(t); return { d, s: `${d.getMonth() + 1}.${d.getDate()}(${_DOW_KO[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }; };
+  const f = p(a.from), t = p(a.to);
+  // 공통 마감(9/11)보다 이른 마감은 학생이 놓치기 딱 좋은 함정 — 강조 대상
+  const early = t.d < new Date(2026, 8, 11);
+  return { from: f.s, to: t.s, toDate: t.d, via: a.via, early,
+           txt: `${f.s} ~ ${t.s}`, short: `~${t.s} 마감` };
+}
+
 /* 짧은 알림. 브라우저 alert()는 페이지를 멈춰 세우고 모바일에서 특히 거슬린다 —
    '지원희망 최대 6장'처럼 학생이 자주 마주치는 안내에는 흐름을 끊지 않는 토스트를 쓴다. */
 let _toastT = null;
@@ -761,8 +775,10 @@ function uniPanelHTML(uni, rows) {
     ((byType[t] = byType[t] || {})[r.jhname] = byType[t][r.jhname] || []).push(r);
   });
   const typeKeys = [...JHTYPE_ORDER, '기타'].filter(t => byType[t]);
+  const ap = applyInfo(uni);
   return `<div class="panel-head"><h2>🏫 ${esc(uni)} 전형별 학과 한눈에</h2>
       <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
+    ${ap ? `<div class="uni-apply${ap.early ? ' early' : ''}">🗓️ 원서접수 <b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten">조기마감</span>' : ''} <span class="muted">· ${esc(ap.via)} 접수 기준</span></div>` : ''}
     <div class="uni-cols">${typeKeys.map(t => {
       const jhs = Object.entries(byType[t]).sort((a, b) => sumE(b[1]) - sumE(a[1]));
       return `<div class="uni-col"><h3 class="uni-type${S.jhtypes.has(t) ? ' on' : ''}" data-jt="${esc(t)}" role="button" tabindex="0" title="클릭하면 아래 표를 이 전형유형으로 거릅니다">${esc(t)} <span class="muted">${jhs.reduce((s, [, rs]) => s + sumE(rs), 0).toLocaleString()}명</span></h3>
@@ -1182,6 +1198,7 @@ function openModal(i) {
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
         ${r.careerSubj ? `<dt>진로선택</dt><dd>${esc(r.careerSubj)}</dd>` : ''}
+        ${(() => { const ap = applyInfo(r.uni); return ap ? `<dt>원서접수</dt><dd><b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten" title="공통 마감(9/11)보다 일찍 닫습니다">조기마감</span>' : ''} <span class="muted">· ${esc(ap.via)}</span></dd>` : ''; })()}
         ${r.date ? `<dt>대학별고사</dt><dd>${esc(r.date)}${r.examKind && r.examKind !== '논술' ? ` ${r.examKind}` : ''}</dd>` : ''}
       </div></div>
       <div class="msec hero-sec"><h4>🎯 올해 입시 유불리 예상 <span class="muted">2026 vs 2025 + 2027 변화 종합 · AI 분석</span></h4>
@@ -1277,7 +1294,7 @@ const BUCKET_NAME = { hope: '지원희망', reach: '상향·도전' };
 function favBucket(i) { return S.fav.hope.includes(i) ? 'hope' : S.fav.reach.includes(i) ? 'reach' : null; }
 function isFav(i) { return !!favBucket(i); }
 function favCount() { return S.fav.hope.length + S.fav.reach.length; }
-function saveFav() { save('fav', S.fav); updateFavBtn(); }
+function saveFav() { save('fav', S.fav); applySchedule(); updateFavBtn(); }
 function updateFavBtn() { $('#favCount').textContent = favCount(); }
 function addFav(i, bucket) {
   const cur = favBucket(i);
@@ -1328,7 +1345,7 @@ function favSlotCard(i, bucket, pos, lastIdx) {
   const r = ROWS[i], v = V(r), d = deltaInfo(r);
   return `<div class="fav-slot" data-open="${i}"><span class="rank-badge ${bucket}">${label}</span>
     <div class="fav-body">
-      <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div>
+      <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span>${(() => { const ap = applyInfo(r.uni); return ap ? ` <span class="fav-apply${ap.early ? ' early' : ''}" title="원서접수 ${ap.txt} · ${esc(ap.via)}">${ap.short}</span>` : ''; })()}</div>
       <div class="fav-dept">${esc(deptDisp(r))}</div>
       <div class="fav-meta"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span> 모집 ${fmtInt(r.enroll)} <span class="delta ${d.cls}">${d.txt}</span>
         · 입결 <b>${fmt(r.g[0])}</b>${stdTag(r)} · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
@@ -1631,7 +1648,7 @@ function printFav() {
     const dirTxt = x => x == null ? '' : x.basisMismatch ? '기준상이' : ({ easier: '유리', harder: '불리', flat: '유지', down: '유리', up: '불리' }[x.dir] || '');
     return `<tr>
       <td class="pr-rank">${label}</td>
-      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(deptDisp(r))}</td>
+      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(deptDisp(r))}${(() => { const ap = applyInfo(r.uni); return ap ? `<br><span class="pr-mut">접수 ${ap.txt}</span>` : ''; })()}</td>
       <td>${esc(r.jhtype)}<br><span class="pr-mut">${esc(r.jhname)}</span></td>
       <td class="pr-c">${fmtInt(r.enroll)}<br><span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span></td>
       <td class="pr-c">${r.hasChoejeo ? esc(r.choejeo) : '<span class="pr-mut">없음</span>'}</td>
@@ -1815,7 +1832,7 @@ $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.n
    ⚠️ 날짜는 2027학년도 대입전형 기본사항(대교협) 기준으로 고정한다 — 명지대 2027 전형계획
    '2026. 9. 7.(월) ~ 11.(금) 중 3일 이상', 유원대 2027 요강 '2026. 09. 07.(월) ~ 09. 11.(금)'로 확인.
    접수 기간·마감 후로 문구가 자동으로 바뀌므로 시점이 지나도 어긋나지 않는다. */
-(function applySchedule() {
+function applySchedule() {
   const box = $('#applyBar'); if (!box) return;
   const S1 = new Date(2026, 8, 7), E1 = new Date(2026, 8, 11, 23, 59);   // 9/7 ~ 9/11
   const now = new Date();
@@ -1832,9 +1849,20 @@ $('#sourceNote').innerHTML = `자료: ${esc(D.meta.source)}<br>전형 ${D.meta.n
     txt = `2027 수시 원서접수 마감(2026.9.11) <span class="ab-sub">이후 일정은 대학별고사·합격자 발표 — 각 입학처 공지를 확인하세요</span>`;
     cls = 'done';
   }
+  // 지원카드에 담긴 대학 중 가장 이른 마감 — 공통 안내보다 이 한 줄이 사고를 막는다
+  try {
+    const favUnis = [...new Set([...(S.fav.hope || []), ...(S.fav.reach || [])].map(i => ROWS[i] && ROWS[i].uni).filter(Boolean))];
+    const deadlines = favUnis.map(u => ({ u, ap: applyInfo(u) })).filter(x => x.ap);
+    if (deadlines.length) {
+      deadlines.sort((a, b) => a.ap.toDate - b.ap.toDate);
+      const first = deadlines[0];
+      txt += ` <span class="ab-sub">내 지원카드에서 가장 이른 마감 — <b>${esc(first.u)} ${first.ap.to}</b>${first.ap.early ? ' <b class="ab-d">(공통 마감 9/11보다 이릅니다)</b>' : ''}</span>`;
+    }
+  } catch (e) {}
   box.className = 'apply-bar ' + cls;
   box.innerHTML = `<span class="ab-ico" aria-hidden="true">🗓️</span><span>${txt}</span>`;
-})();
+}
+applySchedule();
 
 $('#footNote').innerHTML = `<b>이투스247학원</b> &nbsp; '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트

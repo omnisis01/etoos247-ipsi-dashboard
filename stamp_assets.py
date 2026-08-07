@@ -5,7 +5,7 @@
 import hashlib, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ASSETS = ['styles.css', 'data.js', 'insights.js', 'app.js']
+ASSETS = ['styles.css', 'data.js', 'insights.js', 'apply_dates.js', 'app.js']
 
 
 def h8(name):
