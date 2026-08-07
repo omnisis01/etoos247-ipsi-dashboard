@@ -6,7 +6,7 @@
 import json, re, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V7.15_부산동아의대 지역의사제 최저오류.xlsx')
+SRC = os.path.join(HERE, '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것 V7.24_포스텍과기원 입결 추가_대입상담프로그램비공식.xlsx')
 INS = os.path.join(HERE, 'insights.js')
 
 # 자동 대조가 불가능해 의도적으로 건너뛰는 라벨(사유 명시).
@@ -74,6 +74,65 @@ def load_excel():
         kept.append({'uni': a['uni'], 'dept': a['dept'], 'jht': a['jht'], 'jhn': a['jhn'], 'e': a['e']})
     return kept
 
+def resolve(pool, lbl):
+    """라벨 → (전형명, 합계, 스코프행수) 해석. 실패 시 (None, 사유, 0).
+       'to'(V7.24 엑셀)와 'from'(2026 ver8.2 스냅샷) 검증이 이 한 함수를 공유한다 —
+       매칭 로직이 두 벌이면 서로 어긋나는 순간 검증 자체를 못 믿는다."""
+    scope = pool
+    gk = next((k for k, f in GYE if lbl.startswith(k)), None)
+    if gk:
+        f = next(f for k, f in GYE if k == gk)
+        scope = [x for x in scope if f(x['dept'])]
+    for pat, val in JHT:
+        if re.search(pat, lbl):
+            scope = [x for x in scope if x['jht'] == val]; break
+    mgye = re.search(r'\((자연|인문)\)', lbl)
+    if mgye: scope = [x for x in scope if mgye.group(1) in x['dept']]
+    core = lbl[len(gk):] if gk else lbl
+    core = re.sub(r'^ㄴ\s*', '', core)
+    depts = {x['dept'] for x in scope}
+    dhit = [d for d in depts if d and len(d) >= 3 and nz(d) in nz(core)]
+    unresolved = None
+    if not dhit:
+        for kw in ('자유전공', '무전공', '경영대학', '과학기술대학', '글로벌융합대학', '인문사회', '자연공학', '유아교육'):
+            if kw in core:
+                cand = [x for x in scope if kw in x['dept']] or [x for x in scope if '자유전공' in x['dept']]
+                if cand: scope = cand; core = core.replace(kw, '')
+                else: unresolved = kw
+                break
+    elif len(dhit) >= 1:
+        d0 = max(dhit, key=len)
+        scope = [x for x in scope if x['dept'] == d0]
+        core = re.sub(re.escape(d0), '', core)
+    core = nz(re.sub(r'\s(교과|종합|논술)\b', '', re.sub(r'\((교과|종합|논술|실기|자연|인문)\)|—', '', core)))
+    if unresolved: return None, f'학과 수식어 "{unresolved}" 미해결 — 스코프 불명', 0
+    if not core or not scope: return None, '스코프/전형명 추출 불가', 0
+    names = {}
+    for x in scope: names[x['jhn']] = names.get(x['jhn'], 0) + x['e']
+    hits = [k for k in names if nz(k) == core] or \
+           [k for k in names if core and (core in nz(k) or nz(k) in core) and abs(len(nz(k)) - len(core)) <= 6]
+    if len(hits) != 1: return None, f'전형명 유일매칭 실패(후보 {len(hits)})', 0
+    return hits[0], names[hits[0]], len(scope)
+
+
+def load_enroll26():
+    """ver8.2 스냅샷 + build_data의 _E26_OVERRIDES(요강 확정 교정)를 겹쳐 2026 인원 행을 만든다."""
+    snap = json.load(open(os.path.join(HERE, 'enroll26.json'), encoding='utf-8'))['enroll26']
+    bt = open(os.path.join(HERE, 'build_data.py'), encoding='utf-8').read()
+    blk = re.search(r'_E26_OVERRIDES = \{(.*?)\n\}', bt, re.S)
+    ov = {}
+    if blk:
+        for m in re.finditer(r"\('([^']+)', '([^']+)', '([^']+)', '([^']+)'\): (\d+)", blk.group(1)):
+            ov[tuple(m.group(i) for i in (1, 2, 3, 4))] = int(m.group(5))
+    out = []
+    for k, v in snap.items():
+        ps = k.split('|')
+        if len(ps) < 4: continue
+        e = ov.get(tuple(ps[:4]), v)
+        out.append({'uni': ps[0], 'dept': ps[1].replace('(외)', '').strip(), 'jht': ps[2], 'jhn': ps[3], 'e': e})
+    return out
+
+
 def load_insights():
     p = subprocess.run(['node', '-e', f'global.window={{}};require({json.dumps(INS)});process.stdout.write(JSON.stringify(window.IPSI_INSIGHTS))'],
                        capture_output=True, text=True)
@@ -91,6 +150,10 @@ def main():
         sys.exit(0)
     rows, ins = load_excel(), load_insights()
     mism, okc, skips = [], 0, []
+    rows26 = load_enroll26()
+    pool26_by_uni = {}
+    for x in rows26: pool26_by_uni.setdefault(x['uni'], []).append(x)
+    mism26, okc26, skips26 = [], 0, []
     # 0) 행 내부 정합성: from + 증감(note ▲/▼) = to, dir 방향 일치.
     #    실제 사고: 인하대 면접형 from이 면접+서류 합(1,186)으로 적혀 note가 깨졌고,
     #    인하대 지역균형 ▲를 ▼로 적는 수기 실수도 있었다. 산수는 기계가 검사한다.
@@ -122,50 +185,39 @@ def main():
                 if not m: continue
                 if SKIP_PAT.search(lbl): skips.append((u, lbl, '정시/총계 등 엑셀 범위 밖')); continue
                 want = int(m.group(1).replace(',', ''))
-                scope = pool
-                gk = next((k for k, f in GYE if lbl.startswith(k)), None)
-                if gk:
-                    f = next(f for k, f in GYE if k == gk)
-                    scope = [x for x in scope if f(x['dept'])]
-                for pat, val in JHT:                      # 전형유형 스코프
-                    if re.search(pat, lbl):
-                        scope = [x for x in scope if x['jht'] == val]; break
-                mgye = re.search(r'\((자연|인문)\)', lbl)  # 인문/자연 분리 모집
-                if mgye: scope = [x for x in scope if mgye.group(1) in x['dept']]
-                core = lbl[len(gk):] if gk else lbl
-                core = re.sub(r'^ㄴ\s*', '', core)          # 하위항목 표기
-                # 라벨 안에 학과/단과대명이 있으면 그 단위로 스코프(예: 자유전공학부, 경영대학, 무전공)
-                depts = {x['dept'] for x in scope}
-                dhit = [d for d in depts if d and len(d) >= 3 and nz(d) in nz(core)]
-                unresolved = None
-                if not dhit:
-                    for kw in ('자유전공', '무전공', '경영대학', '과학기술대학', '글로벌융합대학', '인문사회', '자연공학', '유아교육'):
-                        if kw in core:
-                            cand = [x for x in scope if kw in x['dept']] or [x for x in scope if '자유전공' in x['dept']]
-                            if cand: scope = cand; core = core.replace(kw, '')
-                            else: unresolved = kw       # 학과 수식어인데 못 풀었으면 전체와 비교하면 안 됨
-                            break
-                elif len(dhit) >= 1:
-                    d0 = max(dhit, key=len)
-                    scope = [x for x in scope if x['dept'] == d0]
-                    core = re.sub(re.escape(d0), '', core)
-                core = nz(re.sub(r'\s(교과|종합|논술)\b', '', re.sub(r'\((교과|종합|논술|실기|자연|인문)\)|—', '', core)))
-                if unresolved: skips.append((u, lbl, f'학과 수식어 "{unresolved}" 미해결 — 스코프 불명')); continue
-                if not core or not scope: skips.append((u, lbl, '스코프/전형명 추출 불가')); continue
-                names = {}
-                for x in scope: names[x['jhn']] = names.get(x['jhn'], 0) + x['e']
-                hits = [k for k in names if nz(k) == core] or \
-                       [k for k in names if core and (core in nz(k) or nz(k) in core) and abs(len(nz(k)) - len(core)) <= 6]
-                if len(hits) != 1: skips.append((u, lbl, f'전형명 유일매칭 실패(후보 {len(hits)})')); continue
-                got = names[hits[0]]                      # ★ 합계로 비교(권역 분리 행 대응)
+                jhn, got, nrow = resolve(pool, lbl)
+                if jhn is None: skips.append((u, lbl, got)); continue
                 if got == want: okc += 1
-                else: mism.append((u, lbl, hits[0], want, got, len(scope)))
+                else: mism.append((u, lbl, jhn, want, got, nrow))
+                # ── 'from'(2026) 검증 — 같은 resolve()로 ver8.2 스냅샷과 대조.
+                #    2027(to)만 보면 반쪽이다. from이 틀리면 증감(▲▼) 서사 전체가 흔들린다.
+                mf = re.match(r'^([\d,]+)명', str(row.get('from', '')).strip())
+                if mf and pool26_by_uni.get(u):
+                    want26 = int(mf.group(1).replace(',', ''))
+                    jhn26, got26, nrow26 = resolve(pool26_by_uni[u], lbl)
+                    # 신설(from=0) 처리 — 2026 풀에 그 전형이 없어야 정상인데, resolve()의
+                    # 부분일치가 이름이 비슷한 기존 전형을 잡아 오탐을 낸다(중앙대 논술(창의형)이
+                    # '논술전형' 484명에 붙었다). 0명 주장은 정확일치 전형이 없으면 '확인'으로 친다.
+                    if want26 == 0:
+                        exact = jhn26 is not None and nz(jhn26) == nz(lbl)
+                        if jhn26 is None or not exact: okc26 += 1
+                        else: mism26.append((u, lbl, jhn26, want26, got26, nrow26))
+                    elif jhn26 is None: skips26.append((u, lbl, got26))
+                    elif got26 == want26: okc26 += 1
+                    else: mism26.append((u, lbl, jhn26, want26, got26, nrow26))
     if mism:
         print(f'FAIL  인사이트 모집인원 불일치 {len(mism)}건 (일치 {okc} · 스킵 {len(skips)})')
         for u, lbl, k, w, g, nrow in sorted(mism, key=lambda x: -abs(x[3] - x[4])):
             print(f'  [{u}] {lbl}: 인사이트 {w}명 / 엑셀 {g}명 ({w-g:+d})  ←"{k}" {nrow}행 합계')
     else:
         print(f'OK  인사이트 모집인원 {okc}건 엑셀과 일치 · 스킵 {len(skips)}건')
+    if mism26:
+        print(f'FAIL  인사이트 2026(from) 불일치 {len(mism26)}건 (일치 {okc26} · 스킵 {len(skips26)})')
+        for u, lbl, k, w, g, nrow in sorted(mism26, key=lambda x: -abs(x[3] - x[4])):
+            print(f'  [{u}] {lbl}: 인사이트 {w}명 / 스냅샷 {g}명 ({w-g:+d})  ←"{k}" {nrow}행 합계')
+        sys.exit(1)
+    else:
+        print(f'OK  인사이트 2026(from) {okc26}건 스냅샷과 일치 · 스킵 {len(skips26)}건')
     if verbose:
         print('\n--- 스킵 목록 ---')
         for u, l, why in skips: print(f'  [{u}] {l} — {why}')
