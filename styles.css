@@ -759,3 +759,6 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .uni-apply.early b{color:var(--bad-ink)}
 .fav-apply{font-size:11px;font-weight:700;color:var(--text-mute);margin-left:4px;white-space:nowrap}
 .fav-apply.early{color:var(--bad-ink)}
+
+/* 접수 배너의 조기마감 경고 강조 */
+.apply-bar .ab-warn{color:var(--bad-ink)}

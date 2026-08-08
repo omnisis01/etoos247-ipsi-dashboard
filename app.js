@@ -1809,12 +1809,16 @@ function applyTheme(t) {
 }
 $('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFavMenu(); closeModal(); closeCompareDrawer(); closeFavDrawer(); closeAdvisor(); closeInsight(); closeSidebar(); } });
-/* 맞춤 추천은 사용성 검증 전까지 베타로 숨긴다. ?beta=1 로 한 번 들어오면 이후 계속 노출된다. */
+/* 맞춤 추천 — 기본 노출로 전환(2026-08-08 사용자 승인). 자체 검증(역전 0건·정렬 결함 수정)과
+   기준 혼재 처리(stage1 제외·배지), 인앱 피드백(GA 수집)을 갖췄고, 원서접수 한 달 전이
+   이 기능이 가장 필요한 시점이다. BETA 배지는 유지 — 피드백 수집 중임을 알린다.
+   ?beta=0 은 비상 오프 스위치(문제 발생 시 그 브라우저에서 숨김), ?beta=1 로 복구. */
 (() => {
   const q = new URLSearchParams(location.search);
-  if (q.get('beta') === '1') save('beta', 1);
-  if (q.get('beta') === '0') { try { localStorage.removeItem('ipsi_beta'); } catch (e) {} }
-  if (!load('beta', 0)) return;
+  if (q.get('beta') === '0') { try { localStorage.setItem('ipsi_beta_off', '1'); } catch (e) {} }
+  if (q.get('beta') === '1') { try { localStorage.removeItem('ipsi_beta_off'); } catch (e) {} }
+  let off = false; try { off = localStorage.getItem('ipsi_beta_off') === '1'; } catch (e) {}
+  if (off) return;
   const b = $('#advisorBtn'); if (!b) return;
   b.classList.remove('hidden');
   b.onclick = renderAdvisor;
@@ -1849,6 +1853,20 @@ function applySchedule() {
     txt = `2027 수시 원서접수 마감(2026.9.11) <span class="ab-sub">이후 일정은 대학별고사·합격자 발표 — 각 입학처 공지를 확인하세요</span>`;
     cls = 'done';
   }
+  // 조기마감 대학 전역 경고 — 대학을 검색·담아야만 보이면 훑어보는 학생은 함정을 모른 채 지나간다.
+  // apply_dates.js 에서 동적으로 산출하므로 재수집하면 문구도 따라 바뀐다.
+  try {
+    if (now <= E1) {
+      const early = Object.entries(APPLY)
+        .filter(([u, a2v]) => new Date(a2v.to) < new Date(2026, 8, 11))
+        .sort((x, y) => new Date(x[1].to) - new Date(y[1].to));
+      if (early.length) {
+        const names = early.slice(0, 3).map(([u]) => u.replace('학교', '')).join('·');
+        const d1 = new Date(early[0][1].to), d2 = new Date(early[early.length - 1][1].to);
+        txt += ` <span class="ab-sub">⚠️ <b class="ab-warn">${names} 등 ${early.length}교는 ${d1.getMonth() + 1}/${d1.getDate()}~${d2.getMonth() + 1}/${d2.getDate()} 조기마감</b> — 대학명을 검색하면 정확한 마감 시각이 보입니다</span>`;
+      }
+    }
+  } catch (e) {}
   // 지원카드에 담긴 대학 중 가장 이른 마감 — 공통 안내보다 이 한 줄이 사고를 막는다
   try {
     const favUnis = [...new Set([...(S.fav.hope || []), ...(S.fav.reach || [])].map(i => ROWS[i] && ROWS[i].uni).filter(Boolean))];
