@@ -762,3 +762,14 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 
 /* 접수 배너의 조기마감 경고 강조 */
 .apply-bar .ab-warn{color:var(--bad-ink)}
+
+/* 지원카드 고사일 확인 안내 — '주의' 톤(정보성). 붉은 경고가 아니라 확인 유도다. */
+.fav-clash{margin:0 0 12px;padding:11px 14px;border-radius:12px;font-size:12.5px;line-height:1.6;
+  background:var(--new-soft);border:1px solid transparent;color:var(--text-soft)}
+.fav-clash>b{color:var(--warn-ink)}
+.fav-clash .fc-line{margin-top:3px}
+.fav-clash .fc-line b{color:var(--warn-ink)}
+.fav-clash .fc-rg{margin-left:3px;padding:0 5px;border-radius:6px;font-size:10px;font-weight:700;
+  background:var(--surface);color:var(--text-mute)}
+.fav-clash .fc-note{margin-top:5px;font-size:11.5px;color:var(--text-mute)}
+.pr-clash{margin:6px 0 10px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:11px}

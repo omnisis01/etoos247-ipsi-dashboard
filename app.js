@@ -1355,6 +1355,42 @@ function favSlotCard(i, bucket, pos, lastIdx) {
       <button class="fav-sw" data-sw="${i}" title="${bucket === 'hope' ? '상향으로 이동' : '지원희망으로 이동'}">⇄</button><button class="fav-rm" data-rm="${i}" title="빼기">✕</button></div>
   </div>`;
 }
+/* 지원카드 고사일 대조 — 같은 날 대학별고사가 있는 카드 조합을 '주의' 톤으로 알린다.
+   수시 6장을 고를 때 고사일까지 대조하는 학생은 드물고, 겹치면 한 장은 원서비만 버린다.
+   같은 날이어도 시간대가 다르면 응시 가능할 수 있으므로 경고가 아니라 확인 안내다.
+   기간형(11.25~27)은 같은 달·7일 이내만 일 단위로 펴서 본다 — 그 이상은 판정이 모호하다. */
+function favDateNotices() {
+  const entries = [];
+  [...(S.fav.hope || []), ...(S.fav.reach || [])].forEach(i => {
+    const r = ROWS[i];
+    if (!r || !r.date) return;
+    const days = new Map();                       // 'm/d' -> viaRange
+    for (const m of r.date.matchAll(/(\d{1,2})\.\s*(\d{1,2})/g))
+      if (!days.has(`${+m[1]}/${+m[2]}`)) days.set(`${+m[1]}/${+m[2]}`, false);
+    for (const m of r.date.matchAll(/(\d{1,2})\.\s*(\d{1,2})[^~\d]*~\s*(?:(\d{1,2})\.)?\s*(\d{1,2})/g)) {
+      const mo1 = +m[1], d1 = +m[2], mo2 = m[3] ? +m[3] : mo1, d2 = +m[4];
+      if (mo1 === mo2 && d2 > d1 && d2 - d1 <= 7)
+        for (let dd = d1 + 1; dd <= d2; dd++) if (!days.has(`${mo1}/${dd}`)) days.set(`${mo1}/${dd}`, true);
+    }
+    days.forEach((viaRange, day) => entries.push({ day, r, viaRange }));
+  });
+  const byDay = {};
+  entries.forEach(e => (byDay[e.day] = byDay[e.day] || []).push(e));
+  return Object.entries(byDay)
+    .filter(([, es]) => new Set(es.map(e => e.r._i)).size >= 2)
+    .map(([day, es]) => {
+      const [mo, dd] = day.split('/').map(Number);
+      return { mo, dd, dow: _DOW_KO[new Date(2026, mo - 1, dd).getDay()],
+               items: [...new Map(es.map(e => [e.r._i, e])).values()] };
+    })
+    .sort((a, b) => (a.mo - b.mo) || (a.dd - b.dd));
+}
+/* 같은 날 항목 표기 — 같은 대학이 둘 이상이면 학과명을 붙여 구분한다. */
+function fcName(e, items) {
+  const dup = items.filter(x => x.r.uni === e.r.uni).length > 1;
+  return `${esc(e.r.uni.replace('학교', ''))}${dup ? ` ${esc(deptDisp(e.r).slice(0, 12))}` : ''} ${esc(e.r.examKind || '고사')}`;
+}
+
 function openFav() {
   const inner = $('#favInner');
   const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
@@ -1362,6 +1398,9 @@ function openFav() {
       <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
     <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favShare">🔗 링크 복사</button><button class="ghost-btn" id="favPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
     <div class="fav-wrap">
+      ${(() => { const ns = favDateNotices(); return ns.length ? `<div class="fav-clash">🗓️ <b>고사일 확인</b> — 같은 날에 대학별고사가 있는 카드가 있어요.
+        ${ns.map(n => `<div class="fc-line"><b>${n.mo}/${n.dd}(${n.dow})</b> — ${n.items.map(e => `${fcName(e, n.items)}${e.viaRange ? '<span class="fc-rg" title="기간형 일정 — 실제 배정일을 확인하세요">기간</span>' : ''}`).join(' · ')}</div>`).join('')}
+        <div class="fc-note">시간대가 다르면 응시할 수 있는 경우도 있어요. 각 대학의 고사 시간을 확인하세요.</div></div>` : ''; })()}
       <div class="fav-group-label hope">🎯 지원희망 (수시 6장) <span class="muted">${S.fav.hope.length}/6</span></div>
       ${mk('hope', FAV_HOPE_MAX)}
       <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
@@ -1662,8 +1701,12 @@ function printFav() {
     return `<h2 class="pr-h2">${name} <span class="pr-mut">${S.fav[bucket].length}장</span></h2>
       <table class="pr-table"><thead><tr><th>순위</th><th>대학 / 모집단위</th><th>전형</th><th>모집<br>(전년대비)</th><th>수능최저</th><th>입결<br>(2026)</th><th>경쟁률<br>(2026)</th><th>올해<br>유불리</th></tr></thead><tbody>${rows}</tbody></table>`;
   };
+  const notices = favDateNotices();
+  const noticeHtml = notices.length
+    ? `<div class="pr-clash">🗓️ 고사일 확인 — ${notices.map(n => `${n.mo}/${n.dd}(${n.dow}): ${n.items.map(e => fcName(e, n.items)).join('·')}`).join(' / ')} <span class="pr-mut">(시간대가 다르면 응시 가능할 수 있음 — 각 대학 고사 시간 확인)</span></div>`
+    : '';
   printDoc('내 지원카드', `지원희망 ${S.fav.hope.length}장 · 상향·도전 ${S.fav.reach.length}장`,
-    section('hope', '🎯 지원희망') + section('reach', '🚀 상향·도전'));
+    noticeHtml + section('hope', '🎯 지원희망') + section('reach', '🚀 상향·도전'));
 }
 function printCompare() {
   const items = [...S.compare].map(i => ROWS[i]);
