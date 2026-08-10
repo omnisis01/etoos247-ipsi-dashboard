@@ -216,6 +216,8 @@ const TOP_UNIS = new Set(['서울대학교', '연세대학교', '고려대학교
 const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semiconductor_contract') || TOP_UNIS.has(r.uni);
 
 /* ---------- state ---------- */
+/* 지원희망은 법정 6장 + 후보 4칸(7~10번, '후보' 배지로 구분) — 넓게 담고 6장으로 추리는 용도. */
+const FAV_HOPE_MAX = 10, FAV_REACH_MAX = 3, SUSI_LIMIT = 6;
 const S = {
   cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '',
   changes: new Set(), sort: 'impact', sortDir: -1,
@@ -230,10 +232,9 @@ const S = {
   expanded: new Set(load('expanded', [])),
   advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '', school: '', width: 'normal' }, load('advisor', {})),
 };
-const FAV_HOPE_MAX = 6, FAV_REACH_MAX = 3;
 function migrateFav(v) {
-  if (Array.isArray(v)) return { hope: v.slice(0, 6), reach: v.slice(6, 9) };       // 구버전(단일 배열) 호환
-  if (v && Array.isArray(v.hope) && Array.isArray(v.reach)) return { hope: v.hope.slice(0, 6), reach: v.reach.slice(0, 3) };
+  if (Array.isArray(v)) return { hope: v.slice(0, FAV_HOPE_MAX), reach: v.slice(FAV_HOPE_MAX, FAV_HOPE_MAX + FAV_REACH_MAX) };  // 구버전(단일 배열) 호환
+  if (v && Array.isArray(v.hope) && Array.isArray(v.reach)) return { hope: v.hope.slice(0, FAV_HOPE_MAX), reach: v.reach.slice(0, FAV_REACH_MAX) };
   return { hope: [], reach: [] };
 }
 function load(k, def) { try { return JSON.parse(localStorage.getItem('ipsi_' + k)) ?? def; } catch (e) { return def; } }
@@ -1225,7 +1226,7 @@ function openModal(i) {
       ${r.note ? `<div class="msec"><h4>💡 지원 시 유의사항</h4><div class="change-box" style="background:var(--surface-2);color:var(--text-soft);border-color:var(--line)">${expandNote(r)}</div></div>` : ''}
       <div class="msec"><h4>🗂️ 지원카드에 담기 <span class="muted">지원희망 또는 상향을 선택</span></h4>
         <div class="modal-actions">
-          <button class="ghost-btn fav-pick ${bk === 'hope' ? 'on' : ''}" id="modalFavHope">${bk === 'hope' ? '✓ 지원희망에 담김' : '🎯 지원희망으로'} <span class="muted">${S.fav.hope.length}/6</span></button>
+          <button class="ghost-btn fav-pick ${bk === 'hope' ? 'on' : ''}" id="modalFavHope">${bk === 'hope' ? '✓ 지원희망에 담김' : '🎯 지원희망으로'} <span class="muted">${S.fav.hope.length}/${FAV_HOPE_MAX}</span></button>
           <button class="ghost-btn fav-pick reach ${bk === 'reach' ? 'on' : ''}" id="modalFavReach">${bk === 'reach' ? '✓ 상향에 담김' : '🚀 상향·도전으로'} <span class="muted">${S.fav.reach.length}/3</span></button>
         </div>
         <button class="ghost-btn" id="modalAdd" style="width:100%;justify-content:center;margin-top:8px">${inCmp ? '✓ 비교함에서 보기' : '⇄ 비교함에 담기'}</button>
@@ -1328,7 +1329,7 @@ function openFavMenu(i, anchor) {
   const cur = favBucket(i);
   const m = el('div', 'fav-menu');
   m.innerHTML = `<div class="fm-title">지원카드에 담기</div>
-    <button data-b="hope" class="${cur === 'hope' ? 'on' : ''}"><span>🎯 지원희망</span><span class="fm-n">${S.fav.hope.length}/6</span></button>
+    <button data-b="hope" class="${cur === 'hope' ? 'on' : ''}"><span>🎯 지원희망</span><span class="fm-n">${S.fav.hope.length}/${FAV_HOPE_MAX}</span></button>
     <button data-b="reach" class="${cur === 'reach' ? 'on reach' : 'reach'}"><span>🚀 상향·도전</span><span class="fm-n">${S.fav.reach.length}/3</span></button>
     ${cur ? `<button data-b="remove" class="fm-rm">✕ 지원카드에서 빼기</button>` : ''}`;
   document.body.appendChild(m);
@@ -1340,10 +1341,12 @@ function openFavMenu(i, anchor) {
   setTimeout(() => document.addEventListener('click', function h() { closeFavMenu(); document.removeEventListener('click', h); }), 0);
 }
 function favSlotCard(i, bucket, pos, lastIdx) {
+  const cand = bucket === 'hope' && pos >= SUSI_LIMIT;      // 7~10번은 법정 6장 밖의 후보 칸
   const label = bucket === 'hope' ? (pos + 1) : '상' + (pos + 1);
-  if (i == null) return `<div class="fav-slot empty"><span class="rank-badge ${bucket}">${label}</span><span class="fav-empty-t">비어 있음 — ${bucket === 'hope' ? '표의 ☆에서 지원희망으로 담기' : '상향으로 담기'}</span></div>`;
+  const badge = `<span class="rank-badge ${bucket}${cand ? ' cand' : ''}"${cand ? ' title="후보 칸 — 수시 원서는 최대 6장"' : ''}>${label}</span>`;
+  if (i == null) return `<div class="fav-slot empty">${badge}<span class="fav-empty-t">비어 있음 — ${bucket === 'hope' ? (cand ? '후보로 담기 (수시 원서는 최대 6장)' : '표의 ☆에서 지원희망으로 담기') : '상향으로 담기'}</span></div>`;
   const r = ROWS[i], v = V(r), d = deltaInfo(r);
-  return `<div class="fav-slot" data-open="${i}"><span class="rank-badge ${bucket}">${label}</span>
+  return `<div class="fav-slot" data-open="${i}">${badge}
     <div class="fav-body">
       <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span>${(() => { const ap = applyInfo(r.uni); return ap ? ` <span class="fav-apply${ap.early ? ' early' : ''}" title="원서접수 ${ap.txt} · ${esc(ap.via)}">${ap.short}</span>` : ''; })()}</div>
       <div class="fav-dept">${esc(deptDisp(r))}</div>
@@ -1394,14 +1397,14 @@ function fcName(e, items) {
 function openFav() {
   const inner = $('#favInner');
   const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
-  inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/9</span></h3>
+  inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/${FAV_HOPE_MAX + FAV_REACH_MAX}</span></h3>
       <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
     <div style="display:flex;gap:8px">${favCount() ? '<button class="ghost-btn" id="favShare">🔗 링크 복사</button><button class="ghost-btn" id="favPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="favClear">전체 비우기</button>' : ''}<button class="modal-close" id="favClose">✕</button></div></div>
     <div class="fav-wrap">
       ${(() => { const ns = favDateNotices(); return ns.length ? `<div class="fav-clash">🗓️ <b>고사일 확인</b> — 같은 날에 대학별고사가 있는 카드가 있어요.
         ${ns.map(n => `<div class="fc-line"><b>${n.mo}/${n.dd}(${n.dow})</b> — ${n.items.map(e => `${fcName(e, n.items)}${e.viaRange ? '<span class="fc-rg" title="기간형 일정 — 실제 배정일을 확인하세요">기간</span>' : ''}`).join(' · ')}</div>`).join('')}
         <div class="fc-note">시간대가 다르면 응시할 수 있는 경우도 있어요. 각 대학의 고사 시간을 확인하세요.</div></div>` : ''; })()}
-      <div class="fav-group-label hope">🎯 지원희망 (수시 6장) <span class="muted">${S.fav.hope.length}/6</span></div>
+      <div class="fav-group-label hope">🎯 지원희망 (수시 6장 + 후보 4칸) <span class="muted">${S.fav.hope.length}/${FAV_HOPE_MAX}</span></div>
       ${mk('hope', FAV_HOPE_MAX)}
       <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
       ${mk('reach', FAV_REACH_MAX)}
@@ -1697,7 +1700,7 @@ function printFav() {
   };
   const section = (bucket, name) => {
     if (!S.fav[bucket].length) return '';
-    const rows = S.fav[bucket].map((i, k) => card(i, bucket === 'hope' ? (k + 1) : '상' + (k + 1))).join('');
+    const rows = S.fav[bucket].map((i, k) => card(i, bucket === 'hope' ? (k >= SUSI_LIMIT ? `${k + 1} (후보)` : k + 1) : '상' + (k + 1))).join('');
     return `<h2 class="pr-h2">${name} <span class="pr-mut">${S.fav[bucket].length}장</span></h2>
       <table class="pr-table"><thead><tr><th>순위</th><th>대학 / 모집단위</th><th>전형</th><th>모집<br>(전년대비)</th><th>수능최저</th><th>입결<br>(2026)</th><th>경쟁률<br>(2026)</th><th>올해<br>유불리</th></tr></thead><tbody>${rows}</tbody></table>`;
   };

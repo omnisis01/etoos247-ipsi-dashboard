@@ -450,6 +450,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   background:var(--neutral-soft);color:var(--text-mute);align-self:center}
 .rank-badge.hope{background:var(--primary);color:#fff}
 .rank-badge.reach{background:var(--new);color:#fff;font-size:11px}
+/* 후보 칸(지원희망 7~10번) — 법정 6장 밖임을 옅은 배지로 구분 */
+.rank-badge.cand{background:var(--surface-2);color:var(--text-mute);border:1.5px dashed var(--text-mute)}
 .fav-empty-t{font-size:12.5px;font-weight:600}
 .fav-body{flex:1;min-width:0}
 .fav-uni{font-size:11.5px;font-weight:700;color:var(--text-soft)}
