@@ -208,12 +208,22 @@ const CAT_ICON = {
 };
 const CATS = D.cats;
 const CAT_BY = {}; CATS.forEach(c => CAT_BY[c.key] = c);
+// 표기 교정(사용자 요청): '비상경'만으로는 인문 계열임이 안 드러난다. 데이터 재빌드와 무관하게 유지되도록 여기서 덮는다.
+{ const c = CATS.find(x => x.label === '비상경'); if (c) c.label = '인문(비상경)'; }
 const JHTYPES = ['학생부교과', '학생부종합', '논술', '실기/실적', '특기자'];
 const REGIONS = [...new Set(ROWS.map(r => r.region).filter(Boolean))].sort();
 // '올해 유불리 예상' 추천은 메디컬(전 대학) 또는 상위권 본교(SKY·서성한·중경외시·건동홍)로 한정
 const TOP_UNIS = new Set(['서울대학교', '연세대학교', '고려대학교', '서강대학교', '성균관대학교', '한양대학교',
   '중앙대학교', '경희대학교', '한국외국어대학교', '서울시립대학교', '건국대학교', '동국대학교', '홍익대학교']);
 const isPickWorthy = r => r.cats.includes('medical') || r.cats.includes('semiconductor_contract') || TOP_UNIS.has(r.uni);
+// 검색 결과 카드 정렬용 대학 서열(사용자 지정, 건동홍숙까지) — 이후는 가나다순
+const UNI_RANK = ['서울대학교', '연세대학교', '고려대학교', '서강대학교', '성균관대학교', '한양대학교',
+  '중앙대학교', '경희대학교', '한국외국어대학교', '서울시립대학교', '이화여자대학교',
+  '건국대학교', '동국대학교', '홍익대학교', '숙명여자대학교'];
+const uniRank = u => { const i = UNI_RANK.indexOf(u); return i < 0 ? 999 : i; };
+// 특수전형 판별(지역인재·고른기회·사회배려 등) — 전형명 정렬에서 맨 뒤로 보낸다.
+// ⚠️ '지역균형'은 특수전형이 아니다 — '지역'이 아니라 '지역인재'로만 잡는다.
+const SPECIAL_JH = /지역인재|고른기회|기회균형|사회배려|사회통합|사회다양성|사회기여|농어촌|특성화고|장애|특수교육|보훈|서해\s?5도|만학|재직|저소득|기초생활|한부모|다문화|북한이탈|새터민|성인학습|평생학습/;
 
 /* ---------- state ---------- */
 /* 지원희망은 법정 6장 + 후보 4칸(7~10번, '후보' 배지로 구분) — 넓게 담고 6장으로 추리는 용도. */
@@ -469,7 +479,15 @@ function passChange(row) {
 let FILTERED = [];
 function applyFilters() {
   const q = S.search.trim().toLowerCase();
-  const SEARCH_TOKENS = q ? q.split(/\s+/).filter(Boolean) : [];
+  // 약칭 확장: 학생들은 '이화여자'가 아니라 '이화여대'로 친다. 정식 명칭의 부분문자열이
+  // 되도록 토큰을 고쳐 쓴다('이화여대'→'이화여자'⊂이화여자대학교, '한국외대'→'한국외국어대').
+  const expandToken = t => t
+    .replace(/여대/g, '여자')
+    .replace(/외대/g, '외국어대')
+    .replace(/교대$/, '교육대')
+    .replace(/^카이스트$/, 'kaist')
+    .replace(/^(포스텍|포항공대)$/, 'postech');
+  const SEARCH_TOKENS = q ? q.split(/\s+/).filter(Boolean).map(expandToken) : [];
   FILTERED = ROWS.filter(r => {
     if (S.cat !== 'all' && !r.cats.includes(S.cat)) return false;
     if (S.jhtypes.size && !S.jhtypes.has(r.jhtype)) return false;
@@ -781,14 +799,26 @@ function uniPanelHTML(uni, rows) {
       <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
     ${ap ? `<div class="uni-apply${ap.early ? ' early' : ''}">🗓️ 원서접수 <b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten">조기마감</span>' : ''} <span class="muted">· ${esc(ap.via)} 접수 기준</span></div>` : ''}
     <div class="uni-cols">${typeKeys.map(t => {
-      const jhs = Object.entries(byType[t]).sort((a, b) => sumE(b[1]) - sumE(a[1]));
+      // 전형명은 가나다순, 특수전형(지역인재·고른기회·사회배려 등)은 맨 뒤(그 안에서도 가나다).
+      const jhs = Object.entries(byType[t]).sort((a, b) =>
+        (SPECIAL_JH.test(a[0]) - SPECIAL_JH.test(b[0])) || a[0].localeCompare(b[0], 'ko'));
       return `<div class="uni-col"><h3 class="uni-type${S.jhtypes.has(t) ? ' on' : ''}" data-jt="${esc(t)}" role="button" tabindex="0" title="클릭하면 아래 표를 이 전형유형으로 거릅니다">${esc(t)} <span class="muted">${jhs.reduce((s, [, rs]) => s + sumE(rs), 0).toLocaleString()}명</span></h3>
         ${jhs.map(([jh, rs]) => `<details class="uni-jh"><summary><b>${esc(jh)}</b> <span class="muted">${rs.length}개 단위 · ${sumE(rs).toLocaleString()}명</span></summary>
           <ul>${rs.slice().sort((a, b) => (b.enroll || 0) - (a.enroll || 0)).map(r =>
-            `<li>${esc(deptDisp(r)).replace(/\n/g, ' ')} <span class="muted">${r.enroll != null ? r.enroll + '명' : ''}</span></li>`).join('')}</ul>
+            `<li class="uni-dept" data-i="${r._i}" role="button" tabindex="0" title="누르면 상세 카드가 열립니다">${esc(deptDisp(r)).replace(/\n/g, ' ')} <span class="muted">${r.enroll != null ? r.enroll + '명' : ''}</span></li>`).join('')}</ul>
         </details>`).join('')}</div>`;
     }).join('')}</div>`;
 }
+// 학과 클릭 → 해당 학과 상세 카드(위임 — 패널은 renderAll마다 다시 그려진다)
+document.addEventListener('click', e => {
+  const li = e.target.closest && e.target.closest('#uniPanel .uni-dept');
+  if (li) { openModal(+li.dataset.i); return; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const li = e.target.closest && e.target.closest('#uniPanel .uni-dept');
+  if (li) { e.preventDefault(); openModal(+li.dataset.i); }
+});
 // 유형 헤더 클릭 → 전형유형 필터와 연동(위임 — 패널은 renderAll마다 다시 그려진다)
 document.addEventListener('click', e => {
   const h = e.target.closest && e.target.closest('#uniPanel .uni-type');
@@ -885,7 +915,16 @@ function renderHighlights() {
     return true;
   });
   let top;
-  if (S.hlFilter === 'all') {                       // 유리·불리·신설 교차 배치(편향 방지)
+  if (S.search.trim()) {
+    // 검색 중엔 관련도 교차 배치 대신 대학 서열순(건동홍숙까지, 이후 가나다).
+    // 같은 대학 안에서는 교과(추천) → 학종 → 논술 → 실기 순.
+    const ji = t => { const i = JHTYPE_ORDER.indexOf(t); return i < 0 ? 9 : i; };
+    pool.sort((a, b) => uniRank(a.uni) - uniRank(b.uni)
+      || (uniRank(a.uni) === 999 ? a.uni.localeCompare(b.uni, 'ko') : 0)
+      || ji(a.jhtype) - ji(b.jhtype)
+      || a.jhname.localeCompare(b.jhname, 'ko'));
+    top = pool.slice(0, 12);
+  } else if (S.hlFilter === 'all') {                // 유리·불리·신설 교차 배치(편향 방지)
     const g = [], b = [], n = [];
     pool.forEach(r => { const c = V(r).cls; (c === 'good' ? g : c === 'bad' ? b : n).push(r); });
     [g, b, n].forEach(a => a.sort((x, y) => hlRelevance(y) - hlRelevance(x)));
@@ -987,7 +1026,7 @@ function renderCharts() {
         <div class="bar-track"><div class="bar-fill" style="width:${w.toFixed(1)}%;background:${catColor}">${inside ? label : ''}</div>${inside ? '' : `<span class="bar-val-out">${label}</span>`}</div>
         <div class="bn">${metric === 'grade' ? a.gn : a.n}개</div></div>`;
     }).join('');
-    $('#chartA').querySelectorAll('.bl').forEach(b => b.onclick = () => { $('#search').value = b.dataset.uni; S.search = b.dataset.uni; renderAll(); });
+    $('#chartA').querySelectorAll('.bl').forEach(b => b.onclick = () => { $('#search').value = b.dataset.uni; S.search = b.dataset.uni; syncSearchClear(); renderAll(); });
   }
   // trend chart B
   renderTrendChart();
@@ -1663,11 +1702,20 @@ const NOTE_RULES = [
   [/교과이수기준|핵심권장과목/, '이 모집단위는 교과이수기준과 핵심권장과목 이수 여부를 확인합니다. 미이수 시 평가에서 불리하거나 지원 자체가 제한될 수 있으니, 모집요강의 권장과목 표와 본인 이수 내역을 대조하세요.'],
   [/본캠.*학적부? 이동.*불가능/, '입학 후 본캠퍼스로의 학적 이동(캠퍼스 간 전과)은 사실상 불가능합니다. 소속 캠퍼스를 확인하고, 캠퍼스가 다른 동일 학과와 혼동하지 않도록 주의하세요.'],
   [/일반고:?면접형/, '고교 유형별 합격 비율이 전형에 따라 다릅니다. 표기된 비율은 일반고 출신 합격자 비중으로, 본인 고교 유형에서의 실질 경쟁 구도를 가늠하는 참고 지표로 활용하세요.'],
+  [/[가-힣]+대?식\s*(환산)?\s*(등급|점수)/, '이 대학 입결은 대학 자체 산출 방식(환산등급·환산점수)의 값입니다. 학교 내신 평균등급과 산식이 달라 그대로 비교하면 오판할 수 있으니, 해당 대학 입학처가 제공하는 산출 방식으로 본인 성적을 환산해 비교하세요.'],
+  [/국영수사과|국·?영·?수·?사·?과/, '표기된 입결은 국어·영어·수학·사회·과학 반영교과 기준 등급입니다. 전 과목 평균이 아니라 반영교과만 계산한 값이므로, 본인 성적도 같은 교과 조합으로 산출해 비교해야 정확합니다.'],
+  [/하락 예상/, '전형 방법이나 반영 방식 변화로 올해 합격선이 전년보다 낮아질(등급 숫자가 커질) 수 있다는 원자료의 분석입니다. 어디까지나 예측이므로 확정 정보로 받아들이지 말고, 전년 입결과 함께 보수적으로 참고하세요.'],
+  [/등급 상승 가능|상승 예상/, '수능최저 완화 등으로 지원 문턱이 낮아져 경쟁이 붙으면 합격선이 오히려 올라갈(등급 숫자가 작아질) 수 있다는 원자료의 분석입니다. 전년 입결만 믿고 지원선을 잡으면 위험할 수 있으니 여유를 두고 판단하세요.'],
+  [/등급\s?왜곡/, '교과 반영 방식이 바뀌어 표기된 등급이 실제 합격자 수준과 다르게 보일 수 있습니다. 이 값만으로 판단하지 말고, 대학어디가(adiga.kr)의 2026학년도 공식 입결과 대학 입학처 발표를 함께 확인하세요.'],
+  [/일반고\s*\d점대\s*지원/, '일반고 기준으로 해당 내신 등급대라면 지원을 검토해볼 만하다는 원자료의 분석입니다. 고교 유형과 학교 내 위치에 따라 실제 경쟁력은 달라지므로, 담임·진학 교사와 상의해 최종 판단하세요.'],
+  [/합격\s?확률|합격확률/, '원자료가 제시한 사실상의 지원 하한선입니다. 이 등급대를 넘어서는 성적이라면 이 전형은 상향 지원으로 분류하고, 다른 전형과의 조합(수시 6장)을 함께 설계하세요.'],
+  [/핵심과목의?\s*내신|교과이수\s*중요|선택과목 이수 여부|원점수 및 세특/, '지원 학과와 관련된 과목의 이수 여부·성적·세부능력특기사항이 평가에 비중 있게 반영됩니다. 학생부에서 해당 과목 기록을 미리 점검하고, 이수 내역이 부족하면 지원 전략을 재검토하세요.'],
+  [/전형\s*방식\s*등급|방식 등급 평균/, '표기된 입결은 해당 전형의 성적 반영 방식으로 산출한 등급 평균입니다. 단순 전 과목 평균과 다를 수 있으니, 같은 방식으로 본인 성적을 계산해 비교하세요.'],
 ];
 function expandNote(r) {
   const note = r.note || '';
   for (const [re, tip] of NOTE_RULES) if (re.test(note)) return `<b>${esc(note)}</b><br><span style="display:block;margin-top:6px">${esc(tip)}</span>`;
-  return `<b>${esc(note)}</b><br><span style="display:block;margin-top:6px">위 내용은 원자료의 비고를 옮긴 것입니다. 세부 조건과 예외는 반드시 해당 대학의 2027학년도 수시 모집요강 원문에서 확인하세요.</span>`;
+  return `<b>${esc(note)}</b><br><span style="display:block;margin-top:6px">전형 조건과 예외 사항은 대학마다 다르게 적용됩니다. 지원 전에 반드시 해당 대학의 2027학년도 수시 모집요강 원문에서 세부 내용을 확인하고, 애매한 부분은 대학 입학처에 직접 문의하세요.</span>`;
 }
 
 function printDoc(title, subtitle, bodyHTML) {
@@ -1747,9 +1795,10 @@ function renderInsightBanner() {
   const sec = $('#insightBanner');
   const list = (INS.order || []).filter(u => INS.unis[u]);
   if (!sec || list.length < 4) { if (sec) sec.classList.add('hidden'); return; }
-  // 인덱스를 고르게 분산해 SKY~거점국립~여대까지 다양하게 노출
-  const N = 4, feat = [];
-  for (let i = 0; i < N; i++) feat.push(list[Math.round(i * (list.length - 1) / (N - 1))]);
+  // 디폴트는 최상위권 5교(사용자 지정) — 균등 분산은 서울대 옆에 전남대·금오공대가 놓여 어색했다.
+  const N = 5, PREF = ['서울대학교', '연세대학교', '고려대학교', '성균관대학교', '한양대학교'];
+  const feat = PREF.filter(u => INS.unis[u]);
+  for (const u of list) { if (feat.length >= N) break; if (!feat.includes(u)) feat.push(u); }
   const cards = feat.map(u => {
     const d = INS.unis[u];
     const tags = (d.tags || []).slice(0, 2).map(t => `<span class="ins-tag">${esc(t)}</span>`).join('');
@@ -1844,10 +1893,12 @@ $('#insightBtn').onclick = () => openInsight();
 
 /* ----- topbar / theme / search / mobile ----- */
 let searchT;
-$('#search').oninput = e => { S.search = e.target.value; clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
+const syncSearchClear = () => $('#searchClear').classList.toggle('hidden', !S.search.trim());
+$('#search').oninput = e => { S.search = e.target.value; syncSearchClear(); clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
+$('#searchClear').onclick = () => { S.search = ''; $('#search').value = ''; syncSearchClear(); renderAll(); $('#search').focus(); };
 $('#resetBtn').onclick = () => {
   S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
-  renderFilters(); renderAll();
+  syncSearchClear(); renderFilters(); renderAll();
 };
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;   // 아이콘·로고는 CSS가 data-theme로 전환

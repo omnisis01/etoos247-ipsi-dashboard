@@ -59,7 +59,7 @@
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=eb613a28">
+<link rel="stylesheet" href="styles.css?v=7573dd72">
 </head>
 <body>
 <a href="#content" class="skip-link">본문으로 건너뛰기</a>
@@ -95,6 +95,7 @@
       <div class="search-wrap">
         <span class="search-ico" aria-hidden="true">🔎</span>
         <input id="search" type="search" aria-label="대학·학과 검색" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
+        <button id="searchClear" class="search-clear hidden" aria-label="검색어 지우고 전체로 돌아가기" title="검색어 지우기">✕</button>
       </div>
       <div class="top-actions">
         <button id="insightBtn" class="ghost-btn insight-btn" aria-label="대학별 변화 인사이트 열기"><span aria-hidden="true">📰</span> <span class="btn-label">변화 인사이트</span></button>
@@ -102,7 +103,7 @@
         <button id="compareBtn" class="ghost-btn" aria-label="비교함 열기"><span aria-hidden="true">⇄</span> <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
         <!-- 베타: ?beta=1 로 들어온 경우에만 보인다(app.js가 hidden 해제) -->
         <button id="advisorBtn" class="ghost-btn hidden" aria-label="성적 맞춤 추천 열기"><span aria-hidden="true">🧭</span> <span class="btn-label">맞춤 추천</span> <span class="badge beta-badge">BETA</span></button>
-        <button id="themeBtn" class="icon-btn" aria-label="다크/라이트 테마 전환"></button>
+        <button id="themeBtn" class="ghost-btn theme-btn" aria-label="다크/화이트 테마 전환"></button>
       </div>
     </header>
 
@@ -197,6 +198,6 @@
 <script src="data.js?v=6f72c2d3"></script>
 <script src="insights.js?v=eae2e619"></script>
 <script src="apply_dates.js?v=b0cbda51"></script>
-<script src="app.js?v=afc1b11b"></script>
+<script src="app.js?v=f83129b8"></script>
 </body>
 </html>
