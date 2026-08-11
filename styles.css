@@ -624,6 +624,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .uni-jh summary:hover{background:var(--surface-2)}
 .uni-jh ul{margin:4px 0 6px 16px;padding:0;list-style:disc;color:var(--text)}
 .uni-jh li{margin:2px 0}
+/* 상세 모달 유불리 안내 두 줄 — muted 회색으론 안 읽힌다는 피드백. 본문색 볼드로 또렷하게. */
+.verdict-note{color:var(--text);font-weight:700;font-size:12.5px;line-height:1.5}
 .uni-jh li.uni-dept{cursor:pointer;border-radius:6px;padding:1px 4px;margin-left:-4px}
 .uni-jh li.uni-dept:hover{background:var(--primary-soft);color:var(--primary-ink)}
 

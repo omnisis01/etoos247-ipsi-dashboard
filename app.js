@@ -1250,8 +1250,8 @@ function openModal(i) {
           ${yoyCmp(`추합(충원, ${chungUnit(r)})`, v.ch, x => fmtChung(r, x), dir => dir === 'up')}
         </tbody></table>
         <div class="impact-box" style="margin-top:12px">${reasons}</div>
-        <div class="muted" style="margin-top:6px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.</div>
-        <div class="muted" style="margin-top:4px">※ 다만 실제 입시에서는 입결이 내려간 학과로 오히려 지원이 몰려 경쟁이 폭발하는 경우도 있으니 주의하세요.</div>
+        <div class="verdict-note" style="margin-top:8px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.</div>
+        <div class="verdict-note" style="margin-top:4px">※ 다만 실제 입시에서는 입결이 내려간 학과로 오히려 지원이 몰려 경쟁이 폭발하는 경우도 있으니 주의하세요.</div>
       </div>
       ${r.change ? `<div class="msec"><h4>📝 2026 대비 변경사항(2027)</h4><div class="change-box">${esc(r.change)}</div></div>` : ''}
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
