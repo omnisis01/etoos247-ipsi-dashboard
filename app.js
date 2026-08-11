@@ -259,6 +259,23 @@ function save(k, v) { try { localStorage.setItem('ipsi_' + k, JSON.stringify(v))
       순번을 붙여 구분한다(예: 'abc12.1'). */
 const hashKey = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return x.toString(36); };
 const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
+/* ----- 분캠(캠퍼스) 구분 -----
+   원천이 일관되지 않다. 강원대·단국대 등 13종은 대학명에 캠퍼스를 병기하는데,
+   경북대(대구/상주)·부산대(부산/밀양/양산)·전남대(광주/여수) 등 33곳은 단일 대학명이고
+   지역·시군으로만 갈린다. 그래서 표에서는 상주캠이 그냥 '경북대학교 경북'으로 보이고,
+   대학 단위 집계에서는 캠퍼스가 섞여 평균이 왜곡됐다
+   (실측: 경북대 대구캠 입결 2.70 · 상주캠 5.28 → 합산 3.20).
+   ⚠️ 공유 링크의 안정 키(rowKey)가 대학명 해시라 **대학명 자체는 건드리지 않는다.**
+   표시(campusOf)와 집계 키(campusKey)에서만 캠퍼스를 구분한다. */
+const MULTI_CAMPUS = (() => {
+  const m = {};
+  ROWS.forEach(r => { if (!r.uni.includes('(')) (m[r.uni] = m[r.uni] || new Set()).add(r.sigun); });
+  return new Set(Object.keys(m).filter(u => m[u].size > 1));
+})();
+// 표시용 캠퍼스 꼬리표. 캠퍼스가 갈리는 대학에서만, 시군이 지역명과 다를 때만 붙인다.
+const campusOf = r => (MULTI_CAMPUS.has(r.uni) && r.sigun && r.sigun !== r.region) ? r.sigun : '';
+// 집계용 키 — 같은 대학이라도 캠퍼스가 다르면 별도로 센다.
+const campusKey = r => { const c = campusOf(r); return c ? `${r.uni}(${c})` : r.uni; };
 let _CODE_TO_I = null, _I_TO_CODE = null;
 function buildCodeMaps() {
   if (_CODE_TO_I) return;
@@ -1007,8 +1024,9 @@ function renderCharts() {
   // aggregate by university
   // 입결은 기준이 섞이면 대학 간 순위가 왜곡되므로 지배 기준 행만으로 평균한다.
   const domA = dominantStd(FILTERED);
+  // 캠퍼스가 갈리는 대학은 캠퍼스별로 센다 — 본교와 분캠의 입결 차이가 커서 합산하면 왜곡된다.
   const byU = {};
-  FILTERED.forEach(r => { (byU[r.uni] = byU[r.uni] || []).push(r); });
+  FILTERED.forEach(r => { const k = campusKey(r); (byU[k] = byU[k] || []).push(r); });
   let arr = Object.entries(byU).map(([uni, rs]) => ({
     uni, n: rs.length, comp: avg(rs.map(r => r.c[0])),
     grade: domA.std ? avg(rs.filter(r => r.stdK26 === domA.std).map(r => r.g[0])) : null,
@@ -1042,7 +1060,12 @@ function renderCharts() {
         <div class="bar-track"><div class="bar-fill" style="width:${w.toFixed(1)}%;background:${catColor}">${inside ? label : ''}</div>${inside ? '' : `<span class="bar-val-out">${label}</span>`}</div>
         <div class="bn">${metric === 'grade' ? a.gn : a.n}개</div></div>`;
     }).join('');
-    $('#chartA').querySelectorAll('.bl').forEach(b => b.onclick = () => { $('#search').value = b.dataset.uni; S.search = b.dataset.uni; syncSearchClear(); renderAll(); });
+        // 라벨이 '경북대학교(상주)'처럼 캠퍼스를 달고 있으면 괄호를 풀어 검색어로 넣는다
+    // (대학명에는 괄호가 없으므로 통짜로 넣으면 0건이 된다. 시군은 검색 대상에 포함돼 있다).
+    $('#chartA').querySelectorAll('.bl').forEach(b => b.onclick = () => {
+      const q = b.dataset.uni.replace(/\(([^)]+)\)$/, ' $1');
+      $('#search').value = q; S.search = q; syncSearchClear(); renderAll();
+    });
   }
   // trend chart B
   renderTrendChart();
@@ -1148,7 +1171,7 @@ function renderTable() {
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
     return `<tr data-i="${r._i}">
-      <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
+      <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
       <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
