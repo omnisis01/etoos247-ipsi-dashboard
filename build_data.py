@@ -720,6 +720,13 @@ for r in raw:
         #    'changed'는 app.js가 '전형변경'으로 대체 출력하므로 건드리지 않는다.
         if delta_kind == 'none':
             prev = '-'
+    # 수능최저 칸에 최저가 아닌 조건이 들어온 행 — 원천의 필드 오배치.
+    #   대구교대 '성비 70%'(3행), 국민대 특기자 '내신 : N등급 이내 과목 3개 이상'(9행).
+    #   그대로 두면 '수능최저 있음' 필터에 잡히고 상세 카드에도 수능최저로 표시된다.
+    #   ⚠️ 경국대 '수학 5등급'·순천대 '수 4등급이내'는 단일 영역이지만 **진짜 수능최저**라 건드리지 않는다.
+    if choejeo and re.match(r'^\s*(성비|내신\s*[:：])', choejeo):
+        note = (note + '\n' if note else '') + choejeo.strip()   # 정보는 비고로 옮겨 보존
+        choejeo = ''
     ch_kind, ch_detail = parse_choejeo_change(change)
     has_choejeo = 0 if (norm(choejeo) in ('', '없음', '미적용', 'X', '-')) else 1
 
