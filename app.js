@@ -769,9 +769,22 @@ function renderFilters() {
 /* ----- category header ----- */
 function renderCatHeader() {
   const c = S.cat === 'all' ? { label: '전체 전형', desc: '전국 모든 대학·계열 수시 전형', color: 'var(--primary)', key: 'all' } : CAT_BY[S.cat];
+  const q = S.search.trim();
+  // 검색 중엔 무엇을 찾고 있는지 제목에 드러내고, 결과 목록으로 바로 갈 수 있게 한다.
+  // (모바일에서 표까지 4.7화면을 스크롤해야 했다 — 검색 의도 대비 결과가 너무 멀었다.)
   $('#catHeader').innerHTML =
     `<div class="ch-icon" style="background:${c.color}">${CAT_ICON[c.key] || '🎓'}</div>
-     <div><h2>${esc(c.label)}</h2><p>${esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>`;
+     <div class="ch-body"><h2>${q ? `🔎 ${esc(q)}` : esc(c.label)}</h2>
+       <p>${q ? `${esc(c.label)}에서 검색` : esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>
+     ${q && FILTERED.length ? `<button class="ghost-btn ch-jump" id="chJump">결과 ${FILTERED.length.toLocaleString()}건 보기 <span aria-hidden="true">↓</span></button>` : ''}`;
+  const jb = $('#chJump');
+  // ⚠️ smooth 스크롤이 무시되는 환경이 있다(자동화 브라우저·reduced-motion 설정 등).
+  //    그대로 두면 버튼을 눌러도 아무 일이 없어 보이므로, 이동이 없으면 즉시 점프로 폴백한다.
+  if (jb) jb.onclick = () => {
+    const t = $('#tableSec'), before = window.scrollY;
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => { if (Math.abs(window.scrollY - before) < 4) t.scrollIntoView({ block: 'start' }); }, 350);
+  };
 }
 
 /* ----- 대학 단위 전형별 학과 요약 -----
