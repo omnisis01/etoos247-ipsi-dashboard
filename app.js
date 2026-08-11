@@ -1943,7 +1943,7 @@ function applySchedule() {
   const dday = Math.ceil((S1 - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / day);
   let txt, cls;
   if (now < S1) {
-    txt = `<b>2027 수시 원서접수</b>까지 <b class="ab-d">D-${dday}</b> · 2026.9.7(월)~9.11(금) <span class="ab-sub">대학마다 이 기간 중 3일 이상 접수 — 대학별 일정은 각 입학처 확인</span>`;
+    txt = `<b>2027 수시 원서접수</b>까지 <b class="ab-d">D-${dday}</b> · 2026.9.7(월)~9.11(금) <span class="ab-sub">대학마다 이 기간 중 3일 이상 접수(KAIST 등 과기원은 자체 일정 — 9/1부터 시작하기도) — 대학별 일정은 각 입학처 확인</span>`;
     cls = 'soon';
   } else if (now <= E1) {
     txt = `<b class="ab-d">원서접수 진행 중</b> · 2026.9.7(월)~9.11(금) <span class="ab-sub">대학마다 마감일이 다릅니다 — 각 입학처 일정을 반드시 확인하세요</span>`;
