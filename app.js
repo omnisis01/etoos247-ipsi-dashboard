@@ -1006,7 +1006,7 @@ function renderCharts() {
   else { arr.sort((a, b) => b.n - a.n); }
   arr = arr.slice(0, 22);
   $('#chartTitleA').innerHTML = metric === 'grade'
-    ? `대학별 평균 입결등급 (낮을수록 상위) · 상위 22` +
+    ? `대학별 평균 입결등급 · 상위 22` +
       (domA.std ? ` <span class="chart-basis">${CUT_LABELS[domA.std]} 기준${domA.dropped ? ` · 다른 기준 ${fmtInt(domA.dropped)}건 제외` : ''}</span>` : '')
     : metric === 'comp' ? '대학별 평균 경쟁률 (높은 순) · 상위 22' : '대학별 전형 수 · 상위 22';
   const catColor = S.cat === 'all' ? 'var(--primary)' : CAT_BY[S.cat].color;
