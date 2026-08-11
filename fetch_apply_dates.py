@@ -64,6 +64,19 @@ def fetch():
     return [x for x in arr if x.get('CategoryName') == '수시']
 
 
+# 진학·유웨이 어느 쪽으로도 접수하지 않는 대학(과기원 등 자체 접수) — 수집으로 안 잡히므로
+# 여기서 보충한다. 출처: 2027 수시파노라마(인천광역시교육청 진로진학지원단, 2027 요강 정리본).
+# ⚠️ 재수집 때도 유지되지만, 자체 접수 일정은 대학이 바꿀 수 있다 — 9월 초 재수집 시 요강 재확인.
+MANUAL = {
+    'KAIST':    {'from': '2026-09-01T10:00', 'to': '2026-09-09T18:00', 'via': '대학 자체'},
+    'DGIST':    {'from': '2026-09-03T09:00', 'to': '2026-09-10T18:00', 'via': '대학 자체'},
+    'UNIST':    {'from': '2026-09-03T19:00', 'to': '2026-09-10T18:00', 'via': '대학 자체'},
+    'GIST':     {'from': '2026-09-07T09:00', 'to': '2026-09-11T18:00', 'via': '대학 자체'},
+    'KENTECH':  {'from': '2026-09-07T10:00', 'to': '2026-09-11T18:00', 'via': '대학 자체'},
+    '공주교육대학교': {'from': '2026-09-08T10:00', 'to': '2026-09-11T16:00', 'via': '대학 자체'},
+}
+
+
 def main():
     susi = fetch()
     if len(susi) < 200:
@@ -94,6 +107,11 @@ def main():
                 continue
             out[target] = rec
 
+    # 자체 접수 대학 보충 — 수집에 이미 잡혔다면(대행 전환) 수집값을 우선한다.
+    manual_used = [u for u, rec in MANUAL.items() if u in dash_unis and u not in out]
+    for u in manual_used:
+        out[u] = MANUAL[u]
+
     covered = len(out); total = len(dash_unis)
     miss_dash = sorted(set(dash_unis) - set(out))
     body = ('/* 대학별 수시 원서접수 기간 — 진학어플라이 공통 원서검색 집계(진학+유웨이).\n'
@@ -101,7 +119,8 @@ def main():
             'window.IPSI_APPLY = ')
     with open(os.path.join(HERE, 'apply_dates.js'), 'w', encoding='utf-8') as f:
         f.write(body + json.dumps(out, ensure_ascii=False, indent=1) + ';\n')
-    print(f'[원서접수] 수집 {len(susi)}건 → 대시보드 {covered}/{total}교 매핑')
+    print(f'[원서접수] 수집 {len(susi)}건 → 대시보드 {covered}/{total}교 매핑'
+          + (f' (자체 접수 보충 {len(manual_used)}교: ' + ', '.join(manual_used) + ')' if manual_used else ''))
     if unmatched:
         print(f'  진학측 미매핑 {len(unmatched)}건(대시보드에 없는 대학이면 정상): '
               + ', '.join(unmatched[:12]) + ('…' if len(unmatched) > 12 else ''))

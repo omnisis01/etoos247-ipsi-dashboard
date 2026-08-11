@@ -1445,6 +1445,7 @@ function openFav() {
         ${ns.map(n => `<div class="fc-line"><b>${n.mo}/${n.dd}(${n.dow})</b> — ${n.items.map(e => `${fcName(e, n.items)}${e.viaRange ? '<span class="fc-rg" title="기간형 일정 — 실제 배정일을 확인하세요">기간</span>' : ''}`).join(' · ')}</div>`).join('')}
         <div class="fc-note">시간대가 다르면 응시할 수 있는 경우도 있어요. 각 대학의 고사 시간을 확인하세요.</div></div>` : ''; })()}
       <div class="fav-group-label hope">🎯 지원희망 (수시 6장 + 후보 4칸) <span class="muted">${S.fav.hope.length}/${FAV_HOPE_MAX}</span></div>
+      <div class="fav-hint muted">과기원(KAIST·GIST·DGIST·UNIST·KENTECH)·사관학교·전문대는 수시 6회 제한에 들어가지 않아요.</div>
       ${mk('hope', FAV_HOPE_MAX)}
       <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
       ${mk('reach', FAV_REACH_MAX)}
