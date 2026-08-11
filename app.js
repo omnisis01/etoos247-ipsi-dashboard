@@ -776,7 +776,10 @@ function renderCatHeader() {
     `<div class="ch-icon" style="background:${c.color}">${CAT_ICON[c.key] || '🎓'}</div>
      <div class="ch-body"><h2>${q ? `🔎 ${esc(q)}` : esc(c.label)}</h2>
        <p>${q ? `${esc(c.label)}에서 검색` : esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>
+     ${q || S.cat !== 'all' ? `<button class="ghost-btn ch-home" id="chHome" title="검색·필터를 모두 해제하고 처음 화면으로">🏠 처음 화면</button>` : ''}
      ${q && FILTERED.length ? `<button class="ghost-btn ch-jump" id="chJump">결과 ${FILTERED.length.toLocaleString()}건 보기 <span aria-hidden="true">↓</span></button>` : ''}`;
+  const hb = $('#chHome');
+  if (hb) hb.onclick = goHome;
   const jb = $('#chJump');
   // ⚠️ smooth 스크롤이 무시되는 환경이 있다(자동화 브라우저·reduced-motion 설정 등).
   //    그대로 두면 버튼을 눌러도 아무 일이 없어 보이므로, 이동이 없으면 즉시 점프로 폴백한다.
@@ -1915,6 +1918,21 @@ $('#resetBtn').onclick = () => {
   S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
   syncSearchClear(); renderFilters(); renderAll();
 };
+/* 처음 화면으로 — 로고 클릭·검색 결과의 '처음 화면' 버튼이 함께 쓴다.
+   상세 필터 해제(resetBtn)와 달리 **계열 카테고리와 입결 컷까지** 전부 되돌리고 맨 위로 올린다.
+   검색 도중 길을 잃었을 때 한 번에 원점으로 오는 탈출구다. */
+function goHome() {
+  S.cat = 'all'; S.jhtypes.clear(); S.changes.clear();
+  S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null;
+  S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
+  S.search = ''; $('#search').value = ''; S.page = 1;
+  syncSearchClear(); closeSidebar();
+  renderCatList(); renderFilters(); renderAll();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => { if (window.scrollY > 4) window.scrollTo(0, 0); }, 350);   // smooth 미지원 환경 폴백
+  track('go_home');
+}
+$('#homeBtn').onclick = goHome;
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;   // 아이콘·로고는 CSS가 data-theme로 전환
   save('theme', t);
