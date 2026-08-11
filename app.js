@@ -273,7 +273,9 @@ const MULTI_CAMPUS = (() => {
   return new Set(Object.keys(m).filter(u => m[u].size > 1));
 })();
 // 표시용 캠퍼스 꼬리표. 캠퍼스가 갈리는 대학에서만, 시군이 지역명과 다를 때만 붙인다.
-const campusOf = r => (MULTI_CAMPUS.has(r.uni) && r.sigun && r.sigun !== r.region) ? r.sigun : '';
+// ⚠️ '대구/상주'처럼 여러 캠퍼스 통합모집인 행(경북대 전 모집단위·경동대 통합선발 4행)은
+//    지역 칸에 이미 '대구/경북'이 찍히므로 꼬리표를 붙이면 '대구/경북·대구/상주'가 된다 — 생략.
+const campusOf = r => (MULTI_CAMPUS.has(r.uni) && r.sigun && r.sigun !== r.region && !r.sigun.includes('/')) ? r.sigun : '';
 // 집계용 키 — 같은 대학이라도 캠퍼스가 다르면 별도로 센다.
 const campusKey = r => { const c = campusOf(r); return c ? `${r.uni}(${c})` : r.uni; };
 let _CODE_TO_I = null, _I_TO_CODE = null;
