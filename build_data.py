@@ -637,6 +637,12 @@ cat_counter = {}
 audit = {}
 for r in raw:
     uni = s(r[2]); gye = s(r[3]); dept = s(r[4]); jhtype = s(r[5]); jhname = s(r[6]); jagyeok = s(r[7])
+    # 원천 오타 정규화(최종판 Final에도 남아 있음, 사용자 제보로 발견).
+    # ⚠️ 계열은 앞 2글자만 저장하므로 '예제능'이 '예제'라는 유령 계열이 되고,
+    #    categorize()의 `gye.startswith('예체')` 분기를 놓쳐 세명대 실내디자인학과
+    #    특성화고교인재전형이 **어느 계열에도 안 잡히는** 실피해가 있었다(같은 학과 일반전형은 정상).
+    gye = {'예제능': '예체능'}.get(gye, gye)
+    dept = {'스프츠의학과': '스포츠의학과'}.get(dept, dept)   # 경희대 3행 — 검색 '스포츠'에 안 걸렸다
     # 학과명 정규화: '(외)' 표기 제거. 정원 외 채용조건형 계약학과는 별도 배지로 노출한다.
     dept = dept.replace('(외)', '').strip()
     _dk = (uni, dept, jhtype, jhname)
