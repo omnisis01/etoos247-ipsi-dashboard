@@ -162,6 +162,62 @@ SEMI_CONTRACT_WHITELIST = [
     ('포항공과대학교', '반도체공학과(계약학과)'),
 ]
 
+# 미분류로 남던 학과의 **개별 판정표**(사용자 요청으로 전수 판정, 2026-08-11).
+# 키는 norm(괄호 앞 학과명). 판정 기준은 '같은 성격의 학과가 이미 어디에 있는가'로 맞췄다 —
+#   식품영양=nat_agri / 조리·외식·관광·호텔=biz_tour / 의류·패션·뷰티=art_college /
+#   항공운항·정비=eng_mech / 환경공학=eng_civil, 환경과학=nat_earth / 미디어콘텐츠=social_science.
+# ⚠️ 폴백 안에서만 조회되므로 기존 분류를 덮어쓰지 않는다.
+_DEPT_CAT_MANUAL = {
+    # 자연 — 생명·자원·환경
+    '생명시스템학부': ['nat_bio', 'natural'], '생명정보융합학과': ['nat_bio', 'natural'],
+    '생명시스템과학과': ['nat_bio', 'natural'], '생명지원과학대학': ['nat_bio', 'natural'],
+    '스마트생명산업융합학과': ['nat_bio', 'natural'], '뇌인지과학부': ['nat_bio', 'natural'],
+    '융합과학부': ['natural'], '스마트그린자원학과': ['nat_agri', 'natural'],
+    '환경재료과학과': ['nat_agri', 'natural'], '와인사이언스학과': ['nat_agri', 'natural'],
+    '식품융합학부': ['nat_agri', 'natural'], '식품산업학과': ['nat_agri', 'natural'],
+    '지속가능대기환경학과': ['nat_earth', 'natural'], '환경학과': ['nat_earth', 'natural'],
+    '환경융합학과': ['nat_earth', 'natural'],
+    # 공학
+    '미래정보디스플레이학부': ['eng_ee', 'engineering'], '스마트보안학부': ['eng_cs', 'engineering'],
+    '스마트보안학과': ['eng_cs', 'engineering'], '융합보안학과': ['eng_cs', 'engineering'],
+    '스마트도시학부': ['eng_civil', 'engineering'], '디지털도시건설학과': ['eng_civil', 'engineering'],
+    '스마트시스템과학과': ['eng_etc', 'engineering'], '정보융합학부': ['eng_cs', 'engineering'],
+    '디지털융합정보학과': ['eng_cs', 'engineering'], '클라우드인프라전공': ['eng_cs', 'engineering'],
+    'HCI사이언스전공': ['eng_cs', 'engineering'], 'MSDE학과': ['eng_mech', 'engineering'],
+    '녹색기술융합학과': ['eng_etc', 'engineering'], '창의설계학부': ['eng_etc', 'engineering'],
+    '문화기술융합학과': ['eng_cs', 'engineering'], '환경안전학과': ['eng_etc', 'engineering'],
+    '본부첨단방위산업학과': ['eng_etc', 'engineering', 'military'],
+    '국방인재개발학과': ['military'], '차세대통신학과': ['eng_ee', 'engineering'],
+    # 메디컬 — 고려대 '의과대학'은 의예과 묶음 표기, 건양대 데이터의학과는 의학 트랙
+    '의과대학': ['med_med', 'medical'], '데이터의학과': ['med_med', 'medical'],
+    # 상경 — 조리·외식·관광·항공서비스(승무원)
+    '글로벌MICE학과': ['biz_tour', 'business'], '글로벌MICE융합전공': ['biz_tour', 'business'],
+    '글로벌MICE전공': ['biz_tour', 'business'], '항공서비스학과': ['biz_tour', 'business'],
+    '항공운항서비스학과': ['biz_tour', 'business'], '식품조리학과': ['biz_tour', 'business'],
+    '한식조리학과': ['biz_tour', 'business'], '한식조리과학전공': ['biz_tour', 'business'],
+    '호텔조리베이커리학과': ['biz_tour', 'business'], '호텔조리제과제빵학과': ['biz_tour', 'business'],
+    # 사회과학 — 미디어·문화콘텐츠 계열
+    '문화콘텐츠학과': ['social_science'], '문학문화콘텐츠학과': ['social_science'],
+    '융합콘텐츠학과': ['social_science'], '디지털콘텐츠학과': ['social_science'],
+    '디지털콘텐츠': ['art_college'],
+    # 인문
+    '문화유산학과': ['humanities_core'],
+    '문화유산보존학과': ['humanities_core'],
+    '캠퍼스아시아학과': ['lang_etc', 'language'], 'K-글로벌학과': ['lang_etc', 'language'],
+    # 예체능
+    '주거환경학과': ['art_college'], '의상학과': ['art_college'], '라이프디자인학과': ['art_college'],
+    '예술학과': ['art_college'], '글로벌예술학부': ['art_college'], '예술크리에이티브학부': ['art_college'],
+    'Art&Design대학': ['art_college'], '아트앤테크놀로지학과': ['art_college'],
+    '트랜스아트과': ['art_college'], '생활예술전공': ['art_college'], '글로벌뷰티아트': ['art_college'],
+    '예술치료학과': ['art_college'], '공연예술학과': ['art_college'], '바둑콘텐츠학과': ['pe_college'],
+    # 자유전공·통합
+    '진리자유학부': ['free_major'], '유스티노자유대학': ['free_major'], '상상력인재학부': ['free_major'],
+    '인문기술융합학부미래융합전공': ['free_major'], '글로컬리더스학부': ['free_major'],
+    '창의융합학과': ['free_major'], '특수창의융합학과': ['free_major'],
+    '미래융합대학': ['integrated'], '문화산업대학': ['integrated'], '사회문화대학': ['integrated'],
+}
+
+
 def categorize(uni, gye, dept, jhname, jagyeok):
     d = norm(dept); head = norm(dept.split('(')[0])
     full = d + norm(jhname) + norm(jagyeok)
@@ -413,6 +469,13 @@ def categorize(uni, gye, dept, jhname, jagyeok):
     # ⚠️ tags가 비어 있을 때만 동작하므로 **기존 분류를 절대 바꾸지 않는다.**
     #    미분류 573행(204종)이 사이드바 어느 계열에도 안 잡히던 문제를 줄이기 위한 것.
     #    확신이 서는 것만 넣고, 애매하면 미분류로 남긴다(잘못 넣는 것이 더 나쁘다).
+    # ⚠️ `not tags`만 조건으로 걸면 안 된다. gye='인문'인 행은 위에서 포괄 태그
+    #    non_business_humanities가 자동으로 붙어 tags가 비지 않으므로 판정표가 통째로 무시된다
+    #    (실제로 주거환경·의상·항공서비스·상상력인재학부가 '비상경'만 달고 남았다).
+    #    그래서 **구체 계열 태그가 하나도 없을 때**를 기준으로 삼는다 — 포괄 태그에는 덧붙인다.
+    _VAGUE = {'non_business_humanities', 'integrated', 'free_major'}
+    if head in _DEPT_CAT_MANUAL and not (tags - _VAGUE):
+        tags |= set(_DEPT_CAT_MANUAL[head])
     if not tags:
         # 악기·성부 단위 모집(서경대·단국대 등) — 학과명이 '첼로'·'관악'처럼 악기명 하나뿐이다.
         if head in ('관악', '현악', '바이올린', '비올라', '첼로', '더블베이스', '플룻', '플루트',
@@ -678,6 +741,10 @@ _DEPT_TYPO = [
     ('스프츠', '스포츠'), ('소포츠', '스포츠'), ('소프츠', '스포츠'), ('둥물생명', '동물생명'),
     ('컴단기술', '첨단기술'), ('식품영앙', '식품영양'), ('사람아너스', '사림아너스'),
     ('경영빅데이터과', '경영빅데이터학과'), ('HK자율전공학 I', 'HK자율전공학부 I'),
+    # 충남대 기회균형 II 1행이 '정보통'으로 잘려 있었다. 2027 요강 15쪽 표에서 정보통신융합학부의
+    # 기회균형II가 1명(정보통계학과는 이 전형 모집 자체가 없음)으로 확정 — 인원까지 일치.
+    # '$'는 정확 일치 전용 표시(부분 치환하면 '정보통신공학과'까지 망가진다).
+    ('정보통$', '정보통신융합학부'),
     # 2차 라운드 — '전국 유일 2-gram + 자모 1개 차이로 흔한 조각이 됨' 스캔으로 발견.
     # 1차(같은 대학 내 유사 쌍)가 놓친 것들이다. 대학 내에 정상 표기가 없으면 안 걸렸다.
     ('식퓸', '식품'), ('괴학기술', '과학기술'), ('컴퓨텅', '컴퓨팅'), ('인터렉티브', '인터랙티브'),
@@ -694,7 +761,11 @@ for r in raw:
     #    categorize()의 `gye.startswith('예체')` 분기를 놓쳐 세명대 실내디자인학과
     #    특성화고교인재전형이 **어느 계열에도 안 잡히는** 실피해가 있었다(같은 학과 일반전형은 정상).
     gye = {'예제능': '예체능'}.get(gye, gye)
-    for _bad, _good in _DEPT_TYPO: dept = dept.replace(_bad, _good)
+    for _bad, _good in _DEPT_TYPO:
+        if _bad.endswith('$'):          # 정확 일치 전용(부분 치환 사고 방지)
+            if dept.strip() == _bad[:-1]: dept = _good
+        else:
+            dept = dept.replace(_bad, _good)
     # 지원자격 연도 오타 — DGIST 반도체공학과(학석사통합) 학교장추천 1행만 '2026년 2월'(나머지 60건은 2027년 2월).
     # 2027 요강 원문(p.52) "2027년 2월 국내 고등학교 졸업예정자"로 확정 — 같은 대학 기초학부 행도 2027년이다.
     jagyeok = jagyeok.replace('2026년 2월 국내고 졸업예정자', '2027년 2월 국내고 졸업예정자')
