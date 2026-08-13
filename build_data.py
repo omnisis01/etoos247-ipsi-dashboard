@@ -531,6 +531,12 @@ LEAST_CORRECTIONS = [
     {'uni': '세명대학교', 'dept': '한의예과', 'old': '국,수(기미),영 합5', 'new': '국,수(기미),영 3합5'},
     # 계명대 혁신신약 면접전형: 2합12 → 2합10 (2027 요강 원문 + 토마스 확인). 교과 일반/지역은 2합9로 정상.
     {'uni': '계명대학교', 'dept': '혁신신약학과', 'jhname': '면접전형', 'old': '국,수,영,탐(1) 2합12', 'new': '국,수,영,탐(1) 2합10'},
+    # 성균관대 의예 논술: 원천 '3합4' → 요강 원문 '4합5'. 2027 요강 p.11·p.43 —
+    # 의예과만 "국·수·영·탐(2과목 평균) **4개 영역** 등급합 5 이내"이고, 다른 모집단위는
+    # "4개 중 3개 합 6/5"다. 영역 수와 합이 둘 다 달라 의대 지원자에게 결정적인 오류였다.
+    # 파노라마·입시기사도 4합5로 일치. ※ 의예과는 제2외국어 대체·과탐 상위1과목 선택 배제.
+    {'uni': '성균관대학교', 'dept': '의예과', 'jhname': '논술우수전형(수리형)',
+     'old': '국,수,영,탐(2) 3합4', 'new': '국,수,영,탐(2) 4합5'},
 ]
 _least_fixed = [0]
 def apply_least_correction(uni, dept, jhname, choejeo):
@@ -696,7 +702,9 @@ _renamed = set()
 # old가 엑셀 원문과 완전일치할 때만 적용한다. 엑셀이 갱신되면 미적용으로 남아 아래 검증에 걸린다.
 _DATE_CORR = {}
 for _c in _CORR.get('date', []):
-    _DATE_CORR[(_c['uni'], _c['jhn'], _c['old'])] = _c['new']
+    # dept가 있으면 4키(모집단위 한정), 없으면 3키(대학·전형명 전체)
+    _k = (_c['uni'], _c['jhn'], _c['old'], _c['dept']) if _c.get('dept') else (_c['uni'], _c['jhn'], _c['old'])
+    _DATE_CORR[_k] = _c['new']
 _date_fixed = set()
 
 # 입결 기준(std) 원문 교정. 원천 엑셀이 '최종등록자컷'처럼 퍼센트 없이 적은 대학을
@@ -799,8 +807,14 @@ for r in raw:
     conv = [num(r[23]), num(r[28]), num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
+    # 고사일 교정은 (대학, 전형명, 원문) 키가 기본이고, **모집단위별로 갈릴 때만** dept를 더 건다.
+    # 경상대 학생부종합 일반전형처럼 같은 전형 안에서 면접 시행 학과와 미시행 학과가 섞이면
+    # 3키만으로는 멀쩡한 행까지 덮어쓴다(면접 보는 학과의 일자가 지워진다).
+    _dtk4 = (uni, jhname, date, dept)
     _dtk = (uni, jhname, date)
-    if _dtk in _DATE_CORR:
+    if _dtk4 in _DATE_CORR:
+        date = _DATE_CORR[_dtk4]; _date_fixed.add(_dtk4)
+    elif _dtk in _DATE_CORR:
         date = _DATE_CORR[_dtk]; _date_fixed.add(_dtk)
     gr = s(r[15]); subj = s(r[16]); career = s(r[17])
     # 입결 '기준'은 연도별로 따로 있다(col21=2026, col26=2025, col30=2024). 대학이 해마다 기준을
@@ -1054,7 +1068,7 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
-print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 4: 세명대 3 + 계명대 1)')
+print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 5: 세명대 3 + 계명대 1 + 성균관대 1)')
 print(f'전년대비 재계산 교정: {len(_prev_recomputed)}건 (2026 실측 스냅샷 대조 · 스킵 {len(_RECOMPUTE_SKIP)} · 오버라이드 {len(_E26_OVERRIDES)})')
 print(f'전형 변경(개편·개명) 표기: {_changed_count[0]}건 (2026에 정규화 후에도 없는 대학|학과|전형명, 예상 약 3,000)')
 for _k, _old, _new, _e26, _e27 in _prev_recomputed:
