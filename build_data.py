@@ -188,8 +188,10 @@ _DEPT_CAT_MANUAL = {
     '문화기술융합학과': ['eng_cs', 'engineering'], '환경안전학과': ['eng_etc', 'engineering'],
     '본부첨단방위산업학과': ['eng_etc', 'engineering', 'military'],
     '국방인재개발학과': ['military'], '차세대통신학과': ['eng_ee', 'engineering'],
-    # 메디컬 — 고려대 '의과대학'은 의예과 묶음 표기, 건양대 데이터의학과는 의학 트랙
-    '의과대학': ['med_med', 'medical'], '데이터의학과': ['med_med', 'medical'],
+    # 메디컬 — 고려대 '의과대학'은 의예과 묶음 표기.
+    # 건양대 데이터의학과(2027 신설)는 의과대학 소속이지만 의사면허 학과가 아닌
+    # 의료데이터 전문가 양성 과정이므로 보건의료로 분류한다(med_med에 넣으면 의대 39교 집계에 섞인다).
+    '의과대학': ['med_med', 'medical'], '데이터의학과': ['nursing_health'],
     # 상경 — 조리·외식·관광·항공서비스(승무원)
     '글로벌MICE학과': ['biz_tour', 'business'], '글로벌MICE융합전공': ['biz_tour', 'business'],
     '글로벌MICE전공': ['biz_tour', 'business'], '항공서비스학과': ['biz_tour', 'business'],
