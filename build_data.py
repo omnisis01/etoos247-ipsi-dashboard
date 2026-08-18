@@ -279,7 +279,9 @@ def categorize(uni, gye, dept, jhname, jagyeok):
     # --- medical core (의·치·한·수·약), head-anchored with blockers ---
     MED_BLOCK = ['스포츠', '식물', '수산', '데이터', '과학수사', '재활', '한방', '제약', '신약', '의약', '창의',
                  '계약', '동물', '보건', '의공', '의료', '문화', '생명의학']
-    if not any(x in head for x in MED_BLOCK):
+    # 충북대 '제약학과'는 약학대학 소속 6년제(약학과와 정원·수능최저·지역인재 의무선발이 동일).
+    # MED_BLOCK의 '제약'은 '제약공학과' 같은 공학 학과를 막으려는 것이라 정확 일치로만 예외를 준다.
+    if head == '제약학과' or not any(x in head for x in MED_BLOCK):
         if '약학' in head or any(t in head for t in ['의예', '의학과', '의학부', '의학전공', '의학계열',
                                                      '치의예', '치의학', '한의예', '한의학', '수의예', '수의학']):
             tags.add('medical')
