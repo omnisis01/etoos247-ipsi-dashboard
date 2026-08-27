@@ -157,17 +157,32 @@ else:
 
 # ---------------------------------------------------------------- 5) 잘림 — 원문 복구 경로 확인
 print('\n=== 표시 잘림 ===')
-for m in re.finditer(r'r\.(\w+)\.slice\(0,\s*(\d+)\)', CODE):
+# 문자열 필드에서 파생된 지역변수(예: const jn = r.jhname.replace(...))도 잘림 검사 대상에 넣는다.
+STR_VAR = {v: src for v, src in re.findall(r'(?:const|let)\s+(\w+)\s*=\s*r\.(\w+)\.replace\(', CODE)}
+# ⚠️ 배열 개수 제한(v.sig.slice(0,2) 같은 것)은 문자열 잘림이 아니다. .map(/.forEach( 가 뒤따르면 배열로 본다.
+for m in re.finditer(r'\b(?:r\.)?(\w+)\.slice\(0,\s*(\d+)\)', CODE):
     f, n = m.group(1), m.group(2)
-    line = CODE[:m.start()].count('\n') + 1
-    seg = CODE[max(0, m.start() - 200):m.start() + 60]
-    has_title = f'title="${{esc(r.{f})}}"' in seg
-    full = re.search(rf'\$\{{esc\(r\.{f}\)\}}', CODE) or re.search(rf'\$\{{esc\(deptDisp\(r\)\)\}}', CODE) if f == 'dept' else None
+    whole = m.group(0)
+    if not (whole.startswith('r.') or f in STR_VAR):
+        continue                                   # 문자열 필드 유래가 아니면 건너뛴다
+    tail = CODE[m.end():m.end() + 40]
+    if re.match(r'\s*\.(?:map|forEach|filter|join)\b', tail):
+        continue                                   # 배열 개수 제한
+    # ⚠️ 줄번호는 반드시 원본(APP) 기준으로 낸다. 주석 제거본(CODE) 기준이면 실제 위치와
+    #    어긋나 엉뚱한 줄을 고치게 된다(2026-08-21 L1115로 보고됐으나 실제는 L1177).
+    hit = re.search(re.escape(whole), APP)
+    line = APP[:hit.start()].count('\n') + 1 if hit else 0
+    src = STR_VAR.get(f, f)                        # 파생 변수면 원본 필드명으로 환원
+    seg = CODE[max(0, m.start() - 260):m.start() + 60]
+    has_title = 'title="' in seg                   # 변수명 무관 — 같은 요소에 title이 붙었는지만 본다
+    full = bool(re.search(rf'\$\{{esc\(r\.{src}\)\}}', CODE) or
+                (src == 'dept' and re.search(r'\$\{esc\(deptDisp\(r\)\)\}', CODE)))
     note = 'title 툴팁으로 원문 보존' if has_title else ('모달·상세에서 전체 표시' if full else '⚠ 원문 확인 경로 없음')
     st = '✓' if (has_title or full) else '✗'
     if st == '✗':
-        fails.append(('잘림', f'{f}@L{line}', '원문 확인 경로 없음'))
-    print(f'  {st} {f} {n}자 (L{line}) — {note}')
+        fails.append(('잘림', f'{src}@L{line}', '원문 확인 경로 없음'))
+    label = src if src == f else f'{src}(→{f})'
+    print(f'  {st} {label} {n}자 (L{line}) — {note}')
 
 # ---------------------------------------------------------------- 6) 결측률(참고)
 if DETAIL:

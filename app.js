@@ -1172,9 +1172,12 @@ function renderTable() {
       : '<span class="no-data">없음</span>';
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
+    // 전형명은 원문에 줄바꿈이 섞여 있다(예: '지역의사선발전형\n(경기도 의정부권)').
+    // 줄바꿈까지 글자 수로 세면 권역명이 통째로 잘려 표에서 권역 구분이 불가능했다 → 한 줄로 펴서 자른다.
+    const jn = r.jhname.replace(/\s+/g, ' ').trim();
     return `<tr data-i="${r._i}">
       <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px">${esc(r.jhname.slice(0, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
+      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(jn.slice(0, 14))}${jn.length > 14 ? '…' : ''}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
       <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
