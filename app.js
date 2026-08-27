@@ -259,6 +259,22 @@ function save(k, v) { try { localStorage.setItem('ipsi_' + k, JSON.stringify(v))
       순번을 붙여 구분한다(예: 'abc12.1'). */
 const hashKey = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return x.toString(36); };
 const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
+
+/* ----- 저장(localStorage)도 안정 키로 -----
+   위 주석이 공유 링크에 대해 경고한 그 위험이 지원카드·비교함에도 그대로 있었다.
+   저장을 ROWS 인덱스로 하면 원천 엑셀이 갱신될 때(행 추가·삭제) 인덱스가 밀려
+   **담아둔 카드가 조용히 다른 학과를 가리킨다.** 하필 접수 주간 직전에 데이터 갱신이
+   예정돼 있어(DATA_UPDATE.md), 지원카드가 가장 값진 시점에 어긋날 수 있었다.
+   → 저장은 rowKey 로, 읽을 때 인덱스로 되살린다. 숫자가 들어 있으면 구버전 저장값이므로
+     그대로 인덱스로 해석한다(기존 사용자 카드가 사라지지 않게). */
+const KEY2I = (() => { const m = new Map(); ROWS.forEach((r, i) => { const k = rowKey(r); if (!m.has(k)) m.set(k, i); }); return m; })();
+const toIdx = v => (typeof v === 'number' ? v : (KEY2I.has(v) ? KEY2I.get(v) : -1));
+const toKey = i => (ROWS[i] ? rowKey(ROWS[i]) : null);
+const saveCmp = () => save('cmp', [...S.compare].map(toKey).filter(Boolean));
+(function hydrateSaved() {
+  S.compare = new Set([...S.compare].map(toIdx).filter(i => i >= 0 && i < ROWS.length));
+  for (const b of ['hope', 'reach']) S.fav[b] = (S.fav[b] || []).map(toIdx).filter(i => i >= 0 && i < ROWS.length);
+})();
 /* ----- 분캠(캠퍼스) 구분 -----
    원천이 일관되지 않다. 강원대·단국대 등 13종은 대학명에 캠퍼스를 병기하는데,
    경북대(대구/상주)·부산대(부산/밀양/양산)·전남대(광주/여수) 등 33곳은 단일 대학명이고
@@ -312,7 +328,7 @@ function applyShareURL() {
   const h = pick('h'), r = pick('r'), c = pick('c');
   if (!h.length && !r.length && !c.length) return null;
   if (h.length || r.length) { S.fav = { hope: h.slice(0, FAV_HOPE_MAX), reach: r.slice(0, FAV_REACH_MAX) }; saveFav(); }
-  if (c.length) { S.compare = new Set(c.slice(0, 6)); save('cmp', [...S.compare]); }
+  if (c.length) { S.compare = new Set(c.slice(0, 6)); saveCmp(); }
   history.replaceState(null, '', location.origin + location.pathname);   // 주소창 정리
   return { fav: h.length + r.length, cmp: c.length };
 }
@@ -1174,7 +1190,7 @@ function renderTable() {
     const gradeSpark = sparkline(r.g, { invert: true, color: 'var(--primary)' });
     const compSpark = sparkline(r.c, { color: 'var(--new)' });
     const least = r.hasChoejeo
-      ? `<span class="jh-pill" style="background:var(--primary-soft);color:var(--primary-ink);border:none" title="${esc(r.choejeo)}">${esc(r.choejeo.slice(0, 16))}${r.choejeo.length > 16 ? '…' : ''}</span>${r.chKind ? `<span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}" style="margin-left:4px">${r.chKind}</span>` : ''}`
+      ? `<span class="jh-pill" style="background:var(--primary-soft);color:var(--primary-ink);border:none" title="${esc(r.choejeo)}">${esc(r.choejeo.slice(0, 16))}${r.choejeo.length > 16 ? '…' : ''}</span>${r.chKindShow ? `<span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'up' : 'down'}" style="margin-left:4px">${r.chKindShow}</span>` : ''}`
       : '<span class="no-data">없음</span>';
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
@@ -1336,7 +1352,7 @@ $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 function toggleCompare(i) {
   if (S.compare.has(i)) S.compare.delete(i);
   else { if (S.compare.size >= 6) { toast('비교함은 최대 6개까지 담을 수 있습니다.'); return; } S.compare.add(i); }
-  save('cmp', [...S.compare]);
+  saveCmp();
   updateCompareBtn(); renderTable();
 }
 function updateCompareBtn() { $('#compareCount').textContent = S.compare.size; }
@@ -1350,12 +1366,12 @@ function openCompare() {
     inner.innerHTML = `<div class="drawer-head"><h3>전형 비교 <span class="muted">${items.length}개</span></h3>
       <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpShare">🔗 링크 복사</button><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
       <div style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
-        `<th>${esc(r.uni)}<div class="muted" title="${esc(flat(r.dept))}">${esc(cut(r.dept, 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
+        `<th>${esc(r.uni)}<div class="muted" title="${esc(flat(deptDisp(r)))}">${esc(cut(deptDisp(r), 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
         ${rowM('🎯 올해 유불리', r => `<span class="impact-chip ${V(r).cls}">${V(r).label}</span>`)}
         ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
         ${rowM('전형', r => esc(r.jhtype) + '<br><span class="muted">' + esc(r.jhname) + '</span>')}
         ${rowM('모집인원(전년대비)', r => `<b>${fmtInt(r.enroll)}</b> <span class="delta ${deltaInfo(r).cls}">${deltaInfo(r).txt}</span>`)}
-        ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) + (r.chKind ? ` <span class="delta ${(r.chKind === '강화' || r.chKind === '신설') ? 'up' : 'down'}">${r.chKind}</span>` : '') : '<span class="muted">없음</span>')}
+        ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) + (r.chKindShow ? ` <span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'up' : 'down'}">${r.chKindShow}</span>` : '') : '<span class="muted">없음</span>')}
         ${rowM('입결 2025→2026', r => { const g = yoyGrade(r); return `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + stdTag(r) + (g && g.dir !== 'flat' ? ` <span class="ycell ${g.dir === 'easier' ? 'good' : 'bad'}">${g.dir === 'easier' ? '유리' : '불리'}</span>` : ''); })}
         ${rowM('입결 추이', r => sparkline(r.g, { invert: true, color: 'var(--primary)', w: 70 }))}
         ${rowM('경쟁률 2025→2026', r => { const c = yoyComp(r); return (r.c[1] == null ? '–' : r.c[1].toFixed(1)) + ' → <b>' + (r.c[0] == null ? '–' : r.c[0].toFixed(1)) + ':1</b>' + (c && c.dir !== 'flat' ? ` <span class="ycell ${c.dir === 'down' ? 'good' : 'bad'}">${c.dir === 'down' ? '유리' : '불리'}</span>` : ''); })}
@@ -1370,8 +1386,8 @@ function openCompare() {
   $('#cmpClose').onclick = closeCompareDrawer;
   const cp = $('#cmpPrint'); if (cp) cp.onclick = printCompare;
   const cs = $('#cmpShare'); if (cs) cs.onclick = () => copyShare('cmp', cs);
-  const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); save('cmp', []); updateCompareBtn(); renderTable(); openCompare(); };
-  inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); save('cmp', [...S.compare]); updateCompareBtn(); renderTable(); openCompare(); });
+  const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); saveCmp(); updateCompareBtn(); renderTable(); openCompare(); };
+  inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); saveCmp(); updateCompareBtn(); renderTable(); openCompare(); });
 }
 function closeCompareDrawer() { if ($('#compareDrawer').classList.contains('hidden')) return; $('#compareDrawer').classList.add('hidden'); closeDialog(); }
 $('#compareDrawer').onclick = e => { if (e.target.id === 'compareDrawer') closeCompareDrawer(); };
@@ -1383,7 +1399,11 @@ const BUCKET_NAME = { hope: '지원희망', reach: '상향·도전' };
 function favBucket(i) { return S.fav.hope.includes(i) ? 'hope' : S.fav.reach.includes(i) ? 'reach' : null; }
 function isFav(i) { return !!favBucket(i); }
 function favCount() { return S.fav.hope.length + S.fav.reach.length; }
-function saveFav() { save('fav', S.fav); applySchedule(); updateFavBtn(); }
+function saveFav() {
+  // 인덱스가 아니라 안정 키로 — 데이터 갱신 시 카드가 다른 학과를 가리키지 않게(위 hydrateSaved 참조)
+  save('fav', { hope: S.fav.hope.map(toKey).filter(Boolean), reach: S.fav.reach.map(toKey).filter(Boolean) });
+  applySchedule(); updateFavBtn();
+}
 function updateFavBtn() { $('#favCount').textContent = favCount(); }
 function addFav(i, bucket) {
   const cur = favBucket(i);
@@ -1814,7 +1834,7 @@ function printCompare() {
   if (!items.length) { toast('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
   const rowM = (lab, fn) => `<tr><td class="pr-rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
   const body = `<table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
-      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(flat(r.dept))}</span></th>`).join('')}</tr></thead><tbody>
+      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(flat(deptDisp(r)))}</span></th>`).join('')}</tr></thead><tbody>
       ${rowM('올해 유불리', r => `<span class="pr-vd ${V(r).cls}">${V(r).label}</span>`)}
       ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
       ${rowM('전형', r => esc(r.jhtype) + '<br><span class="pr-mut">' + esc(r.jhname) + '</span>')}
@@ -1858,7 +1878,7 @@ function renderInsightBanner() {
       <div class="ib-tags">${tags}</div></button>`;
   }).join('');
   sec.innerHTML = `<div class="panel-head">
-      <h2>📰 대학별 변화 인사이트 <span class="muted">2027 vs 2026 · ${list.length}개 대학</span></h2>
+      <h2>📰 대학별 변화 인사이트 <span class="muted">2027 vs 2026 · ${insUniCount()}개 대학</span></h2>
       <button class="ghost-btn ib-all" id="ibAllBtn">전체 보기 <span aria-hidden="true">→</span></button>
     </div>
     <div class="ib-cards">${cards}</div>`;
@@ -1866,6 +1886,11 @@ function renderInsightBanner() {
   $('#ibAllBtn').onclick = () => openInsight();
   sec.querySelectorAll('.ib-card').forEach(c => c.onclick = () => openInsight(c.dataset.uni));
 }
+// 인사이트 항목 중 '이슈·특집'(주제별 총정리) 판별 — 레일과 홈 배너가 같은 기준을 써야
+// 한쪽은 169개, 다른 쪽은 164개를 '대학'이라 세는 모순이 안 생긴다.
+const isIssueKey = u => !!INS.unis[u] && (INS.unis[u].tier === '이슈' || INS.unis[u].tier === '특집');
+const insUniCount = () => (INS.order || []).filter(u => INS.unis[u] && !isIssueKey(u)).length;
+
 function renderInsightRail() {
   const rail = $('#insightRail');
   const item = u => {
@@ -1875,11 +1900,11 @@ function renderInsightRail() {
   };
   // 축 분리: 이슈·특집(주제별 총정리)을 상단에, 대학별을 하단에.
   const order = INS.order || [];
-  const issues = order.filter(u => INS.unis[u] && (INS.unis[u].tier === '이슈' || INS.unis[u].tier === '특집'));
+  const issues = order.filter(isIssueKey);
   const unis = order.filter(u => !issues.includes(u));
   rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>`
     + (issues.length ? `<div class="ins-rail-group">🔎 이슈·특집 <span class="muted">주제별 총정리</span></div>` + issues.map(item).join('') : '')
-    + `<div class="ins-rail-group">🏫 대학별 <span class="muted">${unis.filter(u => INS.unis[u]).length}개 대학</span></div>` + unis.map(item).join('');
+    + `<div class="ins-rail-group">🏫 대학별 <span class="muted">${insUniCount()}개 대학</span></div>` + unis.map(item).join('');
   rail.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => { _insUni = b.dataset.uni; renderInsightRail(); renderInsightDetail(_insUni); track('open_insight', { uni: _insUni }); $('#insightMain').scrollTop = 0; });
 }
 // 서술체 문장을 두괄식(결론) + 개조식(글머리표)으로 분해
@@ -1919,7 +1944,7 @@ function renderInsightDetail(uni) {
   const verdict = (d.verdict || []).map(v => {
     const sv = splitVerdict(v.text);
     const body = sv.subj ? `<b>${esc(sv.subj)}</b> — ${esc(sv.body)}` : esc(sv.body);
-    return `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : '🟠'}</span><span>${body}</span></div>`;
+    return `<div class="ins-vline ${esc(v.type)}"><span class="iv-ico">${v.type === 'good' ? '🟢' : v.type === 'bad' ? '🔴' : v.type === 'info' ? '🔵' : v.type === 'neutral' ? '⚪' : '🟠'}</span><span>${body}</span></div>`;
   }).join('');
   const ol = bulletize(d.oneLine);
   const oneLineHtml = ol.head ? `<div class="ins-oneline"><div class="ins-oneline-head">💡 ${esc(ol.head)}</div>${ol.bullets.length ? `<ul class="ins-oneline-bullets">${ol.bullets.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}</div>` : '';
