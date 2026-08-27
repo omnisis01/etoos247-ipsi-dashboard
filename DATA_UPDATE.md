@@ -15,12 +15,14 @@
    → 검증: rows/uni 수·카테고리 카운트 급변 없는지 + 교정 리포트 전건 적용인지
      [구분교정] [일자교정] [기준교정] [경쟁률교정] [지역교정] [입결교정] [enroll교정]
    → "미적용 N건 — SystemExit"가 뜨면 아래 '가드가 중단시켰을 때' 절차.
-4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py
+4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py && python3 verify_frontend.py
    → verify_data: 불변식(stdK 버킷 화이트리스트 포함).
    → qa_comp_ratio: 경쟁률 산술 래칫 — 신규 의심이 늘면 커밋 차단. 교정으로 기존 의심이
      줄었다면 --save-baseline 으로 기준선 갱신(현재 30건).
    → verify_insights: 인사이트 to(새 엑셀)·from(enroll26.json 스냅샷) 양쪽 대조.
      ⚠️ enroll26.json 은 2026 확정 스냅샷이라 엑셀이 갱신돼도 바꾸지 않는다.
+   → verify_frontend: 그 데이터가 **화면에 도달하는지**. 필드를 새로 추가했는데 프런트가
+     안 뿌리면 여기서 잡힌다(--detail 로 필드별 표·결측률).
 5. git show HEAD:data.js > <scratchpad>/prev_data.js
    python3 verify_data.py --diff <scratchpad>/prev_data.js
    → "의도한 수정"과 diff 가 일치하는지. 뜻밖의 신규/삭제 행이면 중단하고 원인 확인.
