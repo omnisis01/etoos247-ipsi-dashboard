@@ -15,14 +15,20 @@
    → 검증: rows/uni 수·카테고리 카운트 급변 없는지 + 교정 리포트 전건 적용인지
      [구분교정] [일자교정] [기준교정] [경쟁률교정] [지역교정] [입결교정] [enroll교정]
    → "미적용 N건 — SystemExit"가 뜨면 아래 '가드가 중단시켰을 때' 절차.
-4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py && python3 verify_frontend.py
+4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py \
+     && node probe_fields.js && python3 verify_frontend.py
    → verify_data: 불변식(stdK 버킷 화이트리스트 포함).
    → qa_comp_ratio: 경쟁률 산술 래칫 — 신규 의심이 늘면 커밋 차단. 교정으로 기존 의심이
      줄었다면 --save-baseline 으로 기준선 갱신(현재 30건).
    → verify_insights: 인사이트 to(새 엑셀)·from(enroll26.json 스냅샷) 양쪽 대조.
      ⚠️ enroll26.json 은 2026 확정 스냅샷이라 엑셀이 갱신돼도 바꾸지 않는다.
-   → verify_frontend: 그 데이터가 **화면에 도달하는지**. 필드를 새로 추가했는데 프런트가
-     안 뿌리면 여기서 잡힌다(--detail 로 필드별 표·결측률).
+   → probe_fields(실행 기반): 그 데이터가 **화면에 도달하는지**. app.js를 최소 DOM 스텁으로
+     진짜 돌려(verify_render.js) 필드마다 마커를 주입하고 렌더 결과에서 찾는다.
+     필드를 새로 추가했는데 프런트가 안 뿌리면 여기서 잡힌다. 새 필드는 probe_fields.js의
+     DATA_FIELDS/INS_FIELDS 에 등재할 것. 숫자 필드는 NUMERIC 에도 등재(문자열 마커는 포맷
+     함수가 걸러낸다).
+   → verify_frontend(정적): **필드 도달 판정은 믿지 마라.** 변이 테스트에서 미탐 7/10이었다.
+     키 정합·DOM 앵커·잘림 원문 복구 경로만 이쪽이 담당한다.
 5. git show HEAD:data.js > <scratchpad>/prev_data.js
    python3 verify_data.py --diff <scratchpad>/prev_data.js
    → "의도한 수정"과 diff 가 일치하는지. 뜻밖의 신규/삭제 행이면 중단하고 원인 확인.
@@ -87,6 +93,13 @@ cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
 > `../입결*/*.xlsx`(NFC 패턴)가 빈 결과를 낸다. 이 탓에 하네스가 조용히 건너뛰어져
 > 잘못된 인사이트가 커밋을 통과한 사고가 있었다. 존재 확인은 `os.path.exists`로 한다
 > (파일시스템이 정규화해 주므로 정상 동작).
+
+## 하네스를 하네스로 검수하기 (변이 테스트)
+
+검사기가 "전부 통과"라고 말할 때가 가장 위험하다. 그 말이 사실인지 확인하려면
+**렌더 코드를 일부러 지우고 잡는지** 보면 된다.
+실제로 이 방법으로 정적 검사기의 미탐 7/10을 찾아냈다(bullets 렌더·DOM 앵커를 삭제해도 통과).
+새 검사기를 만들면 반드시 이 검수를 거칠 것 — 통과 여부가 아니라 **검출력**을 봐야 한다.
 
 ## 왜 이렇게 하나 (Ratchet)
 
