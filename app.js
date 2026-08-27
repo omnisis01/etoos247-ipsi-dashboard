@@ -334,6 +334,12 @@ const $ = s => document.querySelector(s);
 const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '–' : Number(v).toFixed(d);
+// 좁은 칸(표·비교함·인쇄물)에 이름을 넣을 때 쓴다. 원문 학과명·전형명에는 줄바꿈이 섞여 있어
+// (예: '기계공학부\n(기계공학,로봇공학,설비소방공학)') 줄바꿈까지 글자로 세면 괄호 안 핵심이
+// 통째로 잘린다 — 실제로 '건축학부(건축공학,건축학전공(5년' 처럼 괄호도 못 닫았다.
+// 한 줄로 펴서 자르고, 잘렸으면 '…'로 알린다. 잘림 표시가 없으면 잘린 이름을 전체로 오인한다.
+const flat = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const cut = (s, n) => { const t = flat(s); return t.length > n ? t.slice(0, n) + '…' : t; };
 const fmtInt = v => (v == null || isNaN(v)) ? '–' : Math.round(v).toLocaleString();
 function avg(arr) { const a = arr.filter(x => x != null && !isNaN(x)); return a.length ? a.reduce((s, x) => s + x, 0) / a.length : null; }
 /* 입결 평균은 '같은 기준'끼리만 내야 한다. 대학마다 발표 기준이 달라서(70%컷·평균·80%컷·
@@ -1172,12 +1178,10 @@ function renderTable() {
       : '<span class="no-data">없음</span>';
     const inCmp = S.compare.has(r._i);
     const fb = favBucket(r._i);
-    // 전형명은 원문에 줄바꿈이 섞여 있다(예: '지역의사선발전형\n(경기도 의정부권)').
-    // 줄바꿈까지 글자 수로 세면 권역명이 통째로 잘려 표에서 권역 구분이 불가능했다 → 한 줄로 펴서 자른다.
-    const jn = r.jhname.replace(/\s+/g, ' ').trim();
+    const jn = flat(r.jhname);   // 줄바꿈 섞인 전형명을 한 줄로 — 자세한 이유는 flat/cut 정의부 참조
     return `<tr data-i="${r._i}">
       <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(jn.slice(0, 14))}${jn.length > 14 ? '…' : ''}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
+      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(cut(jn, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
       <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
@@ -1346,7 +1350,7 @@ function openCompare() {
     inner.innerHTML = `<div class="drawer-head"><h3>전형 비교 <span class="muted">${items.length}개</span></h3>
       <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpShare">🔗 링크 복사</button><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
       <div style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
-        `<th>${esc(r.uni)}<div class="muted">${esc(r.dept.slice(0, 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
+        `<th>${esc(r.uni)}<div class="muted" title="${esc(flat(r.dept))}">${esc(cut(r.dept, 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
         ${rowM('🎯 올해 유불리', r => `<span class="impact-chip ${V(r).cls}">${V(r).label}</span>`)}
         ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
         ${rowM('전형', r => esc(r.jhtype) + '<br><span class="muted">' + esc(r.jhname) + '</span>')}
@@ -1810,7 +1814,7 @@ function printCompare() {
   if (!items.length) { toast('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
   const rowM = (lab, fn) => `<tr><td class="pr-rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
   const body = `<table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
-      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(r.dept.slice(0, 18))}</span></th>`).join('')}</tr></thead><tbody>
+      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(flat(r.dept))}</span></th>`).join('')}</tr></thead><tbody>
       ${rowM('올해 유불리', r => `<span class="pr-vd ${V(r).cls}">${V(r).label}</span>`)}
       ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
       ${rowM('전형', r => esc(r.jhtype) + '<br><span class="pr-mut">' + esc(r.jhname) + '</span>')}

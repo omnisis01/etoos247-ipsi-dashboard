@@ -80,7 +80,10 @@ def n_ref(name, blob=CODE):
            len(re.findall(rf"\['{re.escape(name)}'\]", blob))
 
 
-def audit(label, fields, alias=None):
+def audit(label, fields, alias=None, soft=False):
+    """soft=True 면 미참조를 실패가 아니라 확인 권장으로 낸다.
+    meta 처럼 화면 표시용이 아닌 메타데이터가 그렇다 — years 는 verify_data.py 가
+    불변식(cur==2027)으로 쓰므로 '화면에 안 나온다'는 이유로 지우면 안 된다."""
     alias = alias or {}
     rows = []
     for f in fields:
@@ -93,8 +96,9 @@ def audit(label, fields, alias=None):
                 rows.append(('OK', f, f'참조 {ref} · 출력 {out}(→{alt}) — {why}'))
                 continue
         if ref == 0:
-            rows.append(('MISS', f, '참조 0회 — 수집했으나 프런트가 안 씀'))
-            fails.append((label, f, '참조 0회'))
+            rows.append(('REVIEW' if soft else 'MISS', f,
+                         '참조 0회 — ' + ('메타데이터(하네스용일 수 있음)' if soft else '수집했으나 프런트가 안 씀')))
+            (reviews if soft else fails).append((label, f, '참조 0회'))
         elif out == 0 and probe in _INDIRECT:
             rows.append(('OK', f, f'참조 {ref} · 간접 출력(→{_INDIRECT[probe]} 변수 경유)'))
         elif out == 0:
@@ -113,13 +117,45 @@ def audit(label, fields, alias=None):
 schema = dump('window.IPSI.schema')
 dec = re.search(r'const ROWS = D\.rows\.map\([\s\S]*?\n\}\)\);', CODE)
 dec_src = dec.group(0) if dec else ''
-for name, i in re.findall(r'(\w+)\s*:\s*(?:dc\.\w+\[)?r\[(\d+)\]', dec_src):
-    i = int(i)
-    exp = schema[i] if i < len(schema) else '(범위밖)'
-    if name != exp and ALIAS.get(exp) != name:
-        fails.append(('디코드', name, f'r[{i}] → SCHEMA는 {exp}'))
+# ⚠️ 예전 정규식 `(\w+): (?:dc\.\w+\[)?r\[(\d+)\]` 은 38개 중 24개만 봤다.
+#    배열(`c: [r[16], r[17], r[18]]`)과 삼항(`std26: dc.std ? (dc.std[r[35]]||'') : ''`)에서 끊겨
+#    **연도별 3개조 12개 + std 2개가 통째로 미검사**였다. 하필 연도가 핵심인 필드들이다.
+#    실증: c/g/v 의 연도 순서를 뒤집어 2026 자리에 2024가 오게 해도 이 검사도, 실행 프로브도
+#    통과했다(프로브는 '어디에 나오는가'만 보고 '올바른 자리인가'는 안 본다).
+#    그래서 key: value 쌍을 통째로 떠서 value 안의 r[N] 을 **순서대로** 스키마와 대조한다.
+#    ⚠️ 배열을 `\[[^\]]*\]` 로 잡으면 `[r[16], r[17], r[18]]` 이 `r[16` 에서 끊긴다(중첩 대괄호).
+#       그래서 key 위치로 구간을 나눠 value 를 통째로 뜬다.
+YEARS = ['26', '25', '24']
+seen_idx = set()
+_keys = [(m.group(1), m.start(), m.end()) for m in re.finditer(r'(?m)(?:^|[,{]\s*)(\w+)\s*:', dec_src)]
+_pairs = []
+for n, (key, _s, e) in enumerate(_keys):
+    end = _keys[n + 1][1] if n + 1 < len(_keys) else len(dec_src)
+    _pairs.append((key, dec_src[e:end]))
+for key, val in _pairs:
+    idxs = [int(x) for x in re.findall(r'r\[(\d+)\]', val)]
+    if not idxs:
+        continue
+    seen_idx.update(idxs)
+    if len(idxs) == 1:
+        i = idxs[0]
+        exp = schema[i] if i < len(schema) else '(범위밖)'
+        if key != exp and ALIAS.get(exp) != key:
+            fails.append(('디코드', key, f'r[{i}] → SCHEMA는 {exp}'))
+    else:
+        # 배열로 묶인 연도 3개조 — 위치가 곧 연도다. 뒤바뀌면 2024 값이 2026 자리에 온다.
+        for k, i in enumerate(idxs):
+            exp = schema[i] if i < len(schema) else '(범위밖)'
+            want = f'{key}{YEARS[k]}' if k < len(YEARS) else f'{key}?{k}'
+            if exp != want:
+                fails.append(('디코드', f'{key}[{k}]', f'r[{i}]={exp} 인데 {want} 자리 — 연도 뒤바뀜'))
+miss_idx = sorted(set(range(len(schema))) - seen_idx)
+if miss_idx:
+    fails.append(('디코드', '미검사 인덱스', f'{[schema[i] for i in miss_idx]} — 디코드 파싱이 놓쳤다'))
 audit('data.js SCHEMA', schema, ALIAS)
 audit('cats', dump('Object.keys(window.IPSI.cats[0])'))
+# window.IPSI.meta 는 감사 대상이 아니었다 — insights meta 와 이름만 같은 다른 객체다.
+audit('data.js meta', dump('Object.keys(window.IPSI.meta)'), soft=True)
 
 # ---------------------------------------------------------------- 2) insights.js
 def ins_keys(path):
@@ -153,10 +189,39 @@ for key, label, hard in [('orderMiss', 'order 누락(레일 미표시)', True),
         print(f'  ✓ {label}: 0건')
 print(f"  ✓ 접수일 수집 {cov['apN']}교")
 
+# ---------------------------------------------------------------- 3.5) 접수일 값 구조
+# ⚠️ 키(대학명)만 보면 값이 통째로 깨져도 통과한다. 실증: from/to/via 를 start/end/src 로
+#    리네임하니 164교 전부 접수일이 사라졌는데 하네스는 OK 를 냈다.
+#    원서접수 마감 시각은 틀리면 가장 치명적인 값이고, fetch_apply_dates.py 를 접수 주간
+#    직전에 다시 돌리기로 돼 있다 — 그때 구조가 바뀌면 여기서 잡아야 한다.
+ap = dump("""(()=>{const A=window.IPSI_APPLY||{};const need=['from','to','via'];
+ const bad=[],badDate=[];
+ for(const [k,v] of Object.entries(A)){
+   if(!v||typeof v!=='object'){bad.push(k);continue;}
+   if(need.some(f=>!(f in v)||!String(v[f]||'').trim())){bad.push(k);continue;}
+   if(isNaN(Date.parse(v.from))||isNaN(Date.parse(v.to))) badDate.push(k);
+ }
+ return {n:Object.keys(A).length, bad:bad.slice(0,6), nBad:bad.length,
+         badDate:badDate.slice(0,6), nBadDate:badDate.length};})()""")
+print('\n=== 접수일 값 구조 ===')
+if ap['nBad']:
+    fails.append(('접수일', 'from/to/via 누락', f"{ap['nBad']}교 {ap['bad']}"))
+    print(f"  ✗ from/to/via 누락 {ap['nBad']}교 → {ap['bad']}")
+elif ap['nBadDate']:
+    fails.append(('접수일', '날짜 파싱 불가', f"{ap['nBadDate']}교 {ap['badDate']}"))
+    print(f"  ✗ 날짜 파싱 불가 {ap['nBadDate']}교 → {ap['badDate']}")
+else:
+    print(f"  ✓ {ap['n']}교 전부 from/to/via 보유 · 날짜 파싱 정상")
+
 # ---------------------------------------------------------------- 4) DOM 앵커
 ids_html = set(re.findall(r'id="([^"]+)"', HTML))
 ids_made = set(re.findall(r'id="([\w-]+)"', CODE)) | set(re.findall(r"\.id\s*=\s*'([\w-]+)'", CODE))
-ids_app = set(re.findall(r"\$\('#([\w-]+)'\)", CODE)) | set(re.findall(r"getElementById\('([\w-]+)'\)", CODE))
+# ⚠️ `$('#x')` 와 getElementById 만 보면 querySelector('#x') 4곳을 통째로 놓친다.
+#    그중 #cutFilter 는 index.html 에 있는 외부 앵커라, 지워지면 app.js 가 `if (!box) return`
+#    으로 조용히 빠져나가 입결 컷·고사시기 필터가 콘솔 에러 없이 증발한다.
+ids_app = (set(re.findall(r"\$\('#([\w-]+)'\)", CODE))
+           | set(re.findall(r"getElementById\(['\"]([\w-]+)['\"]\)", CODE))
+           | set(re.findall(r"querySelector\(\s*['\"]#([\w-]+)['\"]", CODE)))
 orphan = sorted(ids_app - ids_html - ids_made)
 print('\n=== DOM 앵커 ===')
 if orphan:
@@ -170,10 +235,19 @@ print('\n=== 표시 잘림 ===')
 # 문자열 필드에서 파생된 지역변수(예: const jn = r.jhname.replace(...))도 잘림 검사 대상에 넣는다.
 STR_VAR = {v: src for v, src in re.findall(r'(?:const|let)\s+(\w+)\s*=\s*r\.(\w+)\.replace\(', CODE)}
 # ⚠️ 배열 개수 제한(v.sig.slice(0,2) 같은 것)은 문자열 잘림이 아니다. .map(/.forEach( 가 뒤따르면 배열로 본다.
-for m in re.finditer(r'\b(?:r\.)?(\w+)\.slice\(0,\s*(\d+)\)', CODE):
-    f, n = m.group(1), m.group(2)
-    whole = m.group(0)
-    if not (whole.startswith('r.') or f in STR_VAR):
+# ⚠️ `.slice(0,N)` 만 보면 헬퍼로 감싼 잘림을 놓친다. cut(r.dept, 16) 같은 형태도 대상이다.
+#    (실제로 dept 잘림을 cut() 으로 리팩터하자 검사 대상에서 조용히 빠졌다.)
+_slices = [(m.group(1), m.group(2), m.group(0), m.start())
+           for m in re.finditer(r'\b(?:r\.)?(\w+)\.slice\(0,\s*(\d+)\)', CODE)]
+_slices += [(m.group(1), m.group(2), m.group(0), m.start())
+            for m in re.finditer(r'\bcut\(\s*(?:r\.)?(\w+)\s*,\s*(\d+)\s*\)', CODE)]
+for f, n, whole, pos in sorted(_slices, key=lambda x: x[3]):
+    class _M:                                       # finditer 결과처럼 쓰기 위한 얇은 래퍼
+        def __init__(self, s, w): self._s, self._w = s, w
+        def start(self): return self._s
+        def end(self): return self._s + len(self._w)
+    m = _M(pos, whole)
+    if not (whole.startswith('r.') or whole.startswith('cut(') or f in STR_VAR):
         continue                                   # 문자열 필드 유래가 아니면 건너뛴다
     tail = CODE[m.end():m.end() + 40]
     if re.match(r'\s*\.(?:map|forEach|filter|join)\b', tail):
@@ -183,10 +257,19 @@ for m in re.finditer(r'\b(?:r\.)?(\w+)\.slice\(0,\s*(\d+)\)', CODE):
     hit = re.search(re.escape(whole), APP)
     line = APP[:hit.start()].count('\n') + 1 if hit else 0
     src = STR_VAR.get(f, f)                        # 파생 변수면 원본 필드명으로 환원
-    seg = CODE[max(0, m.start() - 260):m.start() + 60]
-    has_title = 'title="' in seg                   # 변수명 무관 — 같은 요소에 title이 붙었는지만 본다
-    full = bool(re.search(rf'\$\{{esc\(r\.{src}\)\}}', CODE) or
-                (src == 'dept' and re.search(r'\$\{esc\(deptDisp\(r\)\)\}', CODE)))
+    # ⚠️ 앞뒤 320자 '창'으로 title 을 찾으면 이웃 요소의 title 이 새어 들어온다(실증: jn 의
+    #    title 을 지워도 옆 반도체 배지 title 때문에 통과했다). slice 가 속한 태그 안만 본다.
+    tag_start = CODE.rfind('<', max(0, m.start() - 400), m.start())
+    seg = CODE[tag_start:m.start()] if tag_start >= 0 else ''
+    has_title = bool(re.search(rf'title="\$\{{esc\((?:r\.)?{re.escape(f)}\)\}}"', seg)
+                     or re.search(r'title="\$\{esc\(', seg))
+    # ⚠️ full 을 파일 전역에서 찾으면 인쇄 전용 표(모달이 인쇄에서 display:none)까지
+    #    '모달에서 전체 표시'로 통과시킨다. 같은 함수 본문 안에서만 복구 경로를 인정한다.
+    fn_start = max(CODE.rfind('\nfunction ', 0, m.start()), CODE.rfind('\nconst ', 0, m.start()))
+    fn_end = CODE.find('\nfunction ', m.start())
+    body = CODE[fn_start if fn_start > 0 else 0: fn_end if fn_end > 0 else len(CODE)]
+    full = bool(re.search(rf'\$\{{esc\(r\.{src}\)\}}', body) or
+                (src == 'dept' and re.search(r'\$\{esc\(deptDisp\(r\)\)\}', body)))
     note = 'title 툴팁으로 원문 보존' if has_title else ('모달·상세에서 전체 표시' if full else '⚠ 원문 확인 경로 없음')
     st = '✓' if (has_title or full) else '✗'
     if st == '✗':
