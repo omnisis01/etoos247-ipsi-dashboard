@@ -189,6 +189,32 @@ else:
     else:
         print(f'  ✓ 미사용 {len(_unused)}열은 전부 비어 있음(수집 대상 아님)')
 
+
+# ---------------------------------------------------------------- ⑥ 3개년 세트의 연도 편식
+# ⑤(미사용 열)로는 **std24 형 사고를 못 잡는다** — 읽기는 읽으니 ⑤는 통과한다.
+# 진짜 원인은 따로였다: 2026-07-15 e60d82e 에서 '기준이 다르면 추세로 읽으면 안 된다'는
+# 원리를 알아내고 std25 를 도입했는데, 그 커밋이 고친 건 **유불리 판정(2026 vs 2025 프레임)**
+# 뿐이었다. 같은 입결을 3개년으로 그리는 화면(모달 표·스파크라인·차트B)은 점검하지 않아
+# std24 가 40여 일간 비어 있었다.
+# → 3개년 세트 필드인데 **특정 연도만 참조가 0**이면 그 연도가 소비처에서 누락된 것이다.
+#   (배열로 묶어 쓰는 필드는 세 연도가 모두 0 — 균등하므로 정상으로 본다.)
+print('\n=== ⑥ 3개년 세트의 연도 편식 ===')
+_app = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
+_odd = []
+for base in ('c', 'g', 'v', 'chung', 'std'):
+    cnt = {y: len(re.findall(rf'\b(?:r\.)?{base}{y}\b', _app)) for y in ('26', '25', '24')}
+    zero = [y for y, n in cnt.items() if n == 0]
+    if zero and len(zero) < 3:
+        _odd.append((base, cnt, zero))
+        print(f'  ✗ {base}: ' + ' '.join(f'{base}{y}={n}' for y, n in cnt.items())
+              + f' → {zero} 만 소비처 없음')
+    else:
+        print(f'  ✓ {base}: ' + ' '.join(f'{base}{y}={n}' for y, n in cnt.items())
+              + ('  (배열 참조 — 균등)' if len(zero) == 3 else ''))
+if _odd:
+    fails.append(f'3개년 세트 연도 편식 {len(_odd)}건 — {[b for b, _, _ in _odd]}: '
+                 '한 연도만 화면에서 안 쓰인다(std24 형 사고)')
+
 # ---------------------------------------------------------------- 결론
 print()
 if fails:
