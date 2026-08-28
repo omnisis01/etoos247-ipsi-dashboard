@@ -133,6 +133,32 @@ elif m:
 else:
     print('  ? uniPanel 구성 코드를 찾지 못함 — 구조 변경 확인 필요')
 
+
+# ---------------------------------------------------------------- ④ 추합 단일 오염
+# 대학마다 '충원' 정의가 달라(명/배/%) 계통 차이는 손대지 않는다(checklist 🔒).
+# 하지만 **같은 행 3개년 중 하나만 자릿수가 튀는 것**은 정의 차이로 설명되지 않는다 —
+# 옆 셀 값이 흘러든 오염이다. 실측: 동아대 사회학 [7, 972, 4] 1행(모집 6명·지원 42명).
+print('\n=== ④ 추합 단일 오염 (3개년 중 하나만 자릿수 이탈) ===')
+_CH = [S.index(k) for k in ('chung26', 'chung25', 'chung24')]
+_out = []
+for r in D['rows']:
+    vals = []
+    for ci in _CH:
+        t = str(r[ci] or '')
+        if re.fullmatch(r'\d+', t): vals.append(int(t))
+    if len(vals) < 3: continue
+    mx = max(vals); others = [v for v in vals if v != mx]
+    if not others: continue
+    om = max(others)
+    if mx >= 100 and om > 0 and mx / om >= 15:
+        _out.append((mx / om, dc['uni'][r[iu]], dc['dept'][r[idp]][:18], vals))
+for ratio, u, d, vals in sorted(_out, reverse=True):
+    print(f'  ✗ {u} {d} 3개년 {vals} → {ratio:.0f}배 이탈')
+if _out:
+    fails.append(f'추합 단일 오염 {len(_out)}행 — data_corrections.json "chung" 채널로 처리하라')
+else:
+    print('  ✓ 3개년이 함께 크거나 함께 작다(계통 차이만 남음)')
+
 # ---------------------------------------------------------------- 결론
 print()
 if fails:

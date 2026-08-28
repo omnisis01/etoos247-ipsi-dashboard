@@ -776,6 +776,13 @@ for _c in _CORR.get('comp', []):
     _COMP_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c['old'], _c['new'])
 _comp_fixed = set()
 
+# 추합 교정 — 대학마다 '충원' 정의가 달라 계통 차이는 손대지 않는다(checklist 🔒).
+# 같은 행 3개년 중 하나만 자릿수가 튀는 **단일 오염**만 대상이다(전수 스캔 결과 1행).
+_CHUNG_CORR = {}
+for _c in _CORR.get('chung', []):
+    _CHUNG_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (str(_c['old']), str(_c['new']))
+_chung_fixed = set()
+
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
 # ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
 #    캠퍼스에 있을 때(경상대 진주/통영, 유원대 영동/아산 등) 멀쩡한 행까지 덮어써 버린다.
@@ -856,6 +863,10 @@ for r in raw:
             grade[0] = _new; _grade_fixed.add(_gk)
     conv = [strict_num(r[23]), strict_num(r[28]), strict_num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
+    for _yi, _yr in enumerate(('26', '25', '24')):
+        _hk = (uni, dept, jhtype, jhname, _yr)
+        if _hk in _CHUNG_CORR and chung[_yi] == _CHUNG_CORR[_hk][0]:
+            chung[_yi] = _CHUNG_CORR[_hk][1]; _chung_fixed.add(_hk)
     method = s(r[12]); note = s(r[25]); date = s(r[34])
     # 고사일 교정은 (대학, 전형명, 원문) 키가 기본이고, **모집단위별로 갈릴 때만** dept를 더 건다.
     # 경상대 학생부종합 일반전형처럼 같은 전형 안에서 면접 시행 학과와 미시행 학과가 섞이면
@@ -1043,6 +1054,10 @@ print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
 # ⚠️ 다른 교정(date·std·comp·region·enroll)에는 전부 미적용 중단 가드가 있는데 입결에만 없었다.
 #    파서가 값을 바꾸면 old 와 어긋나 교정이 조용히 스킵되고, 숫자만 121→120으로 줄어든 채
 #    빌드가 exit 0 으로 통과한다. 입결은 이 대시보드의 핵심 지표다 — 소리 없이 빠지면 안 된다.
+_miss_chung = sorted(set(_CHUNG_CORR) - _chung_fixed)
+if _miss_chung:
+    raise SystemExit(f"[중단] 추합교정 미적용 {len(_miss_chung)}건 — 엑셀이 값을 바꿨다: {_miss_chung}")
+print(f"[추합교정] {len(_chung_fixed)}/{len(_CHUNG_CORR)}건")
 _miss_grade = sorted(set(_GRADE_CORR) - _grade_fixed)
 if _miss_grade:
     raise SystemExit(f"[중단] 입결교정 미적용 {len(_miss_grade)}건 — 엑셀이 값을 바꿨거나 파서가 달라졌다. "
