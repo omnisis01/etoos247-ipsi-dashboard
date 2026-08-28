@@ -783,6 +783,15 @@ for _c in _CORR.get('chung', []):
     _CHUNG_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (str(_c['old']), str(_c['new']))
 _chung_fixed = set()
 
+# 환산점수 오타 복원 — 원본이 '79..22' 처럼 점이 겹쳐 숫자로 안 읽히는 칸.
+# ⚠️ **원본에 없는 값을 만드는 것**이라 산술 근거가 확정적일 때만 넣는다.
+#    충남대 일반전형은 '환산 = 110 − 10×등급' 이 표본 80건 100% 성립해 예측 79.20 vs 복원 79.22.
+#    근거가 약한 건(대구가톨릭 표본 부족·동아대 적합 2%)은 무데이터 + 원문 노출로 남긴다.
+_CONV_CORR = {}
+for _c in _CORR.get('conv', []):
+    _CONV_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (str(_c['old']), float(_c['new']))
+_conv_fixed = set()
+
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
 # ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
 #    캠퍼스에 있을 때(경상대 진주/통영, 유원대 영동/아산 등) 멀쩡한 행까지 덮어써 버린다.
@@ -862,6 +871,10 @@ for r in raw:
         if (grade[0] is None and _old is None) or (grade[0] is not None and _old is not None and abs(grade[0] - _old) < 1e-9):
             grade[0] = _new; _grade_fixed.add(_gk)
     conv = [strict_num(r[23]), strict_num(r[28]), strict_num(r[32])]
+    for _yi, (_yr, _ci) in enumerate((('26', 23), ('25', 28), ('24', 32))):
+        _vk = (uni, dept, jhtype, jhname, _yr)
+        if _vk in _CONV_CORR and s(r[_ci]) == _CONV_CORR[_vk][0]:
+            conv[_yi] = _CONV_CORR[_vk][1]; _conv_fixed.add(_vk)
     chung = [s(r[24]), s(r[29]), s(r[33])]
     for _yi, _yr in enumerate(('26', '25', '24')):
         _hk = (uni, dept, jhtype, jhname, _yr)
@@ -1054,6 +1067,10 @@ print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
 # ⚠️ 다른 교정(date·std·comp·region·enroll)에는 전부 미적용 중단 가드가 있는데 입결에만 없었다.
 #    파서가 값을 바꾸면 old 와 어긋나 교정이 조용히 스킵되고, 숫자만 121→120으로 줄어든 채
 #    빌드가 exit 0 으로 통과한다. 입결은 이 대시보드의 핵심 지표다 — 소리 없이 빠지면 안 된다.
+_miss_conv = sorted(set(_CONV_CORR) - _conv_fixed)
+if _miss_conv:
+    raise SystemExit(f"[중단] 환산교정 미적용 {len(_miss_conv)}건 — 엑셀이 오타를 고쳤을 수 있다: {_miss_conv}")
+print(f"[환산교정] {len(_conv_fixed)}/{len(_CONV_CORR)}건")
 _miss_chung = sorted(set(_CHUNG_CORR) - _chung_fixed)
 if _miss_chung:
     raise SystemExit(f"[중단] 추합교정 미적용 {len(_miss_chung)}건 — 엑셀이 값을 바꿨다: {_miss_chung}")
