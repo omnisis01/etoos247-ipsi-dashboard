@@ -36,7 +36,7 @@ process.stdout.write(JSON.stringify({
 const DATA_FIELDS = ['region', 'sigun', 'uni', 'gye', 'dept', 'jhtype', 'jhname', 'jagyeok', 'enroll',
   'prev', 'dkind', 'dn', 'change', 'choejeo', 'hasChoejeo', 'chKind', 'c26', 'c25', 'c24',
   'g26', 'g25', 'g24', 'v26', 'v25', 'v24', 'chung26', 'chung25', 'chung24', 'method', 'note',
-  'date', 'gradeRatio', 'subjects', 'careerSubj', 'std26', 'stdK26'];
+  'date', 'gradeRatio', 'subjects', 'careerSubj', 'std26', 'stdK26', 'std24', 'dupApply', 'docs'];
 const INS_FIELDS = ['ins.tier', 'ins.headline', 'ins.tags', 'ins.oneLine', 'ins.caption',
   'ins.bullets', 'ins.icon', 'ins.title', 'ins.text', 'ins.label', 'ins.from', 'ins.to', 'ins.note'];
 
@@ -84,6 +84,11 @@ const CODE_FIELDS = {
   dkind: ['증원', '감원', '신설'],
   hasChoejeo: ['없음', '최저'],
   stdK26: ['평균', '컷', '최저'],
+  // ⚠️ std24 는 마커 주입으로 검증할 수 없다 — std26/std25/std24 가 **같은 dict를 공유**해서
+  //    주입하면 세 연도가 전부 같은 값이 되고, "기준이 서로 다를 때만" 뜨는 경고가 사라진다.
+  //    즉 마커 미검출은 도달 실패가 아니라 주입 방식의 한계다(실측으로 도달 확인함).
+  //    대신 그 경고 문구가 화면에 있는지로 확인한다.
+  std24: ['연도별 기준 상이'],
 };
 
 const missing = rows.filter(r => r.boot && !r.hit && !(r.f in CODE_FIELDS));

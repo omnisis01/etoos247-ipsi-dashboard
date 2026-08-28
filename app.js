@@ -24,6 +24,13 @@ const ROWS = D.rows.map((r, i) => ({
   raw: (D.raw && D.raw[i]) || null,
   std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
   std25: dc.std ? (dc.std[r[37]] || '') : '',
+  // 2024 입결 기준 — std25 는 쓰면서 std24 만 빠져 있었다. 5,097행에서 2026 기준과 달라
+  // 3개년 추이가 기준이 다른 값을 이어 그렸다(70%컷과 평균을 한 선으로).
+  std24: dc.std ? (dc.std[r[38]] || '') : '',
+  // 복수지원 제약 — 22.2%(5,860행)에 '불가'·'학종 불가'·'3회' 같은 제한이 있다.
+  // 수시 6회 안에서 전략을 짜는 데 직결되는데 화면에 아예 없었다.
+  dupApply: dc.dupApply ? (dc.dupApply[r[39]] || '') : '',
+  docs: dc.docs ? (dc.docs[r[40]] || '') : '',
 }));
 
 /* 신설 전형의 상속된 과거 실적은 build_data.py가 data.js 단계에서 비운다(전수 94행).
@@ -628,6 +635,23 @@ ROWS.forEach(r => { if (r.stdK26 && r.g[0] != null) STD_COUNT[r.stdK26] = (STD_C
 const CUT_LABELS = { avg: '평균', cut50: '50% 컷', cut70: '70% 컷', cut80: '75~85% 컷', cut90: '90% 컷', lowest: '최저(등록자 끝단)', stage1: '1단계 평균' };
 // 표·카드에 숫자 옆에 붙는 짧은 라벨. 대학마다 발표 기준이 달라 같은 숫자라도 뜻이 다르다
 // (cut70 평균 3.73 vs lowest 4.80 — 1등급 넘게 벌어진다). 숫자만 보여주면 오해한다.
+// 원천의 필요서류는 '학'·'학,증'·'학,추' 같은 약어다. 그대로 두면 뜻이 안 통한다.
+const DOCS_LABEL = t => String(t || '').replace(/\s/g, '')
+  .split(/[,.]/).filter(Boolean)
+  .map(x => ({ '학': '학생부', '증': '증빙서류', '(증)': '증빙서류(해당자)', '추': '추천서',
+               '활': '활동보고서', '자': '자기소개서' }[x] || x)).join(' · ');
+// 3개년 입결의 **기준이 해마다 다르면** 추세선을 그대로 읽으면 안 된다.
+// 70%컷과 평균을 한 선으로 이으면 없는 등락이 생긴다(실측 5,097행에서 2026≠2024).
+// std24 를 뒤늦게 수집한 이유가 이것이다 — std25 는 쓰면서 std24 만 빠져 있었다.
+const nzStd2 = t => String(t || '').replace(/\s/g, '');
+function basisWarn(r) {
+  const ys = [['2026', r.std26], ['2025', r.std25], ['2024', r.std24]]
+    .filter(([y, t]) => t && nzStd2(t));
+  const uniq = [...new Set(ys.map(([, t]) => nzStd2(t)))];
+  if (uniq.length < 2) return '';
+  const detail = ys.map(([y, t]) => `${y} ${t}`).join(' / ');
+  return ` <span class="basis-warn" title="${esc(detail)}">⚠ 연도별 기준 상이</span>`;
+}
 const CUT_SHORT = { avg: '평균', cut50: '50%', cut70: '70%', cut80: '75~85%', cut90: '90%', lowest: '최저', stage1: '1단계' };
 /** 입결 숫자 옆에 붙일 기준 배지. 숫자만 보여주면 서로 다른 지표를 같은 잣대로 읽는다. */
 function stdTag(r, cls) {
@@ -1316,6 +1340,9 @@ function openModal(i) {
         <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${r.dkind === 'changed' ? '전형 변경(개편·개명)' : esc(r.prev || '-')})</span></dd>
         <dt>지원자격</dt><dd>${r.jagyeok ? esc(r.jagyeok) : '<span class="muted">전형명 참조 · 세부 자격은 대학 요강에서 확인하세요</span>'}${r.nsuNo ? ' <span class="delta tighten" title="졸업예정자(현 고3)만 지원 가능 — 재수생 이상 지원 불가">N수불가</span>' : ''}</dd>
         <dt>전형방법</dt><dd>${esc(r.method) || '–'}</dd>
+        ${r.dupApply ? `<dt>복수지원</dt><dd>${/불가/.test(r.dupApply)
+            ? `<b class="dup-no">${esc(r.dupApply)}</b>` : esc(r.dupApply)}</dd>` : ''}
+        ${r.docs ? `<dt>필요서류</dt><dd>${esc(DOCS_LABEL(r.docs))}</dd>` : ''}
         <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKindShow ? `<span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'tighten' : (r.chKindShow === '변경') ? 'neu' : 'ease'}">최저 ${r.chKindShow}</span>` : ''}</dd>
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
@@ -1338,7 +1365,7 @@ function openModal(i) {
       ${r.change ? `<div class="msec"><h4>📝 2026 대비 변경사항(2027)</h4><div class="change-box">${esc(r.change)}</div></div>` : ''}
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
         <table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
-          ${trendRow(`입결(등급) ${stdTag(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
+          ${trendRow(`입결(등급) ${stdTag(r)}${basisWarn(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
           ${trendRow('입결(환산)', [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}

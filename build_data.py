@@ -562,7 +562,7 @@ def categorize(uni, gye, dept, jhname, jagyeok):
 
 # ---------------------------------------------------------------- build rows
 # dictionaries for interning
-dicts = {k: {} for k in ['region','sigun','uni','dept','jhname','jagyeok','choejeo','change','method','gradeRatio','subjects','careerSubj','note','date','std']}
+dicts = {k: {} for k in ['region','sigun','uni','dept','jhname','jagyeok','choejeo','change','method','gradeRatio','subjects','careerSubj','note','date','std','dupApply','docs']}
 order = {k: [] for k in dicts}
 def intern(key, val):
     val = s(val)
@@ -895,6 +895,10 @@ for r in raw:
     # 바꾸기도 해서(예: 2025 평균 → 2026 70%컷) 기준이 다른 두 해의 등급을 비교하면 의미가 없다.
     # 실제로 이 비교 때문에 가짜 입결 추세 신호가 983건 발생했다 → std25도 실어 보내 app.js에서 막는다.
     std26 = s(r[21])
+    std24 = s(r[30])          # 2024 입결 기준 — std25 는 이미 쓰는데 std24 만 빠져 있었다.
+                              # 5,097행에서 2026 기준과 달라 3개년 추이가 기준 다른 값을 이어 그렸다.
+    dupApply = s(r[14])       # 복수지원 가능 여부 — 22.2%(5,860행)에 제약이 있다('불가'·'학종 불가'·'3회').
+    docs = s(r[13])           # 필요 서류 — '학'(학생부)·'학,증'(증빙)·'학,추'(추천서)
     if (uni, std26) in _STD_CORR:
         std26 = _STD_CORR[(uni, std26)]; _std_fixed.add((uni, s(r[21])))
     stdK = std_kind(std26)
@@ -980,7 +984,7 @@ for r in raw:
         intern('method', method), intern('note', note), intern('date', date),
         intern('gradeRatio', gr), intern('subjects', subj), intern('careerSubj', career),
         tags,
-        intern('std', std26), stdK, intern('std', std25),
+        intern('std', std26), stdK, intern('std', std25), intern('std', std24), intern('dupApply', dupApply), intern('docs', docs),
     ])
 
 # ---------------------------------------------------------------- 누락 행 보완 (요강 근거)
@@ -1090,7 +1094,7 @@ if _miss or len(_drop_hit) != len(_ROW_DROP) or len(_dedupe_hit) < len(_ROW_DEDU
 SCHEMA = ['region','sigun','uni','gye','dept','jhtype','jhname','jagyeok','enroll','prev','dkind','dn',
           'change','choejeo','hasChoejeo','chKind','c26','c25','c24','g26','g25','g24','v26','v25','v24',
           'chung26','chung25','chung24','method','note','date','gradeRatio','subjects','careerSubj',
-          'cats','std26','stdK26','std25']
+          'cats','std26','stdK26','std25', 'std24', 'dupApply', 'docs']
 
 # (key, label, desc, color, sub, parent)
 CATS = [

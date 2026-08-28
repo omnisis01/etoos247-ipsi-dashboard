@@ -817,3 +817,9 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .raw-line{display:flex;gap:10px;align-items:baseline;font-size:12.5px}
 .raw-line b{flex:none;min-width:82px;color:var(--text-soft);font-weight:700}
 .raw-line span{color:var(--text);font-variant-numeric:tabular-nums}
+
+/* 복수지원 제약 — '불가'는 지원 전략을 바꾸는 정보라 눈에 띄어야 한다 */
+.dup-no{color:var(--bad-ink,var(--bad));font-weight:800}
+/* 3개년 입결의 기준이 해마다 다를 때 — 추세선을 그대로 읽으면 안 된다는 신호 */
+.basis-warn{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:20px;
+  background:var(--new-soft);color:var(--new-ink,var(--new));white-space:nowrap}
