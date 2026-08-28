@@ -19,6 +19,9 @@ const ROWS = D.rows.map((r, i) => ({
   method: dc.method[r[28]] || '', note: dc.note[r[29]] || '', date: dc.date[r[30]] || '',
   gradeRatio: dc.gradeRatio[r[31]] || '', subjects: dc.subjects[r[32]] || '', careerSubj: dc.careerSubj[r[33]] || '',
   cats: r[34] || [],
+  // 파서가 단일 값으로 환원하지 못해 버린 셀의 원문(희소 — 152행). SCHEMA 밖 사이드맵이라
+  // 인덱스로 붙인다. 예: '남:5.20 · 여:3.20' — 값은 비우되 근거는 사용자에게 보여준다.
+  raw: (D.raw && D.raw[i]) || null,
   std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
   std25: dc.std ? (dc.std[r[37]] || '') : '',
 }));
@@ -1342,6 +1345,19 @@ function openModal(i) {
         </tbody></table>
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
+      ${(() => {
+        if (!r.raw) return '';
+        const LBL = { enroll: '모집인원', c26: '경쟁률 2026', c25: '경쟁률 2025', c24: '경쟁률 2024',
+                      g26: '입결 2026', g25: '입결 2025', g24: '입결 2024',
+                      v26: '환산 2026', v25: '환산 2025', v24: '환산 2024' };
+        const items = Object.entries(r.raw).map(([k, v]) =>
+          `<div class="raw-line"><b>${esc(LBL[k] || k)}</b><span>${esc(v)}</span></div>`).join('');
+        // 왜 이 섹션이 있나 — 원천이 한 칸에 여러 값을 적어(계열·성별 분리, 구간 분포) 단일 값으로
+        // 환원할 수 없는 경우다. 임의로 하나를 고르거나 평균 내면 틀린 숫자가 되므로 비워 두고,
+        // 대신 원문을 그대로 보여준다.
+        return `<div class="msec"><h4>📄 원문 표기 <span class="muted">단일 값으로 환산이 안 되는 항목</span></h4>
+          <div class="raw-box">${items}</div></div>`;
+      })()}
       ${r.note ? `<div class="msec"><h4>💡 지원 시 유의사항</h4><div class="change-box" style="background:var(--surface-2);color:var(--text-soft);border-color:var(--line)">${expandNote(r)}</div></div>` : ''}
       <div class="msec"><h4>🗂️ 지원카드에 담기 <span class="muted">지원희망 또는 상향을 선택</span></h4>
         <div class="modal-actions">

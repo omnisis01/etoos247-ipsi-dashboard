@@ -810,3 +810,10 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   background:var(--surface);color:var(--text-mute)}
 .fav-clash .fc-note{margin-top:5px;font-size:11.5px;color:var(--text-mute)}
 .pr-clash{margin:6px 0 10px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:11px}
+
+/* 원문 표기 — 파서가 단일 값으로 환원하지 못한 셀(계열·성별 분리, 구간 분포)의 원본 */
+.raw-box{display:flex;flex-direction:column;gap:5px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:9px;padding:9px 11px}
+.raw-line{display:flex;gap:10px;align-items:baseline;font-size:12.5px}
+.raw-line b{flex:none;min-width:82px;color:var(--text-soft);font-weight:700}
+.raw-line span{color:var(--text);font-variant-numeric:tabular-nums}

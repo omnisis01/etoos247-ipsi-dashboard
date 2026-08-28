@@ -53,6 +53,24 @@ def parse_enroll(v):
         return float(sum(n for _, n in tracks)), tracks
     return num(v), []
 
+# ── 통계 3열군(경쟁률·입결등급·환산점수) 전용 엄격 파서 ────────────────────────
+# num() 은 문자열에서 첫 숫자를 뽑는다. 모집인원에선 관용이 필요하지만(‘약간명’·‘10이내’),
+# 통계 칸에서는 그 관용이 **틀린 숫자를 만들어낸다**. 실측 120셀 —
+#   · 라벨분리 75셀  '남:5.20\n여:3.20' → 5.20 만 취해 여자 지원자에게 2.00등급 틀린 값
+#   · 구간분포  9셀  '1.5~1.99 : 64.5%…' → 1.5 를 등급으로. 경인교대 g24 가 그 결과였다
+#   · 접미어    7셀  '3명이하'(인원 비공개) → 등급 3.0 으로 둔갑
+#   · 개수·토익 22셀 '맞힌 개수 10.24'·'토익:984.17' → 환산점수로 둔갑
+# 단일 값으로 환원할 수 없으면 **무데이터**가 정답이다. 원문은 D.raw 로 보존해 화면에 띄운다.
+def strict_num(v):
+    if v is None: return None
+    if isinstance(v, (int, float)): return float(v)
+    t = str(v).strip().replace(',', '')
+    if t in ('', '-', '–', '—', '없음', '미정', 'N/A'): return None
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
 def vgrade(v):
     """입결 등급은 1.0~9.0 범위만 유효. 범위 밖(환산점수 오입력·오타 등)은 무데이터 처리."""
     return v if (v is not None and 1.0 <= v <= 9.0) else None
@@ -554,6 +572,7 @@ def intern(key, val):
     return dd[val]
 
 rows = []
+_raw_cells = {}   # {행인덱스: {키: 원문}} — 파서가 버린 셀의 원문. SCHEMA 밖 사이드맵.
 # 알려진 원천(마스터 xlsx) 수능최저 오기 교정 — 외부 소스(2027 요강·토마스·입시위키)로 확인된 것만.
 # 마스터 파일을 직접 수정하지 않고 빌드 시 패치한다. (uni, dept, [jhname], old 원문) → new 원문.
 LEAST_CORRECTIONS = [
@@ -823,19 +842,19 @@ for r in raw:
     enroll = apply_enroll_correction(uni, dept, jhtype, jhname, _enroll_raw); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
-    comp = [num(r[18]), num(r[19]), num(r[20])]
+    comp = [strict_num(r[18]), strict_num(r[19]), strict_num(r[20])]
     _ck = (uni, dept, jhtype, jhname)
     if _ck in _COMP_CORR:
         _cold, _cnew = _COMP_CORR[_ck]
         if comp[0] is not None and abs(comp[0] - _cold) < 1e-9:
             comp[0] = _cnew; _comp_fixed.add(_ck)
-    grade = [vgrade(num(r[22])), vgrade(num(r[27])), vgrade(num(r[31]))]
+    grade = [vgrade(strict_num(r[22])), vgrade(strict_num(r[27])), vgrade(strict_num(r[31]))]
     _gk = (uni, dept, jhtype, jhname)
     if _gk in _GRADE_CORR:
         _old, _new = _GRADE_CORR[_gk]
         if (grade[0] is None and _old is None) or (grade[0] is not None and _old is not None and abs(grade[0] - _old) < 1e-9):
             grade[0] = _new; _grade_fixed.add(_gk)
-    conv = [num(r[23]), num(r[28]), num(r[32])]
+    conv = [strict_num(r[23]), strict_num(r[28]), strict_num(r[32])]
     chung = [s(r[24]), s(r[29]), s(r[33])]
     method = s(r[12]); note = s(r[25]); date = s(r[34])
     # 고사일 교정은 (대학, 전형명, 원문) 키가 기본이고, **모집단위별로 갈릴 때만** dept를 더 건다.
@@ -912,6 +931,19 @@ for r in raw:
     _rk = (uni, dept, _reg, _sig)
     if _rk in _REGION_CORR:
         _reg, _sig = _REGION_CORR[_rk]; _region_fixed.add(_rk)
+    # 파서가 무데이터로 떨어뜨렸는데 원천에 글자가 있으면 원문을 남긴다(화면에서 '원문 보기'로 노출)
+    _rw = {}
+    for _key, _ci, _got in (('c26', 18, comp[0]), ('c25', 19, comp[1]), ('c24', 20, comp[2]),
+                            ('g26', 22, grade[0]), ('g25', 27, grade[1]), ('g24', 31, grade[2]),
+                            ('v26', 23, conv[0]), ('v25', 28, conv[1]), ('v24', 32, conv[2]),
+                            ('enroll', 8, None)):
+        _txt = s(r[_ci])
+        if _key == 'enroll':
+            if _etracks: _rw['enroll'] = _txt.replace('\n', ' · ')
+            continue
+        if _got is None and _txt and _txt not in ('-', '–', '—', '없음', '미정', 'N/A'):
+            _rw[_key] = _txt.replace('\n', ' · ')
+    if _rw: _raw_cells[len(rows)] = _rw
     rows.append([
         intern('region', _reg), intern('sigun', _sig), intern('uni', uni), gye[:2],
         intern('dept', dept), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
@@ -1008,6 +1040,13 @@ print(f"[경쟁률교정] c26 {len(_comp_fixed)}/{len(_COMP_CORR)}건")
 if len(_region_fixed) != len(_REGION_CORR):
     raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
+# ⚠️ 다른 교정(date·std·comp·region·enroll)에는 전부 미적용 중단 가드가 있는데 입결에만 없었다.
+#    파서가 값을 바꾸면 old 와 어긋나 교정이 조용히 스킵되고, 숫자만 121→120으로 줄어든 채
+#    빌드가 exit 0 으로 통과한다. 입결은 이 대시보드의 핵심 지표다 — 소리 없이 빠지면 안 된다.
+_miss_grade = sorted(set(_GRADE_CORR) - _grade_fixed)
+if _miss_grade:
+    raise SystemExit(f"[중단] 입결교정 미적용 {len(_miss_grade)}건 — 엑셀이 값을 바꿨거나 파서가 달라졌다. "
+                     f"data_corrections.json 'ipgyeol' 의 old 를 원문과 맞추라: {_miss_grade[:5]}")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[트랙합산] 모집인원 라벨 분리 {len(_track_hits)}행 합산")
@@ -1083,6 +1122,7 @@ payload = {
     'dicts': {k: order[k] for k in order},
     'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'sub': sub, 'parent': par, 'count': cat_counter.get(k, 0)} for k, l, d, c, sub, par in CATS],
     'rows': rows,
+    'raw': _raw_cells,   # 희소 사이드맵 — 파서가 버린 셀의 원문
 }
 
 with open(os.path.join(OUT_DIR, 'data.js'), 'w', encoding='utf-8') as f:
