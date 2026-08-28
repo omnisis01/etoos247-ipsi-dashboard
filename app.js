@@ -236,7 +236,7 @@ const S = {
 
   cutOpen: null,   // 입결 컷 필터 펼침. null=미결정(모바일이면 접힘). 기준이 7종으로 늘어 모바일에서 373px를 먹었다
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut50' | 'cut70' | 'cut80' | 'cut90' | 'stage1', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
-  page: 1, perPage: 60, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
+  page: 1, perPage: 100, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
@@ -523,8 +523,11 @@ function applyFilters() {
   // 약칭 확장: 학생들은 '이화여자'가 아니라 '이화여대'로 친다. 정식 명칭의 부분문자열이
   // 되도록 토큰을 고쳐 쓴다('이화여대'→'이화여자'⊂이화여자대학교, '한국외대'→'한국외국어대').
   const expandToken = t => t
+    .replace(/^이대$/, '이화여자')          // 특수 약칭 — 규칙으로 안 나온다
+    .replace(/^한기대$/, '한국기술교육대')
     .replace(/여대/g, '여자')
     .replace(/외대/g, '외국어대')
+    .replace(/과기대/g, '과학기술대')       // 서울과기대 → 서울과학기술대
     .replace(/교대$/, '교육대')
     .replace(/^카이스트$/, 'kaist')
     .replace(/^(포스텍|포항공대)$/, 'postech');
@@ -841,10 +844,18 @@ function renderUniPanel() {
   const unis = [...new Set(FILTERED.map(r => r.uni))];
   // 본교+분교(예: 고려대/고려대(세종))가 함께 잡히는 경우가 흔해 2개 대학까지 허용한다.
   if (unis.length < 1 || unis.length > 2 || FILTERED.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.innerHTML = unis.map(u => uniPanelHTML(u, FILTERED.filter(r => r.uni === u))).join('');
+  // ⚠️ 묶는 단위는 대학명이 아니라 **캠퍼스**다. r.uni 로만 묶으면 경북대 대구 577행과
+  //    상주 103행이 한 덩어리가 돼 어느 학과가 상주인지 알 수 없다(사용자 제보 2026-08-28).
+  //    입결이 캠퍼스별로 크게 갈리므로(대구 2.70 vs 상주 5.28) 섞으면 판단을 그르친다.
+  //    게이트(2개 대학)는 uni 기준을 유지한다 — campusKey 로 세면 부산대(부산·밀양·양산)가
+  //    3개가 돼 멀쩡히 뜨던 패널이 사라진다.
+  const keys = [...new Set(FILTERED.map(campusKey))];
+  box.innerHTML = keys.map(k => uniPanelHTML(k, FILTERED.filter(r => campusKey(r) === k))).join('');
   box.style.display = '';
 }
-function uniPanelHTML(uni, rows) {
+function uniPanelHTML(label, rows) {
+  // label 은 캠퍼스까지 붙은 표시명(예: '경북대학교(상주)'), 접수일 조회는 실제 대학명으로 한다.
+  const uni = rows[0] ? rows[0].uni : label;
   const byType = {};
   rows.forEach(r => {
     const t = JHTYPE_ORDER.includes(r.jhtype) ? r.jhtype : '기타';
@@ -852,7 +863,7 @@ function uniPanelHTML(uni, rows) {
   });
   const typeKeys = [...JHTYPE_ORDER, '기타'].filter(t => byType[t]);
   const ap = applyInfo(uni);
-  return `<div class="panel-head"><h2>🏫 ${esc(uni)} 전형별 학과 한눈에</h2>
+  return `<div class="panel-head"><h2>🏫 ${esc(label)} 전형별 학과 한눈에</h2>
       <span class="muted">전형을 누르면 학과 목록이 열립니다</span></div>
     ${ap ? `<div class="uni-apply${ap.early ? ' early' : ''}">🗓️ 원서접수 <b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten">조기마감</span>' : ''} <span class="muted">· ${esc(ap.via)} 접수 기준</span></div>` : ''}
     <div class="uni-cols">${typeKeys.map(t => {
@@ -1181,7 +1192,11 @@ function renderTable() {
   if (S.page > pages) S.page = pages;
   const start = (S.page - 1) * S.perPage;
   const slice = FILTERED.slice(start, start + S.perPage);
-  $('#tableCount').textContent = `· 총 ${total.toLocaleString()}개`;
+  // ⚠️ '총 85개'만 보이면 화면의 60개가 전부인 줄 알고 '누락'으로 오해한다(사용자 제보 2026-08-28:
+  //    교대 85행 중 청주·춘천·한국교원대가 2페이지로 밀렸다). 지금 보는 구간을 함께 밝힌다.
+  $('#tableCount').textContent = total > slice.length
+    ? `· ${(start + 1).toLocaleString()}~${(start + slice.length).toLocaleString()} / 총 ${total.toLocaleString()}개`
+    : `· 총 ${total.toLocaleString()}개`;
   const statusEl = $('#a11yStatus'); if (statusEl) statusEl.textContent = `${(CAT_BY[S.cat] ? CAT_BY[S.cat].label : '전체')} 검색결과 ${total.toLocaleString()}개`;
 
   $('#gridBody').innerHTML = slice.map(r => {

@@ -74,7 +74,11 @@ else:
         print('  ✓ 복수 숫자 행이 전부 처리됨')
 
 # ---------------------------------------------------------------- ② 약칭 검색
-# 상담 현장 호칭(진주교대·서울여대)이 0건이 된다. app.js 의 hay 구성을 그대로 재현해 검사.
+# ⚠️ 2026-08-28 교훈 — 이 검사를 처음 짤 때 app.js 의 expandToken() 을 재현하지 않고
+#    원문 매칭만 해서 '진주교대·서울여대 0건'이라는 **가짜 결함**을 만들었다.
+#    실제 앱은 '교대$→교육대', '여대→여자' 확장을 이미 하고 있었다.
+#    그래서 규칙을 하드코딩하지 않고 **app.js 에서 함수 본문을 그대로 떠다 실행**한다.
+#    앱이 규칙을 고치면 이 검사도 자동으로 따라간다.
 print('\n=== ② 약칭 검색 ===')
 D = dump('window.IPSI')
 S, dc = D['schema'], D['dicts']
@@ -84,14 +88,30 @@ def hay(r):
     return (dc['uni'][r[iu]] + ' ' + dc['dept'][r[idp]] + ' ' + dc['jhname'][r[ijn]] + ' ' +
             dc['region'][r[ir]] + ' ' + r[ijt] + ' ' + dc['sigun'][r[isg]] + ' ' + r[ig]).lower()
 HAYS = [hay(r) for r in D['rows']]
-def count(q):
-    toks = q.lower().split()
-    return sum(1 for h in HAYS if all(t in h for t in toks))
-ALIASES = ['진주교대', '서울교대', '경인교대', '서울여대', '숙명여대', '이대']
+APP_SRC = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
+_m = re.search(r'const expandToken = (t => t[\s\S]*?);\n', APP_SRC)
+if not _m:
+    raise SystemExit('app.js 에서 expandToken 을 찾지 못했다 — 검색 확장 규칙 위치가 바뀌었는지 확인하라')
+EXPAND_SRC = _m.group(1)
+
+def expand_many(tokens):
+    """app.js 의 expandToken 을 node 로 실제 실행해 확장 결과를 받는다."""
+    js = f'const f = {EXPAND_SRC}; process.stdout.write(JSON.stringify({json.dumps(tokens)}.map(f)))'
+    out = subprocess.run(['node', '-e', js], capture_output=True, text=True, cwd=HERE)
+    if out.returncode != 0:
+        raise SystemExit('expandToken 실행 실패\n' + out.stderr)
+    return json.loads(out.stdout)
+
+def count(q, expanded):
+    return sum(1 for h in HAYS if all(t in h for t in expanded))
+
+ALIASES = ['진주교대', '서울교대', '경인교대', '서울여대', '숙명여대', '이대',
+           '한국외대', '카이스트', '포스텍', '서울과기대', '한기대']
 miss = []
-for q in ALIASES:
-    n = count(q)
-    print(f'  {"✓" if n else "✗"} "{q}" → {n}건')
+_exp = expand_many([a.lower() for a in ALIASES])
+for q, e in zip(ALIASES, _exp):
+    n = count(q, [e])
+    print(f'  {"✓" if n else "✗"} "{q}" → {n}건  (확장: {e})')
     if not n:
         miss.append(q)
 if miss:
@@ -101,7 +121,7 @@ if miss:
 # uniPanel 이 r.uni 로만 묶어 경북대 대구·상주가 섞인다. app.js 소스로 판정한다.
 print('\n=== ③ 대학 패널 캠퍼스 구분 ===')
 APP = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
-m = re.search(r'box\.innerHTML = unis\.map\(u => uniPanelHTML\(u, FILTERED\.filter\(([^)]*)\)', APP)
+m = re.search(r'box\.innerHTML = \w+\.map\(\w+ => uniPanelHTML\(\w+, FILTERED\.filter\(([^)]*)\)', APP)
 if m and 'campus' not in m.group(1):
     print(f'  ✗ 패널이 캠퍼스를 무시하고 묶는다 — filter({m.group(1).strip()})')
     knu = [r for r in D['rows'] if dc['uni'][r[iu]] == '경북대학교']
