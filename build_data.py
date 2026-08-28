@@ -27,6 +27,32 @@ def num(v):
 def norm(t):
     return re.sub(r'\s+', '', t or '')
 
+# ── 한 칸에 트랙별로 나눠 적은 모집인원 ──────────────────────────────────────
+# '남:22\n여:8', '인:80\n자:40' 처럼 한 셀에 트랙별 인원이 들어간다(14행).
+# num() 은 첫 숫자만 취해 나머지를 잃는다 — 서울여대 논술이 120명인데 80으로 나왔다.
+# **총원 = 트랙 합**임은 엑셀 자신의 전년대비 마크로 2건 독립 확인했다:
+#   · 영남대 군사    2026 스냅샷 30 · 합산 30 · 엑셀 prev '-'   (첫값 22면 ▼8이어야 한다)
+#   · 세종대 항공(공군) 2026 스냅샷 25 · 합산 23 · 엑셀 prev '▼2' (첫값 22면 ▼3이어야 한다)
+# 즉 원천은 '행 하나 = 모집단위 하나, 총원 기준'으로 쓰여 있다.
+# ⚠️ 라벨 화이트리스트를 벗어나면 합산하지 않고 기존 동작으로 떨어진다 — 모르는 표기를
+#    임의로 더하면 없는 정원을 만들어낸다. 발동 건수는 빌드 로그로 감시한다.
+_TRACK = re.compile(r'(남|여|인문|자연|인|자|일반|수상)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*명?')
+_AXIS = {'남', '여', '인문', '자연', '인', '자', '일반', '수상'}
+_track_hits = []
+
+def parse_enroll(v):
+    """(총원, [(라벨, 인원)]) — 라벨 분리 표기면 합산, 아니면 기존 num()."""
+    if v is None or isinstance(v, (int, float)):
+        return num(v), []
+    t = s(v)
+    m = _TRACK.findall(t)
+    if (len(m) >= 2 and all(lb in _AXIS for lb, _ in m)
+            and not re.search(r'\d', _TRACK.sub('', t))):
+        tracks = [(lb, float(n)) for lb, n in m]
+        _track_hits.append((t.replace('\n', '/'), sum(n for _, n in tracks)))
+        return float(sum(n for _, n in tracks)), tracks
+    return num(v), []
+
 def vgrade(v):
     """입결 등급은 1.0~9.0 범위만 유효. 범위 밖(환산점수 오입력·오타 등)은 무데이터 처리."""
     return v if (v is not None and 1.0 <= v <= 9.0) else None
@@ -793,7 +819,8 @@ for r in raw:
         for _e, _to in _ROW_RENAME[_dk]:
             if _e is None or _e == num(r[8]):
                 _renamed.add((_dk, _e)); jhname = _to; break
-    enroll = apply_enroll_correction(uni, dept, jhtype, jhname, num(r[8])); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    _enroll_raw, _etracks = parse_enroll(r[8])
+    enroll = apply_enroll_correction(uni, dept, jhtype, jhname, _enroll_raw); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [num(r[18]), num(r[19]), num(r[20])]
@@ -983,6 +1010,7 @@ if len(_region_fixed) != len(_REGION_CORR):
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
 print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
+print(f"[트랙합산] 모집인원 라벨 분리 {len(_track_hits)}행 합산")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
       + (f" · ⚠️미적용 {_miss}" if _miss else ""))
 if _miss or len(_drop_hit) != len(_ROW_DROP) or len(_dedupe_hit) < len(_ROW_DEDUPE):
