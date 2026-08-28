@@ -94,6 +94,31 @@ cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
 > 잘못된 인사이트가 커밋을 통과한 사고가 있었다. 존재 확인은 `os.path.exists`로 한다
 > (파일시스템이 정규화해 주므로 정상 동작).
 
+## ⚠️ 원천 엑셀의 함정 — 한 칸에 숫자가 여럿
+
+모집인원 칸에 `"인:80\n자:40"`·`"남:15\n여:5"`·`"일반:18\n수상:5"` 처럼 **숫자가 둘 이상**
+들어간 행이 있다(2026-08-28 실측 14행). `num()` 은 첫 숫자만 뽑으므로 나머지가 조용히 사라진다.
+실제로 서울여대 논술 120명이 80명으로 나왔다.
+⚠️ **원본만 보고 규모를 재지 마라.** 14행 중 7행은 `data_corrections.json` 이 이미 잡아 뒀다
+(초기에 이걸 무시해 '14행 113명'으로 오판했고, 실제 미교정은 6행 58명이었다).
+반드시 산출물 data.js 와 대조할 것 — `python3 qa_known_issues.py` 가 그 대조를 한다.
+
+```bash
+# 새 엑셀을 받을 때마다 이 스캔을 돌려라 — 행이 늘거나 새 패턴이 생겼는지 본다
+python3 - <<'EOF'
+import openpyxl, re
+ws = openpyxl.load_workbook('<새 엑셀>', read_only=True, data_only=True)['전체']
+for r in ws.iter_rows(min_row=4, values_only=True):
+    v = r[8]
+    if v is None or isinstance(v, (int, float)): continue
+    n = re.findall(r'\d+', str(v).replace(',', ''))
+    if len(n) > 1: print(r[2], r[4], r[5], repr(str(v))[:40], n)
+EOF
+```
+
+합산이 늘 옳은 건 아니다 — 성별 분리는 합산이 맞지만 계열 분리(인/자)는 별도 행으로 쪼개는 게
+맞을 수 있다(계열 필터·입결 비교가 갈린다). 패턴별로 판정하고 근거를 남길 것.
+
 ## 하네스를 하네스로 검수하기 (변이 테스트)
 
 검사기가 "전부 통과"라고 말할 때가 가장 위험하다. 그 말이 사실인지 확인하려면
