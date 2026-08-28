@@ -159,6 +159,36 @@ if _out:
 else:
     print('  ✓ 3개년이 함께 크거나 함께 작다(계통 차이만 남음)')
 
+
+# ---------------------------------------------------------------- ⑤ 원천 컬럼 미사용
+# 엑셀 35열 중 build_data.py 가 **아예 읽지 않는 열**이 있는지 본다.
+# 실측(2026-08-28): col13 필요서류·col14 복수지원·col30 2024기준 3열이 100% 채워져 있는데
+# 통째로 버려지고 있었다. 특히 std24 부재로 3개년 입결 추이가 기준 다른 값을 이어 그렸다.
+# 새 엑셀에서 열이 늘거나 매핑이 빠지면 여기서 잡힌다.
+print('\n=== ⑤ 원천 컬럼 사용 여부 ===')
+if not os.path.exists(XLSX):
+    print('  - 원천 엑셀 없음 → SKIP')
+else:
+    import openpyxl as _ox
+    _ws = _ox.load_workbook(XLSX, read_only=True, data_only=True)['전체']
+    _hdr = list(next(_ws.iter_rows(min_row=3, max_row=3, values_only=True)))
+    _src = open(os.path.join(HERE, 'build_data.py'), encoding='utf-8').read()
+    _used = {int(x) for x in re.findall(r'r\[(\d+)\]', _src)}
+    _unused = [i for i in range(len(_hdr)) if i not in _used]
+    # 채워진 비율을 함께 재서 '비어 있는 열'과 '버려진 열'을 구분한다
+    _rows = [r for r in _ws.iter_rows(min_row=4, values_only=True) if r[2]]
+    _real = []
+    for i in _unused:
+        n = sum(1 for r in _rows if i < len(r) and r[i] is not None and str(r[i]).strip() not in ('', '-'))
+        pct = n / len(_rows) * 100 if _rows else 0
+        name = str(_hdr[i] or '').replace('\n', ' ')[:20]
+        print(f'  {"✗" if pct >= 5 else "·"} col{i:2d} {name:22s} 채움 {pct:5.1f}%')
+        if pct >= 5: _real.append((i, name, pct))
+    if _real:
+        fails.append(f'원천 컬럼 {len(_real)}열이 미사용 — {[f"col{i}({n})" for i, n, _ in _real]}')
+    else:
+        print(f'  ✓ 미사용 {len(_unused)}열은 전부 비어 있음(수집 대상 아님)')
+
 # ---------------------------------------------------------------- 결론
 print()
 if fails:
