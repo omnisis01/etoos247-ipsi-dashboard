@@ -585,6 +585,26 @@ rows = []
 _raw_cells = {}   # {행인덱스: {키: 원문}} — 파서가 버린 셀의 원문. SCHEMA 밖 사이드맵.
 # 알려진 원천(마스터 xlsx) 수능최저 오기 교정 — 외부 소스(2027 요강·토마스·입시위키)로 확인된 것만.
 # 마스터 파일을 직접 수정하지 않고 빌드 시 패치한다. (uni, dept, [jhname], old 원문) → new 원문.
+# ⚠️ 원천 엑셀의 열 밀림 — 최저 칸에 전형방법 값이, 전형방법 칸에 다른 값이 들어간 행.
+# 실측(2026-08-29): 삼육대 농어촌전형(외) 2행만 최저='교과20+실기80'(전형방법 값)이고
+# 전형방법='교과100'이었다. 같은 학과의 다른 8개 전형은 전부 최저='없음'이고 전형방법에
+# 실기 비중이 들어 있어, 밀린 것이 명백하다. 실기 80%/60% 전형이 '교과100'으로 보이면
+# 실기 준비가 없는 농어촌 학생이 안전 카드로 착각해 지원한다.
+_SHIFTED = {
+    ('삼육대학교', '아트앤디자인학과', '농어촌전형(외)'): ('교과20+실기80', '교과100'),
+    ('삼육대학교', '체육학과', '농어촌전형(외)'): ('교과40+실기60', '교과100'),
+}
+_shift_fixed = set()
+
+def apply_shift(uni, dept, jhname, choejeo, method):
+    """최저 칸에 전형방법 값이 들어온 행 — 최저는 '없음', 전형방법은 그 값으로 되돌린다."""
+    k = (uni, dept, jhname)
+    exp = _SHIFTED.get(k)
+    if exp and choejeo == exp[0] and method == exp[1]:
+        _shift_fixed.add(k)
+        return '없음', exp[0]
+    return choejeo, method
+
 LEAST_CORRECTIONS = [
     # 세명대 한의예: '합5'에 합산 영역수(3) 누락 → 3합5 (입시위키·토마스 확인). SMU의료인재·농어촌·기초차상위 3행 공통 문자열.
     {'uni': '세명대학교', 'dept': '한의예과', 'old': '국,수(기미),영 합5', 'new': '국,수(기미),영 3합5'},
@@ -891,6 +911,7 @@ for r in raw:
         if _hk in _CHUNG_CORR and chung[_yi] == _CHUNG_CORR[_hk][0]:
             chung[_yi] = _CHUNG_CORR[_hk][1]; _chung_fixed.add(_hk)
     method = s(r[12]); note = s(r[25]); date = s(r[34])
+    choejeo, method = apply_shift(uni, dept, jhname, choejeo, method)
     # 고사일 교정은 (대학, 전형명, 원문) 키가 기본이고, **모집단위별로 갈릴 때만** dept를 더 건다.
     # 경상대 학생부종합 일반전형처럼 같은 전형 안에서 면접 시행 학과와 미시행 학과가 섞이면
     # 3키만으로는 멀쩡한 행까지 덮어쓴다(면접 보는 학과의 일자가 지워진다).
@@ -1190,6 +1211,11 @@ with open(os.path.join(OUT_DIR, 'audit_categories.json'), 'w', encoding='utf-8')
 
 sz = os.path.getsize(os.path.join(OUT_DIR, 'data.js'))
 print(f'rows={len(rows)}  uni={len(order["uni"])}  dept={len(order["dept"])}  data.js={sz/1e6:.2f}MB')
+if len(_shift_fixed) != len(_SHIFTED):
+    raise SystemExit(f"[중단] 열밀림 교정 미적용 {len(_SHIFTED)-len(_shift_fixed)}건 — "
+                     f"엑셀이 고쳐졌다면 build_data.py _SHIFTED 에서 제거할 것: "
+                     f"{sorted(set(_SHIFTED) - _shift_fixed)}")
+print(f'[열밀림교정] {len(_shift_fixed)}/{len(_SHIFTED)}건')
 print(f'수능최저 교정 적용: {_least_fixed[0]}건 (예상 5: 세명대 3 + 계명대 1 + 성균관대 1)')
 print(f'전년대비 재계산 교정: {len(_prev_recomputed)}건 (2026 실측 스냅샷 대조 · 스킵 {len(_RECOMPUTE_SKIP)} · 오버라이드 {len(_E26_OVERRIDES)})')
 print(f'전형 변경(개편·개명) 표기: {_changed_count[0]}건 (2026에 정규화 후에도 없는 대학|학과|전형명, 예상 약 3,000)')
