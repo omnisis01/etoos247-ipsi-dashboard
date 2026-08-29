@@ -148,6 +148,10 @@ def least_direction(n1, m1, n2, m2):
     _LEAST_DIR_CACHE[key] = r
     return r
 
+# 최저의 **하위 조건**만 폐지된 경우 — 최저 자체가 사라진 게 아니라 완화다.
+# norm() 이 공백을 지우므로 '한국사반영폐지' 형태로 매칭된다.
+_SUB_ABOLISH = re.compile(r'(한국사|지정|필수|선택|반영|응시|영역|과목|탐구|수학|영어|과학|사탐|과탐)[^폐]{0,4}폐지')
+
 def parse_choejeo_change(change_text):
     """returns (kind, detail) where kind in 신설/폐지/완화/강화/변경/None.
     'N합M' 방향은 least_direction()으로 엄밀 판정한다(합 단순 비교는 N 변화 시 오판)."""
@@ -161,6 +165,12 @@ def parse_choejeo_change(change_text):
     if cseg is None: return (None, '')
     z = norm(cseg)
     if '신설' in z and '최저' in z: return ('신설', cseg)
+    # ⚠️ '폐지'를 무조건 최저 폐지로 읽으면 안 된다.
+    # 실측(2026-08-29): '최저:한국사 반영 폐지'·'수학,탐구 지정 폐지' 처럼 **하위 조건**만
+    # 없어진 139행(모집 1,285명)이 '최저 폐지'로 표시됐다 — 한국외대 경영 논술은 2합4 가
+    # 그대로 살아 있는데도 그랬다. 하위 조건이 사라진 것은 '완화'다.
+    # 진짜 폐지는 '수능 최저 폐지'·'최저 폐지'처럼 최저 자체를 가리킨다(74행, 전부 최저값 '없음').
+    if _SUB_ABOLISH.search(z): return ('완화', cseg)
     if '폐지' in z: return ('폐지', cseg)
     # 합 변경이 '최저'가 든 구간이 아니라 다음 구간에 오는 경우가 있다.
     # 예: '최저:탐,탐→탐(2)과(1) 택1 / 3합6→3합5 / 수학 필수' → 첫 구간엔 영역 지정만 있음.
@@ -1044,6 +1054,10 @@ for _a in _ADDED_ROWS:
         intern('gradeRatio', ''), intern('subjects', ''), intern('careerSubj', ''),
         _cats,
         intern('std', ''), std_kind(''), intern('std', ''),
+        # ⚠️ SCHEMA 에 필드를 추가하면 **여기도 함께 늘려야 한다** — 교정으로 만든 행은
+        #    엑셀 행과 별개 경로라 조용히 짧아진다(실측: 30행이 38필드로 남아 복수지원·필요서류·std24 소실).
+        #    verify_data.py 의 행 길이 불변식이 이제 이 누락을 잡는다.
+        intern('std', ''), intern('dupApply', ''), intern('docs', ''),
     ])
 
 # 모집인원 교정 리포트 — 적용 누락(엑셀 값 변동) 즉시 감지

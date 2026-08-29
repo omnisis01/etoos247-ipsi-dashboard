@@ -58,6 +58,33 @@ def verify(d):
     sch = d['schema']; rows = d['rows']
 
     # 1) 메타 정합성
+    # ⚠️ 모든 행의 길이가 SCHEMA 와 같아야 한다.
+    # 실측(2026-08-29): SCHEMA 를 38→41 로 늘렸는데 data_corrections 'add' 로 만드는 30행만
+    # 38필드로 남아 그 행들에서 복수지원 제한·필요서류·std24 가 통째로 사라졌다.
+    # 엑셀 행과 교정 행은 생성 경로가 달라, 한쪽만 고치면 조용히 어긋난다.
+    _wrong = [i for i, r in enumerate(rows) if len(r) != len(sch)]
+    if _wrong:
+        _by = {}
+        for i in _wrong:
+            _by.setdefault(len(rows[i]), []).append(i)
+        fails.append(f"행 길이가 SCHEMA({len(sch)})와 다른 행 {len(_wrong)}개 — 길이별 "
+                     f"{ {k: len(v) for k, v in _by.items()} } · 예시 행 {_wrong[:5]}. "
+                     f"교정 'add' 경로가 SCHEMA 확장을 못 따라갔는지 확인하라(build_data.py _ADDED_ROWS)")
+
+    # ⚠️ 최저가 살아 있는데 '폐지'로 라벨링되면 안 된다.
+    # 실측(2026-08-29): '한국사 반영 폐지'·'수학 지정 폐지' 같은 **하위 조건** 폐지 139행
+    # (모집 1,285명)이 '최저 폐지'로 표시됐다. 한국외대 경영 논술은 2합4 가 살아 있는데도
+    # '최저 폐지 → 지원 증가'로 렌더됐다 — 최저를 못 맞추는 학생이 수시 한 칸을 버리게 된다.
+    _ick, _ihc = col(sch, 'chKind'), col(sch, 'hasChoejeo')
+    if _ick is not None and _ihc is not None:
+        _zombie = [r for r in rows if r[_ick] == '폐지' and r[_ihc] == 1]
+        if _zombie:
+            _iu, _idp = col(sch, 'uni'), col(sch, 'dept')
+            _ex = ', '.join(f"{d['dicts']['uni'][r[_iu]]} {d['dicts']['dept'][r[_idp]][:10]}"
+                            for r in _zombie[:3])
+            fails.append(f"최저 '폐지'인데 최저값이 남아 있는 행 {len(_zombie)}개 — "
+                         f"하위 조건(한국사·지정·필수) 폐지를 최저 폐지로 오분류했을 가능성. 예: {_ex}")
+
     if d['meta'].get('nRows') != len(rows):
         fails.append(f"meta.nRows({d['meta'].get('nRows')}) != 실제 행수({len(rows)})")
     if d['meta'].get('nUni') != len(d['dicts']['uni']):
