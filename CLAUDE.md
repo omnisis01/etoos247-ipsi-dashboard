@@ -14,6 +14,7 @@
 - **`(외)` 표기 금지**: 학과명에 `(외)` 잔존하면 안 됨. 정원 외 채용조건형은 `semiconductor_contract` 카테고리 + 🔗 배지로 노출. 상세: `memory/ipsi-semiconductor-contract.md`.
 - **입결 컷 필터 표현**: "이하"·"≤" 금지. **"X.X 이내"** 로만 표기. 상세: `memory/ipsi-cut-filter.md`.
 - **한국어 문장 종결**: 콜론(:)으로 끝내지 마라. 마침표/물음표/느낌표만.
+- **수정 범위**: 원인을 찾으면 **그 데이터를 쓰는 소비처를 전수 열거**하고 각각 판정하라. 버그가 보인 곳만 고치면 재발한다(std24가 40여 일 미수집이었던 이유). 상세: `memory/ipsi-fix-scope-rule.md`.
 
 ## 데이터 갱신 (엑셀 새 버전 도착 시)
 `dashboard/DATA_UPDATE.md` 런북을 그대로 따른다. 즉석 diff 스크립트를 다시 짜지 말고 `python3 verify_data.py --diff <이전>` 을 재사용.
