@@ -6,7 +6,7 @@
 
 지금 상태(미수정)에서는 3건 모두 FAIL 이 정상이다.
 """
-import json, os, re, subprocess, sys
+import datetime, json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 XLSX = os.path.join(HERE, '..', '입결 및 인사이트',
@@ -214,6 +214,46 @@ for base in ('c', 'g', 'v', 'chung', 'std'):
 if _odd:
     fails.append(f'3개년 세트 연도 편식 {len(_odd)}건 — {[b for b, _, _ in _odd]}: '
                  '한 연도만 화면에서 안 쓰인다(std24 형 사고)')
+
+
+# ---------------------------------------------------------------- ⑦ 원서접수 일정(apply_dates.js)
+# ⚠️ 이 산출물은 **어떤 하네스도 보지 않는 사각지대**였다. 실측(2026-08-29): 8/11 수집본에
+# 서울여대 마감이 '09-11T06:00'(새벽 6시)로 들어 있었다 — 12시간제 파싱 오류다. 접수 마감
+# 시각은 학생이 원서를 넣는 마지막 순간을 좌우하므로 틀리면 곧바로 지원 실패다.
+# 또한 18일 만에 7개교 일정이 바뀌었다(공주교대는 마감이 17:00→16:00 으로 앞당겨짐) —
+# '접수 주간 직전 1회'로는 부족하다. 접수 D-30 부터는 주 1회 재수집하라.
+print('\n=== ⑦ 원서접수 일정 불변식 ===')
+_ap = os.path.join(HERE, 'apply_dates.js')
+if not os.path.exists(_ap):
+    print('  - apply_dates.js 없음 → SKIP')
+else:
+    _A = dump("(function(){require('./apply_dates.js');return window.IPSI_APPLY})()")
+    _ks = [k for k in _A if k != 'meta']
+    _bad = []
+    for k in _ks:
+        v = _A.get(k) or {}
+        fr, to = v.get('from'), v.get('to')
+        if not to:
+            continue
+        hh = int(to[11:13])
+        if hh < 8:                      # 새벽 마감 = 12시간제 파싱 오류 신호
+            _bad.append((k, to, f'마감이 새벽 {to[11:16]} — 12시간제 파싱 오류 의심'))
+        if datetime.date.fromisoformat(to[:10]).weekday() >= 5:
+            _bad.append((k, to, '마감이 주말'))
+        if fr and fr > to:
+            _bad.append((k, to, f'시작({fr})이 마감보다 늦다'))
+    print(f'  수록 {len(_ks)}교 · 이상 {len(_bad)}건')
+    for k, t, why in _bad[:12]:
+        print(f'  ✗ {k} {t} — {why}')
+    if _bad:
+        fails.append(f'원서접수 일정 이상 {len(_bad)}건 — python3 fetch_apply_dates.py 로 재수집하라')
+    # 신선도 — 접수가 다가오는데 수집본이 낡았으면 경고(실패는 아님)
+    _age = (datetime.date.today()
+            - datetime.date.fromtimestamp(os.path.getmtime(_ap))).days
+    _dday = (datetime.date(2026, 9, 7) - datetime.date.today()).days
+    print(f'  수집 후 {_age}일 경과 · 접수 시작까지 {_dday}일')
+    if _dday <= 30 and _age >= 7:
+        print(f'  ⚠ 접수 D-{_dday} 인데 수집본이 {_age}일 됐다 — python3 fetch_apply_dates.py 재실행 권장')
 
 # ---------------------------------------------------------------- 결론
 print()
