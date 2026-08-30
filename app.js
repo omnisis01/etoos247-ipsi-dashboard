@@ -277,14 +277,16 @@ const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
    예정돼 있어(DATA_UPDATE.md), 지원카드가 가장 값진 시점에 어긋날 수 있었다.
    → 저장은 rowKey 로, 읽을 때 인덱스로 되살린다. 숫자가 들어 있으면 구버전 저장값이므로
      그대로 인덱스로 해석한다(기존 사용자 카드가 사라지지 않게). */
-const KEY2I = (() => { const m = new Map(); ROWS.forEach((r, i) => { const k = rowKey(r); if (!m.has(k)) m.set(k, i); }); return m; })();
-const toIdx = v => (typeof v === 'number' ? v : (KEY2I.has(v) ? KEY2I.get(v) : -1));
-const toKey = i => (ROWS[i] ? rowKey(ROWS[i]) : null);
+/* ⚠️ 저장 키는 **공유 링크와 같은 규칙**(codeOf/indexOfCode)을 쓴다 — 아래 buildCodeMaps 참조.
+   실측(2026-08-29): 순번 없는 rowKey 만 쓰던 탓에 34개 키에 181행이 충돌했다.
+   지역의사선발전형은 권역이 지원자격에만 있어 (대학·학과·전형유형·전형명)이 전부 같다.
+   그래서 강릉권(모집 1명)을 지원카드에 담아도 다음 방문에 춘천권(모집 8명)으로 조용히
+   바뀌었다 — 권역마다 거주 요건과 의무복무 지역이 다른 별개 트랙인데 카드엔 권역 표시가 없다.
+   같은 문제를 공유 링크에서는 이미 순번으로 풀어 놨는데 저장만 그 규칙을 안 따랐다.
+   첫 행은 순번을 생략하므로 **기존에 저장된 카드도 그대로 복원된다.** */
+const toIdx = v => { if (typeof v === 'number') return v; const i = indexOfCode(v); return i === null ? -1 : i; };
+const toKey = i => (ROWS[i] ? codeOf(i) || null : null);
 const saveCmp = () => save('cmp', [...S.compare].map(toKey).filter(Boolean));
-(function hydrateSaved() {
-  S.compare = new Set([...S.compare].map(toIdx).filter(i => i >= 0 && i < ROWS.length));
-  for (const b of ['hope', 'reach']) S.fav[b] = (S.fav[b] || []).map(toIdx).filter(i => i >= 0 && i < ROWS.length);
-})();
 /* ----- 분캠(캠퍼스) 구분 -----
    원천이 일관되지 않다. 강원대·단국대 등 13종은 대학명에 캠퍼스를 병기하는데,
    경북대(대구/상주)·부산대(부산/밀양/양산)·전남대(광주/여수) 등 33곳은 단일 대학명이고
@@ -318,6 +320,10 @@ function buildCodeMaps() {
 }
 const codeOf = i => { buildCodeMaps(); return _I_TO_CODE.get(i) || ''; };
 const indexOfCode = c => { buildCodeMaps(); const v = _CODE_TO_I.get(c); return v === undefined ? null : v; };
+(function hydrateSaved() {   // ↑ codeOf/indexOfCode 정의 뒤여야 한다(const TDZ)
+  S.compare = new Set([...S.compare].map(toIdx).filter(i => i >= 0 && i < ROWS.length));
+  for (const b of ['hope', 'reach']) S.fav[b] = (S.fav[b] || []).map(toIdx).filter(i => i >= 0 && i < ROWS.length);
+})();
 
 function buildShareURL(kind) {
   const p = new URLSearchParams();
@@ -605,7 +611,12 @@ function sortFiltered() {
     return (x - y) * dir;
   });
   // 메디컬 표시 서열: 같은 대학 안에서는 의 > 치 > 한 > 수의 > 약 순으로 고정(사용자 지정).
-  // 유불리 점수와 무관한 서열이라 정렬을 바꾸지 않고, 해당 행들이 차지한 자리 안에서만 재배치한다.
+  // ⚠️ **지표로 정렬할 때는 적용하지 않는다.** '자리 안에서만 재배치'라 정렬이 안 깨진다고
+  //    적어 뒀었지만 사실이 아니었다 — 자리는 그대로여도 그 자리에 오는 행이 바뀐다.
+  //    실측(2026-08-29) 경쟁률 내림차순에서 1위 아주대 약학 708.2:1 이 밀리고 5위에 33.25:1 이
+  //    올라왔다(최대 422칸 이탈). '경쟁률 높은 순'으로 훑는 학생이 실제 상위를 못 본다.
+  //    유불리(impact)·대학명(uni) 정렬에서는 같은 대학 행이 붙어 있어 서열이 뜻을 가진다.
+  if (key === 'impact' || key === 'uni') {
   const MED_RANK = { med_med: 0, med_dent: 1, med_oriental: 2, med_vet: 3, med_pharm: 4 };
   const mrank = r => { for (const c of r.cats || []) if (c in MED_RANK) return MED_RANK[c]; return null; };
   const medByUni = {};
@@ -615,6 +626,7 @@ function sortFiltered() {
     const rows = idxs.map(i => FILTERED[i]);
     rows.sort((a, b) => mrank(a) - mrank(b));   // 안정 정렬 — 같은 서열끼리는 기존 순서 유지
     idxs.forEach((i, k) => { FILTERED[i] = rows[k]; });
+  }
   }
 }
 
