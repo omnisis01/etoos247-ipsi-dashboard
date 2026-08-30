@@ -255,6 +255,45 @@ else:
     if _dday <= 30 and _age >= 7:
         print(f'  ⚠ 접수 D-{_dday} 인데 수집본이 {_age}일 됐다 — python3 fetch_apply_dates.py 재실행 권장')
 
+
+# ---------------------------------------------------------------- ⑧ 대학별 행수 래칫
+# ⚠️ 실측(2026-08-29): 경북대 680행을 통째로 지워도 verify_data·qa_comp_ratio·qa_chungwon·
+# qa_known_issues 가 **전부 통과**했다. meta.nRows 만 함께 줄이면 아무 불변식도 걸리지 않는다.
+# '없는 것'은 화면에 흔적을 남기지 않으므로 학생은 그 학과가 2027에 폐지된 줄 안다.
+# 엑셀 갱신 때 시트 파싱이 끊기거나 한 대학 블록이 누락되는 사고를 여기서 잡는다.
+# 기준선은 row_baseline.json — 의도한 증감이면 --save-baseline 으로 갱신한다.
+print('\n=== ⑧ 대학별 행수 래칫 ===')
+_bl_path = os.path.join(HERE, 'row_baseline.json')
+_cur = dump("(function(){const D=window.IPSI,i=D.schema.indexOf('uni'),c={};"
+            "for(const r of D.rows){const u=D.dicts.uni[r[i]];c[u]=(c[u]||0)+1}"
+            "return {nRows:D.rows.length,nUni:Object.keys(c).length,perUni:c}})()")
+if '--save-baseline' in sys.argv:
+    json.dump(_cur, open(_bl_path, 'w', encoding='utf-8'), ensure_ascii=False)
+    print(f"  기준선 갱신: {_cur['nRows']}행 · {_cur['nUni']}교")
+elif not os.path.exists(_bl_path):
+    print('  - row_baseline.json 없음 → --save-baseline 으로 생성하라')
+else:
+    _bl = json.load(open(_bl_path, encoding='utf-8'))
+    _gone = sorted(set(_bl['perUni']) - set(_cur['perUni']))
+    _new = sorted(set(_cur['perUni']) - set(_bl['perUni']))
+    # 대학이 통째로 사라지는 것은 언제나 사고다. 행수는 10% 이상 급변만 본다.
+    _shrunk = [(u, _bl['perUni'][u], _cur['perUni'][u]) for u in _bl['perUni']
+               if u in _cur['perUni']
+               and _cur['perUni'][u] < _bl['perUni'][u] * 0.9]
+    print(f"  {_cur['nRows']}행 · {_cur['nUni']}교  (기준선 {_bl['nRows']}행 · {_bl['nUni']}교)")
+    for u in _gone:
+        print(f"  ✗ 대학 소멸: {u} (기준선 {_bl['perUni'][u]}행)")
+    for u, a, b in _shrunk:
+        print(f"  ✗ 행수 급감: {u} {a} → {b} ({(b/a-1)*100:.0f}%)")
+    for u in _new:
+        print(f"  + 신규 대학: {u} ({_cur['perUni'][u]}행)")
+    if _gone or _shrunk:
+        fails.append(f"대학 소멸 {len(_gone)}교 · 행수 급감 {len(_shrunk)}교 — "
+                     f"엑셀 파싱이 끊겼는지 확인하라. 의도한 변경이면 "
+                     f"python3 qa_known_issues.py --save-baseline")
+    elif not _new:
+        print('  ✓ 소멸·급감 없음')
+
 # ---------------------------------------------------------------- 결론
 print()
 if fails:
