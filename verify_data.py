@@ -8,7 +8,7 @@
 - Ratchet: 실제로 겪은 실패만 규칙으로 넣는다(입결 등급 범위·연도 프레임·행수 급변).
 - 재사용 스킬: 매 갱신마다 즉석 diff를 다시 짜지 말고 --diff로 재사용.
 """
-import json, os, sys, re
+import json, re, os, sys, re
 
 HERE = os.path.dirname(__file__)
 
@@ -84,6 +84,21 @@ def verify(d):
                             for r in _zombie[:3])
             fails.append(f"최저 '폐지'인데 최저값이 남아 있는 행 {len(_zombie)}개 — "
                          f"하위 조건(한국사·지정·필수) 폐지를 최저 폐지로 오분류했을 가능성. 예: {_ex}")
+
+    # ⚠️ 고사일이 적혀 있는데 날짜 토큰이 하나도 안 잡히면 '수능 전/후' 판정이 통째로 빠진다.
+    # 실측(2026-08-29): '10..5(월)'·'10.,7(수)' 처럼 구분자가 깨진 5종 7행이 examWhen=null 이었고,
+    # 그중 수능 전 실기 4행(이화여대 한국음악 43명 등)에 **수시 납치 경고가 뜨지 않았다.**
+    # 기존 요일 대조 검사는 정규식이 매칭된 뒤에야 동작해 이 계열을 통째로 건너뛴다.
+    _idt = col(sch, 'date')
+    if _idt is not None:
+        _dre = re.compile(r'(\d{1,2})\.\s*(\d{1,2})')
+        _nodate = {d['dicts']['date'][r[_idt]] for r in rows
+                   if (d['dicts']['date'][r[_idt]] or '').strip()
+                   and not _dre.search(d['dicts']['date'][r[_idt]])
+                   and '요강' not in d['dicts']['date'][r[_idt]]}
+        if _nodate:
+            fails.append(f"고사일에 날짜 토큰이 없는 표기 {len(_nodate)}종 — 수능 전/후 판정이 빠진다: "
+                         f"{sorted(_nodate)[:5]}")
 
     if d['meta'].get('nRows') != len(rows):
         fails.append(f"meta.nRows({d['meta'].get('nRows')}) != 실제 행수({len(rows)})")

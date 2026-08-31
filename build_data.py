@@ -109,6 +109,10 @@ def std_kind(k):
 # ---------------------------------------------------------------- 전년대비 -> delta int
 def parse_delta(prev):
     p = s(prev)
+    # ⚠️ '신살' 오타 — 인제대 3계열 85명(면접전형 신설)이 이것 때문에 미지값으로 떨어져
+    # '신설' 필터·하이라이트에서 통째로 빠지고 화면에는 '신살' 이 그대로 노출됐다.
+    # 같은 계열의 다른 행에 '신설' 이 정상 표기로 함께 있어 오타임이 확실하다(2026-08-29 원본 대조).
+    if p == '신살': p = '신설'
     if not p or p == '-': return ('none', 0)
     if '신설' in p: return ('new', None)
     if '폐지' in p: return ('closed', None)
@@ -885,7 +889,7 @@ for r in raw:
             if _e is None or _e == num(r[8]):
                 _renamed.add((_dk, _e)); jhname = _to; break
     _enroll_raw, _etracks = parse_enroll(r[8])
-    enroll = apply_enroll_correction(uni, dept, jhtype, jhname, _enroll_raw); prev = recompute_prev(_rawkey(r), r[8], s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
+    enroll = apply_enroll_correction(uni, dept, jhtype, jhname, _enroll_raw); prev = recompute_prev(_rawkey(r), r[8], '신설' if s(r[9]) == '신살' else s(r[9])); change = s(r[10]); choejeo = apply_least_correction(uni, dept, jhname, s(r[11]))
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [strict_num(r[18]), strict_num(r[19]), strict_num(r[20])]
