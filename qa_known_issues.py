@@ -249,6 +249,33 @@ else:
         print(f'  ✗ {k} {t} — {why}')
     if _bad:
         fails.append(f'원서접수 일정 이상 {len(_bad)}건 — python3 fetch_apply_dates.py 로 재수집하라')
+    # 접수 기간 범위 — 값이 통째로 옮겨져도 형식 검사만으로는 안 걸린다.
+    # 2027 수시 원서접수는 9/7(월)~9/11(금). 과기원 등 자체 일정은 예외로 둔다.
+    _EXEMPT = {'KAIST', 'DGIST', 'UNIST', 'GIST', 'KENTECH'}
+    _oor = []
+    for k in _ks:
+        v = _A.get(k) or {}
+        fr, to = v.get('from'), v.get('to')
+        if not to or k in _EXEMPT:
+            continue
+        if not ('2026-09-07' <= to[:10] <= '2026-09-11'):
+            _oor.append((k, to, '마감이 접수 기간(9/7~9/11) 밖'))
+        if fr and not ('2026-09-01' <= fr[:10] <= '2026-09-09'):
+            _oor.append((k, fr, '시작이 9/1~9/9 밖'))
+    for k, t, why in _oor[:8]:
+        print(f'  ✗ {k} {t} — {why}')
+    if _oor:
+        fails.append(f'접수 일정 범위 이탈 {len(_oor)}건 — 재수집하거나 예외로 등재하라')
+
+    # 커버리지 방향 — data.js 에 있는 대학이 apply_dates 에서 빠지면 그 지원자는 안내를 못 본다
+    _uni = dump("(function(){return window.IPSI.dicts.uni})()")
+    _nomap = [u for u in _uni if u not in _A]
+    if _nomap:
+        print(f'  ✗ 접수일 누락 대학 {len(_nomap)}교: {_nomap[:6]}')
+        fails.append(f'apply_dates 에 없는 대학 {len(_nomap)}교 — python3 fetch_apply_dates.py 재실행')
+    else:
+        print(f'  ✓ data.js 대학 {len(_uni)}교 전부 수록')
+
     # 신선도 — 접수가 다가오는데 수집본이 낡았으면 경고(실패는 아님)
     _age = (datetime.date.today()
             - datetime.date.fromtimestamp(os.path.getmtime(_ap))).days
@@ -295,6 +322,108 @@ else:
                      f"python3 qa_known_issues.py --save-baseline")
     elif not _new:
         print('  ✓ 소멸·급감 없음')
+
+
+# ---------------------------------------------------------------- ⑨ 핵심 분포 래칫
+# ⚠️ 실측(2026-08-29): 수능최저를 300행에서 지워도, 고사일을 요일만 맞춰 옮겨도,
+# 카테고리를 재라벨해도 하네스 7종이 **전부 통과**했다. 값의 '형식'만 보고 '분포'는 아무도
+# 안 봤기 때문이다. 삭제·대량 재라벨 계열 사고는 분포가 먼저 무너진다.
+# 기준선 dist_baseline.json 대비 5% 넘게 움직이면 실패 — 의도한 변경은 --save-baseline.
+print('\n=== ⑨ 핵심 분포 래칫 ===')
+_db = os.path.join(HERE, 'dist_baseline.json')
+_cur = dump("""(function(){const D=window.IPSI,S=D.schema,dc=D.dicts,g=n=>S.indexOf(n);
+const SU=new Date(2026,10,19);
+const when=t=>{const RE=/(\\d{1,2})\\.\\s*(\\d{1,2})/g;const h=[...String(t||'').matchAll(RE)];
+  if(!h.length)return null;const ds=h.map(m=>new Date(2026,+m[1]-1,+m[2]));
+  return ds.every(d=>d<SU)?'pre':ds.every(d=>d>SU)?'post':null};
+const b={hasChoejeo1:D.rows.filter(r=>r[g('hasChoejeo')]===1).length,
+ choejeoUniq:new Set(D.rows.map(r=>dc.choejeo[r[g('choejeo')]]).filter(x=>x&&x!=='없음')).size,
+ dateFilled:D.rows.filter(r=>(dc.date[r[g('date')]]||'').trim()).length,
+ dateUniq:new Set(D.rows.map(r=>dc.date[r[g('date')]]).filter(x=>x&&x.trim())).size,
+ examPre:0,examPost:0,dkind:{},catRows:{}};
+D.rows.forEach(r=>{const w=when(dc.date[r[g('date')]]);if(w==='pre')b.examPre++;else if(w==='post')b.examPost++;
+ const k=r[g('dkind')]||'(빈)';b.dkind[k]=(b.dkind[k]||0)+1;
+ for(const c of (r[g('cats')]||[]))b.catRows[c]=(b.catRows[c]||0)+1});
+return b})()""")
+if '--save-baseline' in sys.argv:
+    json.dump(_cur, open(_db, 'w', encoding='utf-8'), ensure_ascii=False)
+    print('  기준선 갱신')
+elif not os.path.exists(_db):
+    print('  - dist_baseline.json 없음 → --save-baseline 으로 생성하라')
+else:
+    _bl = json.load(open(_db, encoding='utf-8'))
+    _off = []
+    for k in ('hasChoejeo1', 'choejeoUniq', 'dateFilled', 'dateUniq', 'examPre', 'examPost'):
+        a, b2 = _bl.get(k, 0), _cur.get(k, 0)
+        if a and abs(b2 - a) / a > 0.05:
+            _off.append((k, a, b2))
+    for grp in ('dkind', 'catRows'):
+        for k, a in _bl.get(grp, {}).items():
+            b2 = _cur.get(grp, {}).get(k, 0)
+            if a >= 20 and abs(b2 - a) / a > 0.05:
+                _off.append((f'{grp}.{k}', a, b2))
+        for k in set(_cur.get(grp, {})) - set(_bl.get(grp, {})):
+            _off.append((f'{grp}.{k}', 0, _cur[grp][k]))
+    print(f"  최저있음 {_cur['hasChoejeo1']} · 고사일 {_cur['dateFilled']} · 수능전 {_cur['examPre']} · 수능후 {_cur['examPost']}")
+    for k, a, b2 in _off[:12]:
+        print(f'  ✗ {k}: {a} → {b2} ({(b2/a-1)*100:+.0f}%)' if a else f'  ✗ {k}: 신규 {b2}')
+    if _off:
+        fails.append(f'분포 래칫 이탈 {len(_off)}건 — 삭제·대량 재라벨 사고인지 확인하라. '
+                     f'의도한 변경이면 python3 qa_known_issues.py --save-baseline')
+    else:
+        print('  ✓ 기준선 대비 5% 이내')
+
+# ---------------------------------------------------------------- ⑩ 수능최저 파생 정합
+# hasChoejeo 는 choejeo 원문에서 파생되는 값인데 서로 대조된 적이 없었다.
+print('\n=== ⑩ 수능최저 파생 정합 ===')
+_mm = dump("""(function(){const D=window.IPSI,S=D.schema,dc=D.dicts,g=n=>S.indexOf(n);
+const bad=[];D.rows.forEach((r,i)=>{const t=(dc.choejeo[r[g('choejeo')]]||'').trim();
+ const want=(t&&t!=='없음')?1:0; if(r[g('hasChoejeo')]!==want)
+   bad.push([dc.uni[r[g('uni')]],String(dc.dept[r[g('dept')]]).slice(0,12),t.slice(0,18),r[g('hasChoejeo')],want])});
+return bad})()""")
+print(f'  불일치 {len(_mm)}건')
+for x in _mm[:6]:
+    print(f'  ✗ {x[0]} {x[1]} | 최저 {x[2]!r} | hasChoejeo={x[3]} (기대 {x[4]})')
+if _mm:
+    fails.append(f'hasChoejeo 파생 불일치 {len(_mm)}건 — choejeo 원문과 어긋난다')
+
+
+# ---------------------------------------------------------------- ⑪ index.html 자산 배선·캐시버스터
+# ⚠️ 실측(2026-08-29): insights.js 스크립트 태그를 지워도 7개 하네스가 전부 통과했다.
+# app.js 는 window.IPSI_INSIGHTS 가 없으면 조용히 넘어가므로 에러조차 안 난다.
+# 캐시버스터가 stale 이면 접수 주간에 급히 고친 마감 시각을 배포해도 재방문자는 옛 파일을 쓴다
+# — 실제로 이날 apply_dates.js 재수집본이 스탬프 없이 커밋될 뻔했다.
+print('\n=== ⑪ index.html 자산 배선·캐시버스터 ===')
+import hashlib
+_idx_p = os.path.join(HERE, 'index.html')
+_stamp = open(os.path.join(HERE, 'stamp_assets.py'), encoding='utf-8').read()
+_m = re.search(r'ASSETS\s*=\s*\[([^\]]*)\]', _stamp)
+_assets = re.findall(r"'([^']+)'", _m.group(1)) if _m else []
+_idx_raw = open(_idx_p, encoding='utf-8').read()
+# ⚠️ 주석 안의 문자열까지 세면 태그를 주석 처리한 사고를 놓친다(첫 구현이 실제로 그랬다).
+_idx = re.sub(r'<!--.*?-->', '', _idx_raw, flags=re.S)
+_bad = []
+for a in _assets:
+    ap = os.path.join(HERE, a)
+    if not os.path.exists(ap):
+        _bad.append(f'{a}: 파일 없음'); continue
+    h = hashlib.sha1(open(ap, 'rb').read()).hexdigest()[:8]
+    # 실제 <script src>/<link href> 로 실려 있는지 — 파일명만 어디에 있는 것으로는 부족하다
+    tag = re.search(r'<(?:script|link)\b[^>]*\b(?:src|href)="' + re.escape(a) + r'(?:\?v=([a-f0-9]+))?"', _idx)
+    mm = tag if tag and tag.group(1) else None
+    if not tag:
+        _bad.append(f'{a}: index.html 에 script/link 태그로 실려 있지 않다 (배선 끊김)')
+    elif not mm:
+        _bad.append(f'{a}: 캐시버스터(?v=)가 없다 → python3 stamp_assets.py')
+    elif mm.group(1) != h:
+        _bad.append(f'{a}: 캐시버스터 stale (파일 {h} / index {mm.group(1)}) → python3 stamp_assets.py')
+print(f'  자산 {len(_assets)}종 검사')
+for b in _bad:
+    print('  ✗', b)
+if _bad:
+    fails.append(f'index.html 자산 배선·스탬프 이상 {len(_bad)}건')
+else:
+    print('  ✓ 전부 참조되고 스탬프도 최신')
 
 # ---------------------------------------------------------------- 결론
 print()
