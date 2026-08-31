@@ -797,6 +797,7 @@ function renderFilters() {
   const r1 = el('div', 'chip-row');
   JHTYPES.forEach(t => {
     const c = el('button', 'chip' + (S.jhtypes.has(t) ? ' on' : ''), esc(t));
+    c.setAttribute('aria-pressed', String(S.jhtypes.has(t)));   // 색만으로는 켜짐을 알 수 없다
     c.onclick = () => { S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t); renderSoft(); renderFilters(); };
     r1.appendChild(c);
   });
@@ -808,6 +809,7 @@ function renderFilters() {
   const r2 = el('div', 'chip-row');
   [['new', '신설', 'new'], ['up', '증원', 'good'], ['down', '감원', 'bad'], ['changed', '전형 변경', 'new'], ['ease', '최저 완화', 'bad'], ['tighten', '최저 강화·신설', 'good']].forEach(([k, lab, cls]) => {
     const c = el('button', 'chip' + (S.changes.has(k) ? ' on ' + cls : ''), esc(lab));
+    c.setAttribute('aria-pressed', String(S.changes.has(k)));
     c.onclick = () => { S.changes.has(k) ? S.changes.delete(k) : S.changes.add(k); renderSoft(); renderFilters(); };
     r2.appendChild(c);
   });
@@ -819,6 +821,7 @@ function renderFilters() {
   const r3 = el('div', 'chip-row');
   [['', '전체'], ['yes', '있음'], ['no', '없음']].forEach(([k, lab]) => {
     const c = el('button', 'chip' + (S.minLeast === k ? ' on' : ''), lab);
+    c.setAttribute('aria-pressed', String(S.minLeast === k));
     c.onclick = () => { S.minLeast = k; renderSoft(); renderFilters(); };
     r3.appendChild(c);
   });
@@ -1354,7 +1357,7 @@ function openModal(i) {
     const dec = lab.includes('입결') ? 2 : lab.includes('추합') ? (lab.includes('배') ? 2 : 0) : 1;
     return `<tr><td class="metric">${lab}</td><td>${fmtf(info.y25)}</td><td><b>${fmtf(info.y26)}</b></td><td class="ycell ${cls}">${ar} ${Math.abs(info.d).toFixed(dec)}</td><td><span class="impact-chip ${cls}">${word}</span></td></tr>`;
   };
-  const cats = r.cats.map(k => CAT_BY[k] ? `<span class="tag" style="background:${CAT_BY[k].color}22;color:${CAT_BY[k].color}">${esc(CAT_BY[k].label)}</span>` : '').join(' ');
+  const cats = r.cats.map(k => CAT_BY[k] ? `<span class="tag" style="background:${CAT_BY[k].color}22;border-left:3px solid ${CAT_BY[k].color}">${esc(CAT_BY[k].label)}</span>` : '').join(' ');
   const inCmp = S.compare.has(i);
   const bk = favBucket(i);
   $('#modalCard').innerHTML = `

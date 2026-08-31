@@ -238,7 +238,10 @@ input[type=range]{width:100%;accent-color:var(--primary);margin-top:4px}
 .hl-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
 .hl-impact{font-size:11.5px;line-height:1.55;color:var(--text-soft);border-top:1px dashed var(--line-strong);padding-top:8px}
 .hl-impact .imp-line{display:flex;gap:6px;align-items:flex-start;margin-top:3px}
-.tag{font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:7px;white-space:nowrap;letter-spacing:-.01em}
+/* ⚠️ 계열 태그는 글자와 배경에 같은 색을 쓰고 배경만 알파 13% 를 줬다 —
+   대비비가 배경 불투명도에만 좌우돼 46개 중 라이트 36개·다크 34개가 AA 미달이었다(최악 1.55:1).
+   글자는 테마 텍스트색으로 고정하고 계열 색은 좌측 바로 옮긴다(색 의존도도 낮아진다). */
+.tag{font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:7px;white-space:nowrap;letter-spacing:-.01em;color:var(--text)}
 .tag.new{background:var(--new-soft);color:var(--new-ink)}
 .tag.up{background:var(--good-soft);color:var(--good-ink)}
 .tag.down{background:var(--bad-soft);color:var(--bad-ink)}
@@ -436,11 +439,17 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 /* verdict in modal */
 .hero-sec{background:linear-gradient(180deg,var(--primary-soft),transparent);border:1px solid var(--line-strong);border-radius:14px;padding:14px 16px}
 .verdict-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-.verdict-big{font-size:18px;font-weight:900;padding:6px 18px;border-radius:12px;letter-spacing:-.02em}
-.verdict-big.good{background:var(--good);color:#fff}
-.verdict-big.bad{background:var(--bad);color:#fff}
-.verdict-big.new{background:var(--new);color:#fff}
-.verdict-big.neu{background:var(--neutral);color:#fff}
+/* ⚠️ 결론 배지는 흰 글씨 고정이었다 — 단색 채움 위 #fff 는 라이트 2.93~4.37:1,
+   다크 1.76~2.63:1 로 WCAG AA(4.5:1) 전부 미달이었다(2026-08-29 실측).
+   이 서비스의 최종 결론을 담은 배지라 저시력·고령(학부모) 사용자가 색만 보고 판단하게 된다.
+   → 프로젝트에 이미 있는 soft+ink 조합으로 바꿨다(5.22~9.17:1, 라이트·다크 모두 AA).
+   결론이라 눈에 띄어야 하므로 색 테두리를 더해 존재감은 유지한다. */
+.verdict-big{font-size:18px;font-weight:900;padding:5px 16px;border-radius:12px;
+  letter-spacing:-.02em;border:2px solid transparent}
+.verdict-big.good{background:var(--good-soft);color:var(--good-ink);border-color:var(--good)}
+.verdict-big.bad{background:var(--bad-soft);color:var(--bad-ink);border-color:var(--bad)}
+.verdict-big.new{background:var(--new-soft);color:var(--new-ink);border-color:var(--new)}
+.verdict-big.neu{background:var(--neutral-soft);color:var(--neutral-ink);border-color:var(--neutral)}
 .yoy-table td.ycell{font-weight:800}
 .yoy-table td.ycell.good{color:var(--good-ink)}
 .yoy-table td.ycell.bad{color:var(--bad-ink)}
@@ -821,5 +830,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 /* 복수지원 제약 — '불가'는 지원 전략을 바꾸는 정보라 눈에 띄어야 한다 */
 .dup-no{color:var(--bad-ink,var(--bad));font-weight:800}
 /* 3개년 입결의 기준이 해마다 다를 때 — 추세선을 그대로 읽으면 안 된다는 신호 */
-.basis-warn{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:20px;
-  background:var(--new-soft);color:var(--new-ink,var(--new));white-space:nowrap}
+/* ⚠️ 같은 줄에 두면 3개년 추이표 첫 열이 60→108px 로 늘어 375px 모달이 가로로 밀린다
+   (실측: 배지가 있는 행만 modalCard 가로 오버플로 59~81px). 아래 줄로 떨어뜨려 열 폭을 지킨다. */
+.basis-warn{display:block;margin-top:3px;font-size:10.5px;font-weight:800;
+  padding:1px 6px;border-radius:20px;background:var(--new-soft);
+  color:var(--new-ink,var(--new));white-space:nowrap;width:fit-content}
