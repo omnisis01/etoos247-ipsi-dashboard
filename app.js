@@ -673,6 +673,16 @@ const DOCS_LABEL = t => String(t || '').replace(/\s/g, '')
 // 70%컷과 평균을 한 선으로 이으면 없는 등락이 생긴다(실측 5,097행에서 2026≠2024).
 // std24 를 뒤늦게 수집한 이유가 이것이다 — std25 는 쓰면서 std24 만 빠져 있었다.
 const nzStd2 = t => String(t || '').replace(/\s/g, '');
+// 환산점수는 대학·연도마다 **만점 척도**가 다르다(100/200/1000점). 척도가 바뀐 해를 한 선으로
+// 이으면 없는 등락이 생긴다 — 실측 226행에서 3배 이상 벌어진다(경남대 174 / 945 / 254 등).
+// 한국외대 학교장추천 59개 학과는 입결 등급이 비어 환산점수가 유일한 지표라 오독이 그대로 판단이 된다.
+function scaleWarn(r) {
+  const a = [r.v[0], r.v[1], r.v[2]].filter(x => x != null && !isNaN(x));
+  if (a.length < 2) return '';
+  const hi = Math.max(...a), lo = Math.min(...a);
+  if (lo <= 0 || hi / lo < 3) return '';
+  return ` <span class="basis-warn" title="연도별 환산 만점이 달라 추세로 읽으면 안 된다 (${a.map(x => x.toFixed(1)).join(' / ')})">⚠ 연도별 척도 상이</span>`;
+}
 function basisWarn(r) {
   const ys = [['2026', r.std26], ['2025', r.std25], ['2024', r.std24]]
     .filter(([y, t]) => t && nzStd2(t));
@@ -1258,6 +1268,27 @@ function renderTable() {
     : `· 총 ${total.toLocaleString()}개`;
   const statusEl = $('#a11yStatus'); if (statusEl) statusEl.textContent = `${(CAT_BY[S.cat] ? CAT_BY[S.cat].label : '전체')} 검색결과 ${total.toLocaleString()}개`;
 
+  // 필터를 겹쳐 0건이 되면 표가 통째로 비어 '데이터가 빠졌다'·'앱이 멈췄다'로 읽힌다.
+  // 어떤 조건 때문에 비었는지와 원클릭 해제를 함께 준다.
+  if (!FILTERED.length) {
+    const on = [];
+    if (S.search) on.push(`검색 "${esc(S.search)}"`);
+    if (S.region) on.push(`지역 ${esc(S.region)}`);
+    if (S.jhtypes.size) on.push(`전형유형 ${[...S.jhtypes].map(esc).join('·')}`);
+    if (S.changes.size) on.push(`변화 ${[...S.changes].length}종`);
+    if (S.minLeast) on.push('수능최저 조건');
+    if (S.cut) on.push('입결 컷');
+    $('#gridBody').innerHTML =
+      `<tr><td colspan="${COLS.length}" class="empty-row">` +
+      `<b>조건에 맞는 전형이 없습니다.</b>` +
+      (on.length ? `<span>적용 중: ${on.join(' · ')}</span>` : '') +
+      `<button type="button" id="emptyReset" class="ghost-btn">상세 필터 해제</button>` +
+      `</td></tr>`;
+    const rb = $('#emptyReset');
+    if (rb) rb.onclick = () => { const r = $('#resetBtn'); if (r && r.onclick) r.onclick(); };
+    $('#pager').innerHTML = '';
+    return;
+  }
   $('#gridBody').innerHTML = slice.map(r => {
     const d = deltaInfo(r);
     const v = V(r);
@@ -1398,7 +1429,7 @@ function openModal(i) {
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
         <table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
           ${trendRow(`입결(등급) ${stdTag(r)}${basisWarn(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
-          ${trendRow('입결(환산)', [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
+          ${trendRow(`입결(환산)${scaleWarn(r)}`, [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
         </tbody></table>

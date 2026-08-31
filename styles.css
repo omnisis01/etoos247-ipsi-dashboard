@@ -835,3 +835,7 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .basis-warn{display:block;margin-top:3px;font-size:10.5px;font-weight:800;
   padding:1px 6px;border-radius:20px;background:var(--new-soft);
   color:var(--new-ink,var(--new));white-space:nowrap;width:fit-content}
+/* 필터 결과 0건 — 빈 표는 '고장'으로 읽힌다. 이유와 해제 버튼을 함께 준다. */
+.empty-row{text-align:center;padding:38px 16px;color:var(--text-mute)}
+.empty-row b{display:block;font-size:15px;color:var(--text);margin-bottom:6px}
+.empty-row span{display:block;font-size:12.5px;margin-bottom:12px}

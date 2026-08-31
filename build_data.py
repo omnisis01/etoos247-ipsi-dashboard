@@ -1003,6 +1003,9 @@ for r in raw:
         _txt = s(r[_ci])
         if _key == 'enroll':
             if _etracks: _rw['enroll'] = _txt.replace('\n', ' · ')
+            # 숫자가 아예 없는 표기('약간명' 등)도 원문을 남긴다 — 아니면 화면에 '–명' 만 뜨고
+            # 원문 표기 섹션도 안 떠서 사용자가 원인을 확인할 길이 없다(연세대(미래) 특수교육대상자 1행).
+            elif _enroll_raw is None and _txt: _rw['enroll'] = _txt.replace('\n', ' · ')
             continue
         if _got is None and _txt and _txt not in ('-', '–', '—', '없음', '미정', 'N/A'):
             _rw[_key] = _txt.replace('\n', ' · ')
