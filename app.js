@@ -546,7 +546,12 @@ function applyFilters() {
     .replace(/과기대/g, '과학기술대')       // 서울과기대 → 서울과학기술대
     .replace(/교대$/, '교육대')
     .replace(/^카이스트$/, 'kaist')
-    .replace(/^(포스텍|포항공대)$/, 'postech');
+    .replace(/^(포스텍|포항공대)$/, 'postech')
+    // 분캠·과기원 한글 음차 — 원천이 영문 표기라 한글로는 0건이었다(2026-08-29 실측).
+    // 지원카드 안내가 '과기원은 수시 6회 제한 밖'이라 알려 주는데 정작 검색이 안 됐다.
+    .replace(/^에리카$/, 'erica').replace(/^와이즈$/, 'wise')
+    .replace(/^디지스트$/, 'dgist').replace(/^유니스트$/, 'unist')
+    .replace(/^지스트$/, 'gist').replace(/^켄텍$/, 'kentech');
   const SEARCH_TOKENS = q ? q.split(/\s+/).filter(Boolean).map(expandToken) : [];
   FILTERED = ROWS.filter(r => {
     if (S.cat !== 'all' && !r.cats.includes(S.cat)) return false;
@@ -593,12 +598,21 @@ function sortFiltered() {
       default: return V(r).score;
     }
   };
+  // ⚠️ 무데이터는 **방향과 무관하게 항상 맨 뒤**로 보낸다.
+  // 이 규칙이 입결에만 있어서 경쟁률·모집인원 오름차순은 무데이터가 최상단을 차지했다.
+  // 실측(2026-08-29): 경쟁률 오름차순에서 무데이터 2,104행이 1~21페이지를 채워
+  // 실제로 경쟁률이 낮은 전형은 22페이지 뒤에 있었다 — 사실상 도달 불가였다.
+  const NULLABLE = { grade: r => r.g[0], comp: r => r.c[0], enroll: r => r.enroll };
+  const nul = NULLABLE[key];
   FILTERED.sort((a, b) => {
-    if (key === 'grade') {            // 입결 정렬은 무데이터를 항상 맨 뒤로
+    if (nul) {
+      const na = nul(a) == null, nb = nul(b) == null;
+      if (na && nb) return 0;
+      if (na) return 1;
+      if (nb) return -1;
+    }
+    if (key === 'grade') {
       const ga = a.g[0], gb = b.g[0];
-      if (ga == null && gb == null) return 0;
-      if (ga == null) return 1;
-      if (gb == null) return -1;
       if (ga !== gb) return (ga - gb) * dir;
       return (b.c[0] || 0) - (a.c[0] || 0);   // 동점 시 경쟁률 높은순
     }
@@ -634,7 +648,10 @@ function sortFiltered() {
    RENDER
    ============================================================ */
 function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
-function renderSoft() { applyFilters(); renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+// 필터가 바뀌면 결과 집합이 달라지므로 페이지를 유지하면 안 된다.
+// 실측: 5페이지를 보던 중 지역='제주'를 고르면 466건의 **마지막 페이지**가 첫 화면이 됐다
+// (기본 정렬이 유불리순이라 '불리'만 모인 꼬리가 보인다).
+function renderSoft() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
 
 // 입결 기준 버킷. 서로 다른 기준을 섞으면 '컷 이내' 필터가 왜곡되므로 분리해 둔다.
 // stage1(1단계합격자·지원자 평균)은 최종등록자보다 훨씬 넓은 풀이라 별도 취급한다.
@@ -780,7 +797,7 @@ function renderFilters() {
   const r1 = el('div', 'chip-row');
   JHTYPES.forEach(t => {
     const c = el('button', 'chip' + (S.jhtypes.has(t) ? ' on' : ''), esc(t));
-    c.onclick = () => { S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t); renderFilters(); renderSoft(); };
+    c.onclick = () => { S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t); renderSoft(); renderFilters(); };
     r1.appendChild(c);
   });
   g1.appendChild(r1); box.appendChild(g1);
@@ -791,7 +808,7 @@ function renderFilters() {
   const r2 = el('div', 'chip-row');
   [['new', '신설', 'new'], ['up', '증원', 'good'], ['down', '감원', 'bad'], ['changed', '전형 변경', 'new'], ['ease', '최저 완화', 'bad'], ['tighten', '최저 강화·신설', 'good']].forEach(([k, lab, cls]) => {
     const c = el('button', 'chip' + (S.changes.has(k) ? ' on ' + cls : ''), esc(lab));
-    c.onclick = () => { S.changes.has(k) ? S.changes.delete(k) : S.changes.add(k); renderFilters(); renderSoft(); };
+    c.onclick = () => { S.changes.has(k) ? S.changes.delete(k) : S.changes.add(k); renderSoft(); renderFilters(); };
     r2.appendChild(c);
   });
   g2.appendChild(r2); box.appendChild(g2);
@@ -802,7 +819,7 @@ function renderFilters() {
   const r3 = el('div', 'chip-row');
   [['', '전체'], ['yes', '있음'], ['no', '없음']].forEach(([k, lab]) => {
     const c = el('button', 'chip' + (S.minLeast === k ? ' on' : ''), lab);
-    c.onclick = () => { S.minLeast = k; renderFilters(); renderSoft(); };
+    c.onclick = () => { S.minLeast = k; renderSoft(); renderFilters(); };
     r3.appendChild(c);
   });
   g3.appendChild(r3); box.appendChild(g3);
@@ -812,7 +829,7 @@ function renderFilters() {
   g4.innerHTML = '<div class="f-title">지역(광역)</div>';
   const sel = el('select', 'f-select');
   sel.innerHTML = '<option value="">전국 전체</option>' + REGIONS.map(r => `<option ${S.region === r ? 'selected' : ''}>${esc(r)}</option>`).join('');
-  sel.onchange = () => { S.region = sel.value; renderSoft(); };
+  sel.onchange = () => { S.region = sel.value; renderSoft(); renderFilters(); };
   g4.appendChild(sel); box.appendChild(g4);
 
   // 수능최저 검색 (N개 합 + 내 등급 합 슬라이더, '그 외' 특이 최저) — 기존 '입결 등급 상한'을 대체
@@ -932,7 +949,7 @@ document.addEventListener('click', e => {
   if (!h) return;
   const t = h.dataset.jt;
   S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t);
-  renderFilters(); renderSoft();
+  renderSoft(); renderFilters();
 });
 const sumE = rs => rs.reduce((s, r) => s + (r.enroll || 0), 0);
 
@@ -1212,7 +1229,7 @@ function renderTable() {
   if (!rs) {
     rs = document.createElement('select'); rs.id = 'tblRegion'; rs.className = 'f-select tbl-region';
     ph.insertBefore(rs, $('#sortSeg'));
-    rs.onchange = () => { S.region = rs.value; renderFilters(); renderSoft(); };
+    rs.onchange = () => { S.region = rs.value; renderSoft(); renderFilters(); };
   }
   rs.innerHTML = '<option value="">지역: 전국</option>' + REGIONS.map(x => `<option value="${esc(x)}" ${S.region === x ? 'selected' : ''}>${esc(x)}</option>`).join('');
   // sort segment quick

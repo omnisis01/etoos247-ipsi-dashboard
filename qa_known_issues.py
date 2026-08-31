@@ -106,7 +106,9 @@ def count(q, expanded):
     return sum(1 for h in HAYS if all(t in h for t in expanded))
 
 ALIASES = ['진주교대', '서울교대', '경인교대', '서울여대', '숙명여대', '이대',
-           '한국외대', '카이스트', '포스텍', '서울과기대', '한기대']
+           '한국외대', '카이스트', '포스텍', '서울과기대', '한기대',
+           # 분캠·과기원 한글 음차 — 원천이 영문이라 한글로는 0건이었다(2026-08-29)
+           '에리카', '와이즈', '유니스트', '지스트', '디지스트', '켄텍']
 miss = []
 _exp = expand_many([a.lower() for a in ALIASES])
 for q, e in zip(ALIASES, _exp):
