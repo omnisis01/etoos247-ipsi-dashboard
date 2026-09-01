@@ -807,7 +807,9 @@ _std_fixed = set()
 # ⚠️ '두 학과 값이 정확히 뒤바뀌었다'는 것만으로는 방향을 못 가른다 — _note_ipgyeol 참조.
 _COMP_CORR = {}
 for _c in _CORR.get('comp', []):
-    _COMP_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c['old'], _c['new'])
+    # year 생략 시 26(기존 항목 호환). new=None 은 '원천의 값이 가짜라 지운다'는 뜻이다 —
+    # 백석대 계약학과전형처럼 그 해에 존재하지도 않은 전형에 다른 전형의 소계가 박힌 칸.
+    _COMP_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], int(_c.get('year', 26)))] = (_c['old'], _c['new'])
 _comp_fixed = set()
 
 # 추합 교정 — 대학마다 '충원' 정의가 달라 계통 차이는 손대지 않는다(checklist 🔒).
@@ -893,14 +895,16 @@ for r in raw:
     if (uni, dept, jhtype, jhname) in _enroll_fixed and (uni, dept, jhtype, jhname) in _ENROLL_PREV:
         prev = _ENROLL_PREV[(uni, dept, jhtype, jhname)]   # 실제 증감 반영 — 엑셀이 방치한 전년대비 마크 교정
     comp = [strict_num(r[18]), strict_num(r[19]), strict_num(r[20])]
-    _ck = (uni, dept, jhtype, jhname)
-    if _ck in _COMP_CORR:
+    for _yi, _yr in enumerate((26, 25, 24)):
+        _ck = (uni, dept, jhtype, jhname, _yr)
+        if _ck not in _COMP_CORR:
+            continue
         _cold, _cnew = _COMP_CORR[_ck]
         # old=null 은 '원천이 비어 있던 칸을 채운다'는 뜻이다(입결교정 _GRADE_CORR 와 같은 규약).
-        # 엑셀 제작자가 못 채운 c26 을 대행사 최종 경쟁률 페이지에서 확인해 보강할 때 쓴다.
-        if (comp[0] is None and _cold is None) or \
-           (comp[0] is not None and _cold is not None and abs(comp[0] - _cold) < 1e-9):
-            comp[0] = _cnew; _comp_fixed.add(_ck)
+        # 엑셀 제작자가 못 채운 칸을 대행사 최종 경쟁률 페이지에서 확인해 보강할 때 쓴다.
+        if (comp[_yi] is None and _cold is None) or \
+           (comp[_yi] is not None and _cold is not None and abs(comp[_yi] - _cold) < 1e-9):
+            comp[_yi] = _cnew; _comp_fixed.add(_ck)
     grade = [vgrade(strict_num(r[22])), vgrade(strict_num(r[27])), vgrade(strict_num(r[31]))]
     _gk = (uni, dept, jhtype, jhname)
     if _gk in _GRADE_CORR:
@@ -1109,7 +1113,7 @@ if len(_std_fixed) != len(_STD_CORR):
 print(f"[기준교정] std {len(_std_fixed)}/{len(_STD_CORR)}건")
 if len(_comp_fixed) != len(_COMP_CORR):
     raise SystemExit(f"[중단] 경쟁률교정 미적용 {sorted(set(_COMP_CORR) - _comp_fixed)} — 엑셀 갱신 시 data_corrections.json 'comp'에서 제거할 것")
-print(f"[경쟁률교정] c26 {len(_comp_fixed)}/{len(_COMP_CORR)}건")
+print(f"[경쟁률교정] {len(_comp_fixed)}/{len(_COMP_CORR)}건")
 if len(_region_fixed) != len(_REGION_CORR):
     raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
