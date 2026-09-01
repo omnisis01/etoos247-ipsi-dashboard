@@ -896,7 +896,10 @@ for r in raw:
     _ck = (uni, dept, jhtype, jhname)
     if _ck in _COMP_CORR:
         _cold, _cnew = _COMP_CORR[_ck]
-        if comp[0] is not None and abs(comp[0] - _cold) < 1e-9:
+        # old=null 은 '원천이 비어 있던 칸을 채운다'는 뜻이다(입결교정 _GRADE_CORR 와 같은 규약).
+        # 엑셀 제작자가 못 채운 c26 을 대행사 최종 경쟁률 페이지에서 확인해 보강할 때 쓴다.
+        if (comp[0] is None and _cold is None) or \
+           (comp[0] is not None and _cold is not None and abs(comp[0] - _cold) < 1e-9):
             comp[0] = _cnew; _comp_fixed.add(_ck)
     grade = [vgrade(strict_num(r[22])), vgrade(strict_num(r[27])), vgrade(strict_num(r[31]))]
     _gk = (uni, dept, jhtype, jhname)
