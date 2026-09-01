@@ -246,7 +246,7 @@ const S = {
 
   cutOpen: null,   // 입결 컷 필터 펼침. null=미결정(모바일이면 접힘). 기준이 7종으로 늘어 모바일에서 373px를 먹었다
   stdCut: '', cutGrade: 9.0,   // 입결 컷 필터: '' | 'avg' | 'cut50' | 'cut70' | 'cut80' | 'cut90' | 'stage1', 슬라이더 등급(작을수록 우수). 9.0 = 사실상 미적용
-  page: 1, perPage: 100, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade',
+  page: 1, perPage: 100, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade', trendMetric: 'both',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
   expanded: new Set(load('expanded', [])),
@@ -1177,12 +1177,28 @@ function renderCharts() {
 function renderTrendChart() {
   const f = FILTERED;
   const yearsLab = ['2024', '2025', '2026'];
+  // 지표 토글 — 입결과 경쟁률은 축 방향이 반대(입결은 낮을수록 위)라 겹쳐 그리면 읽기 어렵다.
+  // 하나만 고르면 그 지표가 세로 공간을 다 쓰고 눈금선·축 라벨까지 붙는다.
+  const tseg = $('#trendMetric');
+  if (tseg && !tseg.dataset.init) {
+    tseg.dataset.init = '1';
+    tseg.innerHTML = [['both', '함께'], ['grade', '입결'], ['comp', '경쟁률']]
+      .map(([k, l]) => `<button data-k="${k}" class="${S.trendMetric === k ? 'on' : ''}" aria-pressed="${S.trendMetric === k}">${l}</button>`).join('');
+    tseg.onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      S.trendMetric = b.dataset.k;
+      [...tseg.children].forEach(c => { const on = c.dataset.k === S.trendMetric; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on); });
+      renderTrendChart();
+    };
+  }
+  const tm = S.trendMetric || 'both';
+  const solo = tm !== 'both';
   // 추이도 같은 기준끼리만. 연도 사이에 기준이 바뀐 행(std26≠std25)은 추세가 아니라 지표 변경이므로 뺀다.
   const domT = dominantStd(f);
   const gf = domT.std ? f.filter(r => r.stdK26 === domT.std && (!r.std26 || !r.std25 || nzStd(r.std26) === nzStd(r.std25))) : [];
   const gradeY = [avg(gf.map(r => r.g[2])), avg(gf.map(r => r.g[1])), avg(gf.map(r => r.g[0]))];
   const compY = [avg(f.map(r => r.c[2])), avg(f.map(r => r.c[1])), avg(f.map(r => r.c[0]))];
-  const W = 320, H = 190, padL = 38, padR = 38, padT = 18, padB = 26;
+  const W = 320, H = solo ? 230 : 190, padL = solo ? 46 : 38, padR = 38, padT = solo ? 24 : 18, padB = 26;
   const x = i => padL + i / 2 * (W - padL - padR);
   function series(vals, lo, hi, color, fmtf, below, flip) {
     const ok = vals.map((v, i) => ({ v, i })).filter(p => p.v != null);
@@ -1195,15 +1211,39 @@ function renderTrendChart() {
     return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
   }
   const gOk = gradeY.filter(v => v != null), cOk = compY.filter(v => v != null);
+  const showG = tm !== 'comp', showC = tm !== 'grade';
   // 장식이 아니라 데이터 차트다 — 숨기지 말고 스크린리더에 요약을 준다
   const gLab = gradeY.map((v, i) => v == null ? '' : `${2024 + i}년 ${v.toFixed(2)}등급`).filter(Boolean).join(', ');
-  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="2024~2026 평균 입결·경쟁률 추이. 평균 입결 ${gLab || '데이터 없음'}">`;
+  const cLab = compY.map((v, i) => v == null ? '' : `${2024 + i}년 ${v.toFixed(1)}대 1`).filter(Boolean).join(', ');
+  const aria = tm === 'comp' ? `2024~2026 평균 경쟁률 추이. ${cLab || '데이터 없음'}`
+    : tm === 'grade' ? `2024~2026 평균 입결 추이. ${gLab || '데이터 없음'}`
+    : `2024~2026 평균 입결·경쟁률 추이. 평균 입결 ${gLab || '데이터 없음'}`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${aria}">`;
+  // 단독 보기에서는 값 축을 읽을 수 있게 가로 눈금선 3개와 좌측 라벨을 깐다
+  if (solo) {
+    const ok = tm === 'comp' ? cOk : gOk;
+    if (ok.length) {
+      const lo = tm === 'comp' ? Math.min(...ok) * .8 : Math.min(...ok) - .3;
+      const hi = tm === 'comp' ? Math.max(...ok) * 1.15 : Math.max(...ok) + .3;
+      const flip = tm === 'grade';
+      for (let k = 0; k <= 2; k++) {
+        const v = lo + (hi - lo) * k / 2;
+        const t = (v - lo) / ((hi - lo) || 1);
+        const yy = padT + (flip ? t : 1 - t) * (H - padT - padB);
+        svg += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/>`;
+        svg += `<text x="${padL - 6}" y="${(yy + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" font-weight="700" fill="var(--text-soft)">${tm === 'comp' ? v.toFixed(1) : v.toFixed(2)}</text>`;
+      }
+    }
+  }
   svg += `<line class="axis" x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}"/>`;
   yearsLab.forEach((l, i) => { svg += `<text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle" font-size="10.5" font-weight="700">${l}</text>`; });
-  if (gOk.length) { const lo = Math.min(...gOk) - .3, hi = Math.max(...gOk) + .3; svg += series(gradeY, lo, hi, 'var(--primary)', v => v.toFixed(2), true, true); }
-  if (cOk.length) { const lo = Math.min(...cOk) * .8, hi = Math.max(...cOk) * 1.15; svg += series(compY, lo, hi, 'var(--new)', v => v.toFixed(1), false, false); }
+  if (showG && gOk.length) { const lo = Math.min(...gOk) - .3, hi = Math.max(...gOk) + .3; svg += series(gradeY, lo, hi, 'var(--primary)', v => v.toFixed(2), true, true); }
+  if (showC && cOk.length) { const lo = Math.min(...cOk) * .8, hi = Math.max(...cOk) * 1.15; svg += series(compY, lo, hi, 'var(--new)', v => v.toFixed(1), false, false); }
   svg += `</svg>`;
-  svg += `<div class="legend"><span><i style="background:var(--primary)"></i>평균 입결 (위로 갈수록 우수)</span><span><i style="background:var(--new)"></i>평균 경쟁률</span></div>`;
+  const legG = `<span><i style="background:var(--primary)"></i>평균 입결 (위로 갈수록 우수)</span>`;
+  const legC = `<span><i style="background:var(--new)"></i>평균 경쟁률 (위로 갈수록 높음)</span>`;
+  svg += `<div class="legend">${showG ? legG : ''}${showC ? legC : ''}</div>`;
+  if (solo && !(tm === 'comp' ? cOk : gOk).length) svg = `<div class="no-data" style="padding:20px">데이터 없음</div>`;
   $('#chartB').innerHTML = svg;
 }
 
