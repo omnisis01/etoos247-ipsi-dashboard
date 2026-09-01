@@ -14,9 +14,13 @@
 3. python3 build_data.py
    → 검증: rows/uni 수·카테고리 카운트 급변 없는지 + 교정 리포트 전건 적용인지
      [구분교정] [일자교정] [기준교정] [경쟁률교정] [지역교정] [입결교정] [enroll교정]
+     [환산교정] [추합교정] [트랙합산] [열밀림교정]
    → "미적용 N건 — SystemExit"가 뜨면 아래 '가드가 중단시켰을 때' 절차.
-4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 verify_insights.py \
-     && node probe_fields.js && python3 verify_frontend.py
+4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 qa_chungwon.py \
+     && python3 verify_insights.py && python3 verify_frontend.py \
+     && python3 qa_known_issues.py && node probe_fields.js
+   → qa_chungwon: 추합 산술 래칫(추합 ≤ 지원자 − 모집인원) — 기준선 40건.
+   → qa_known_issues: ①~⑪ 회귀·래칫. ⑪ 이 캐시버스터 stale 을 잡는다(아래 5번과 짝).
    → verify_data: 불변식(stdK 버킷 화이트리스트 포함).
    → qa_comp_ratio: 경쟁률 산술 래칫 — 신규 의심이 늘면 커밋 차단. 교정으로 기존 의심이
      줄었다면 --save-baseline 으로 기준선 갱신(현재 30건).
@@ -34,7 +38,11 @@
    → "의도한 수정"과 diff 가 일치하는지. 뜻밖의 신규/삭제 행이면 중단하고 원인 확인.
 6. 미리보기에서 대표 행 1~2개 값 재확인(예: 부산대 치의예 최저).
 7. python3 stamp_assets.py   # 캐시 버스팅 — 배포 전 필수(아래 절 참조)
-8. git commit → git push. (pre-commit hook 이 4번 하네스를 다시 강제한다)
+   → index.html 도 함께 스테이지할 것. 자산만 커밋하고 index.html 을 빠뜨리면
+     서버는 새 파일을 주는데 브라우저는 옛 파일을 계속 쓴다(실제 사고 이력).
+8. git commit → git push.
+   (pre-commit 이 4번 하네스 일부와 `stamp_assets.py --check` 를 다시 강제한다.
+    자산 파일이 스테이지됐는데 스탬프가 낡았으면 여기서 커밋이 막힌다.)
 ```
 
 ## 가드가 중단시켰을 때 ("미적용 N건 — SystemExit")

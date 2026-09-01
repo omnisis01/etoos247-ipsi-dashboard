@@ -37,12 +37,27 @@ firebase deploy --only hosting
 ---
 
 ## 데이터 갱신 방법
-엑셀이 업데이트되면:
+엑셀이 업데이트되면 아래를 **순서대로 전부** 돌린다. 자세한 런북은 `DATA_UPDATE.md`.
+
 ```bash
 cd dashboard
-python3 build_data.py     # 새 data.js 생성
+python3 build_data.py                                   # 새 data.js 생성
+python3 verify_data.py && python3 qa_comp_ratio.py \
+  && python3 qa_chungwon.py && python3 verify_insights.py \
+  && python3 verify_frontend.py && python3 qa_known_issues.py   # 하네스
+node probe_fields.js                                    # 화면 도달(실행 기반)
+python3 stamp_assets.py                                 # ★ 캐시버스팅 — 빠뜨리면 배포해도 화면이 안 바뀐다
 ```
+
 그 후 다시 push(A) 또는 `firebase deploy`(B). **앱 코드는 건드릴 필요 없음.**
+
+> ⚠️ **`stamp_assets.py` 를 빠뜨리지 말 것.** index.html 이 `app.js?v=<해시>` 로 참조하므로,
+> 자산만 바꾸고 스탬프를 안 갱신하면 서버는 새 파일을 주는데 브라우저는 옛 파일을 계속 쓴다.
+> 실제로 이 절차에 그 줄이 없어서 사고가 났다. 지금은 pre-commit 이 `stamp_assets.py --check` 로
+> 막아 주지만, 훅을 우회(`--no-verify`)하거나 훅이 설치되지 않은 클론에서는 여전히 손으로 챙겨야 한다.
+>
+> 프런트 파일(`app.js`·`styles.css`·`apply_dates.js`·`insights.js`)만 고친 경우에도
+> **`stamp_assets.py` 는 똑같이 필요하다.** 데이터 갱신 때만 필요한 것이 아니다.
 
 ## (선택) 나중에 DB가 필요해지면
 다기기 지원카드 동기화·로그인·관리자 업로드가 필요할 때만:

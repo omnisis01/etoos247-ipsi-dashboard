@@ -17,18 +17,27 @@ FAIL=0
 # 실제로 이 때문에 인사이트 하네스가 조용히 건너뛰어져 잘못된 커밋이 통과했다.
 export LANG="${LANG:-en_US.UTF-8}"
 
-run() {  # run <라벨> <스크립트>
-  [ -f "$2" ] || { echo "  ! $2 없음 — 건너뜀"; return; }
-  echo "── $1"
-  if python3 "$2"; then :; else FAIL=1; fi
+run() {  # run <라벨> <스크립트> [인자...]
+  LABEL="$1"; SCRIPT="$2"; shift 2
+  [ -f "$SCRIPT" ] || { echo "  ! $SCRIPT 없음 — 건너뜀"; return; }
+  echo "── $LABEL"
+  if python3 "$SCRIPT" "$@"; then :; else FAIL=1; fi
 }
 
 echo "$STAGED" | grep -qE '^(data\.js|build_data\.py)$' && NEED_DATA=1
 echo "$STAGED" | grep -qE '^match_util\.py$' && NEED_MATCH=1
 echo "$STAGED" | grep -qE '^(insights\.js|build_ins\.py|merge_ins\.py|fix_ins_numbers\.py|apply_rewrite\.py)$' && NEED_INS=1
+# 브라우저가 실제로 받아 가는 자산이 바뀌면 캐시버스터가 같이 갱신돼야 한다.
+echo "$STAGED" | grep -qE '^(styles\.css|data\.js|insights\.js|apply_dates\.js|app\.js|index\.html)$' && NEED_STAMP=1
 
-[ -z "$NEED_DATA$NEED_INS$NEED_MATCH" ] && exit 0
+[ -z "$NEED_DATA$NEED_INS$NEED_MATCH$NEED_STAMP" ] && exit 0
 echo "pre-commit: 데이터 하네스 실행"
+
+# 캐시버스팅 게이트 — 데이터 하네스보다 먼저 돌린다(가장 싸고, 가장 조용히 새어나가는 사고다).
+# 유래: app.js 만 스테이지하고 index.html 을 빠뜨려 배포했더니 서버는 새 파일을 주는데
+#       브라우저는 옛 app.js 를 계속 썼다. 훅이 프런트 자산 변경을 아예 안 보고 있었던 탓이다.
+#       실제로 그 직후 KAIST 접수 시각 교정도 같은 경로로 새어나갈 뻔했다(qa_known_issues ⑪ 이 손검사에서 잡음).
+[ -n "$NEED_STAMP" ] && run "stamp_assets.py --check (캐시버스터)" stamp_assets.py --check
 
 # 외부자료 조인용 정규화 — 로마숫자를 지우면 전형 Ⅰ/Ⅱ가 뒤섞여 허위 불일치가 대량 발생한다.
 # 실제로 하루에 조인 버그를 세 번 냈고 그중 하나가 불일치를 64건으로 부풀렸다.
