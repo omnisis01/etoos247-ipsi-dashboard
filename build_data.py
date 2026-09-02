@@ -1050,7 +1050,11 @@ for r in raw:
         conv = [None, None, None]; chung = ['', '', '']
         std26 = ''; stdK = ''; std25 = ''
 
-    tags = sorted(categorize(uni, gye, dept, jhname, jagyeok))
+    # ⚠️ 계열 분류는 **교정된 학과명**으로 한다. _dept_of 를 행 기록 시점(아래)에만 걸었더니
+    #    분류는 옛 이름으로 되어, 같은 학과의 두 행이 서로 다른 계열에 잡혔다
+    #    (경북대 모바일AI공학전공 — 학종 행은 옛 이름 기준 eng_ee, 요강 근거로 추가한 논술 행은
+    #     새 이름 기준 eng_cs+eng_ee). 이름을 고쳤으면 그 이름으로 분류하는 것이 맞다.
+    tags = sorted(categorize(uni, gye, _dept_of(uni, dept, jhtype, jhname), jhname, jagyeok))
     for t in tags:
         cat_counter[t] = cat_counter.get(t, 0) + 1
         audit.setdefault(t, {}).setdefault((uni, dept), 0)
@@ -1145,6 +1149,17 @@ for _a in _ADDED_ROWS:
     #    비어 있으면 본문 규칙과 같은 categorize()로 자동 분류한다 — 손으로 적은 값이 있으면 그쪽 우선.
     _cats = _a['cats'] or sorted(categorize(_u, _a.get('gye', ''), _d, _jn, ''))
     _inh = _inherit(_u, _jt, _jn)
+    # 상속은 '유일값·80% 다수값'일 때만 채운다. 같은 전형 안에서 모집단위마다 갈리는 값
+    # (수능최저·고사 입실시각)은 그래서 공란으로 남는데, **공란 수능최저는 '최저 없음'으로 읽혀**
+    # 최저 필터가 이 행을 잘못 포함시킨다. 요강에 값이 명시된 경우 교정에 직접 적어 덮어쓴다.
+    # (경북대 논술 모바일AI공학전공 — 최저 2합3·자연계열Ⅰ 15:00 입실. 요강 p.61·p.76)
+    #    ⚠️ 세 필드 모두 사전 인코딩(intern) 대상이다 — 날것의 문자열을 넣으면
+    #       data.js 가 스키마를 어겨 verify_data.py 가 즉시 실패한다.
+    for _k in ('choejeo', 'date', 'jagyeok', 'method'):
+        if _a.get(_k):
+            _inh[_k] = intern(_k, _a[_k])
+            if _k == 'choejeo':
+                _inh['hasCj'] = 1
     for _t in _cats:
         cat_counter[_t] = cat_counter.get(_t, 0) + 1
         audit.setdefault(_t, {}).setdefault((_u, _d), 0)
