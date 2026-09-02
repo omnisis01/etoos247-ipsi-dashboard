@@ -462,7 +462,17 @@ function verdict(r) {
     else if (g.dir === 'easier') { sig.push({ dir: 'good', t: `입결 하락세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score += 2; }
     else if (g.dir === 'harder') { sig.push({ dir: 'bad', t: `입결 상승세 ${g.y25.toFixed(2)}→${g.y26.toFixed(2)}등급`, m: '입결' }); score -= 2; }
   }
-  if (c) { if (c.dir === 'down') { sig.push({ dir: 'good', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score += 2; } else if (c.dir === 'up') { sig.push({ dir: 'bad', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1`, m: '경쟁' }); score -= 2; } }
+  if (c) {
+    // 경쟁률 변화가 입결에 얼마나 반영되는지는 전형유형마다 다르다. 2026 vs 2025 실측(14,842행)에서
+    //   학생부교과 r=-0.414 (설명력 17%) · 학생부종합 r=-0.316 (10%) · 논술 r=+0.004 (0%)
+    // 논술은 자연·인문 모두 r≈0 이고 95% 신뢰구간이 0을 포함한다(n=330). 기본 경쟁률이 수십:1이라
+    // 지원자가 늘어도 합격선이 따라 움직이지 않는 것으로 보인다.
+    // 그래서 논술은 **신호는 보여주되 점수는 주지 않는다** — 점수를 주면 근거 없는 유불리가 된다.
+    const cw = r.jhtype === '논술' ? 0 : 2;
+    const tail = cw ? '' : ' (논술은 합격선 영향 작음)';
+    if (c.dir === 'down') { sig.push({ dir: cw ? 'good' : 'warn', t: `경쟁률 하락 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1${tail}`, m: '경쟁' }); score += cw; }
+    else if (c.dir === 'up') { sig.push({ dir: cw ? 'bad' : 'warn', t: `경쟁률 상승 ${c.y25.toFixed(1)}→${c.y26.toFixed(1)}:1${tail}`, m: '경쟁' }); score -= cw; }
+  }
   if (ch) { const cu = chungUnit(r), c1 = fmtChung(r, ch.y25), c2 = fmtChung(r, ch.y26);
     // 전형유형별 내부 잣대(표기하지 않음): 교과전형은 추합이 모집인원의 100~300%까지 도는
     // 실질 문턱의 핵심 변수라 ±2, 종합·논술·실기는 추합 규모가 작아 ±1 유지.
@@ -1462,7 +1472,7 @@ function openModal(i) {
           ${yoyCmp(`추합(충원, ${chungUnit(r)})`, v.ch, x => fmtChung(r, x), dir => dir === 'up')}
         </tbody></table>
         <div class="impact-box" style="margin-top:12px">${reasons}</div>
-        <div class="verdict-note" style="margin-top:8px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.</div>
+        <div class="verdict-note" style="margin-top:8px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.${r.jhtype === '논술' ? ' <b>단, 논술은 경쟁률 변화를 점수에 넣지 않습니다</b> — 2026 실측에서 논술만 경쟁률과 합격선이 사실상 무관했습니다.' : ''}</div>
         <div class="verdict-note" style="margin-top:4px">※ 다만 실제 입시에서는 입결이 내려간 학과로 오히려 지원이 몰려 경쟁이 폭발하는 경우도 있으니 주의하세요.</div>
       </div>
       ${r.change ? `<div class="msec"><h4>📝 2026 대비 변경사항(2027)</h4><div class="change-box">${esc(r.change)}</div></div>` : ''}
