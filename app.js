@@ -62,7 +62,15 @@ function applyInfo(uni) {
   const f = p(a.from), t = p(a.to);
   // 공통 마감(9/11)보다 이른 마감은 학생이 놓치기 딱 좋은 함정 — 강조 대상
   const early = t.d < new Date(2026, 8, 11);
-  return { from: f.s, to: t.s, toDate: t.d, via: a.via, early,
+  // ⚠️ 시각이 대학 공표값이 아닌 경우가 있다. 요강에 날짜만 적고 시각을 비워 둔 대학이 있고,
+  //    그때 접수처 시스템 기본값(시작 00:00 · 마감 23:59)이 그대로 들어온다.
+  //    실측 — 시작 00:00 이 10개교(건양·경동·광주·광주여·동신·목원·세한·우석·우송·중부),
+  //    중부대 마감 23:59 는 요강 113쪽 어디에도 시각 표기가 없다(서류제출만 '17시까지'로 적는다).
+  //    **마감을 실제보다 늦게 안내하는 쪽이 위험**하므로 단정하지 않고 꼬리표를 붙인다.
+  const fromUnstated = /T00:00$/.test(a.from);
+  const toUnstated = /T23:59$/.test(a.to);
+  return { from: f.s, to: t.s, toDate: t.d, via: a.via, early, fromUnstated, toUnstated,
+           unstated: fromUnstated || toUnstated,
            txt: `${f.s} ~ ${t.s}`, short: `~${t.s} 마감` };
 }
 
@@ -1482,7 +1490,7 @@ function openModal(i) {
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
         ${r.careerSubj ? `<dt>진로선택</dt><dd>${esc(r.careerSubj)}</dd>` : ''}
-        ${(() => { const ap = applyInfo(r.uni); return ap ? `<dt>원서접수</dt><dd><b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten" title="공통 마감(9/11)보다 일찍 닫습니다">조기마감</span>' : ''} <span class="muted">· ${esc(ap.via)}</span></dd>` : ''; })()}
+        ${(() => { const ap = applyInfo(r.uni); if (!ap) return ''; const un = ap.unstated ? ` <span class="warn-tag" title="이 대학은 요강에 접수 ${ap.toUnstated ? '마감' : '시작'} 시각을 적지 않았습니다. 표시된 시각은 접수처 시스템 값이라 실제와 다를 수 있으니 반드시 입학처 공지를 확인하세요.">시각 미공표</span>` : ''; return `<dt>원서접수</dt><dd><b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten" title="공통 마감(9/11)보다 일찍 닫습니다">조기마감</span>' : ''}${un} <span class="muted">· ${esc(ap.via)}</span></dd>`; })()}
         ${r.date ? `<dt>대학별고사</dt><dd>${esc(r.date)}${r.examKind && r.examKind !== '논술' ? ` ${r.examKind}` : ''}</dd>` : ''}
       </div></div>
       <div class="msec hero-sec"><h4>🎯 올해 입시 유불리 예상 <span class="muted">2026 vs 2025 + 2027 변화 종합 · AI 분석</span></h4>

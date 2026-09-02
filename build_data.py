@@ -699,6 +699,12 @@ _RECOMPUTE_SKIP = {
     # 'IT대학 자율학부' 논술 10의 전신은 후자다(2026 경쟁률 11.3은 모집 10으로만 재현,
     # 2027에 IT 첨단자율 논술 행이 없음). 동명 키 재계산(5 기준 ▲5)은 오히려 틀리고
     # 원본 마크 '-'(변동 없음)가 단위 연속 관점에서 옳다.
+    #
+    # ⚠️ 2026-09-02: 이 행의 **학과명을 'IT 첨단자율학부' 로 개명**했지만(dept 교정)
+    #    이 예외는 그대로 둔다. `recompute_prev` 는 `_rawkey(r)` — 즉 **원본 엑셀 행의 키**로
+    #    2026 스냅샷을 찾으므로 개명과 무관하게 여전히 2026 'IT대학 자율학부'(논술 5)를 잡는다.
+    #    실제로 이 항목을 지우고 빌드하니 prev 가 '-' → '▲5' 로 잘못 바뀌는 것을 확인했다.
+    #    그래서 키도 **원본 이름 그대로** 둔다.
     ('경북대학교', 'IT대학 자율학부', '논술', '논술전형'),
 }
 _prev_recomputed = []
@@ -830,6 +836,43 @@ _CONV_CORR = {}
 for _c in _CORR.get('conv', []):
     _CONV_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (str(_c['old']), float(_c['new']))
 _conv_fixed = set()
+
+# 전형방법 교정 — 원천이 단계별 전형을 일괄처럼 적어 놓은 칸.
+# ⚠️ 유래: 충남대 기회균형II 39행이 method='서류100' 인데 요강 p.50 은 1단계 서류100(3배수) →
+#    2단계 서류66.7+면접33.3 이다. '1단계만 기재'를 의심했는데 실제로는 **단계 표기가 아예 없어** 더 나빴다.
+#    면접이 있는 전형을 일괄로 적으면 고사일·수능납치 판정까지 함께 틀어진다.
+_METHOD_CORR = {}
+for _c in _CORR.get('method', []):
+    _METHOD_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c['old'], _c['new'])
+_method_fixed = set()
+
+# 학과명 교정 — 원천이 모집단위명을 잘못 적은 칸. 행 단위라 _DEPT_TYPO(전역 치환)로는 못 고친다.
+# ⚠️ 유래: 경북대는 같은 'IT대학 자율학부' 라는 이름이 전형마다 다른 실체를 가리켰다.
+#    2026→2027 계보가 'IT대학 자율학부 → AI 자율학부' 인데, 논술은 이름만 틀렸고(실체는 IT 첨단자율학부)
+#    농어촌은 두 행의 이름이 서로 뒤바뀌어 있었다. 전역 치환하면 정상 행까지 망가진다.
+# ⚠️ dept 가 바뀌면 rowKey 가 바뀌어 그 행의 저장 카드·공유 링크가 끊긴다. 소수 행에만 쓸 것.
+_DEPT_CORR = {}
+for _c in _CORR.get('dept', []):
+    _DEPT_CORR[(_c['uni'], _c['old'], _c['jht'], _c['jhn'])] = _c['new']
+_dept_fixed = set()
+
+
+def _dept_of(uni, dept, jht, jhn):
+    """학과명 교정 적용. **원본 dept 로 매칭**하므로 두 행의 이름을 맞바꿔도 순서에 영향받지 않는다."""
+    _k = (uni, dept, jht, jhn)
+    if _k in _DEPT_CORR:
+        _dept_fixed.add(_k)
+        return _DEPT_CORR[_k]
+    return dept
+
+
+def _method_of(uni, dept, jht, jhn, cur):
+    """method 교정 적용. old 가 원문과 같을 때만 바꾼다(다른 교정 채널과 같은 규약)."""
+    _k = (uni, dept, jht, jhn)
+    if _k in _METHOD_CORR and (cur or '') == _METHOD_CORR[_k][0]:
+        _method_fixed.add(_k)
+        return _METHOD_CORR[_k][1]
+    return cur
 
 # 캠퍼스(지역) 교정. 원본 엑셀이 학과 소재 캠퍼스를 잘못 배정한 경우(예: 중앙대 약학부 안성→서울).
 # ⚠️ 키에 '기존 지역'을 반드시 포함한다. (uni, dept)만으로 매칭하면 같은 학과명이 여러
@@ -1036,14 +1079,14 @@ for r in raw:
             _chung_doubt[len(rows)] = 1
     rows.append([
         intern('region', _reg), intern('sigun', _sig), intern('uni', uni), gye[:2],
-        intern('dept', dept), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
+        intern('dept', _dept_of(uni, dept, jhtype, jhname)), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
         enroll, prev, delta_kind, delta_n,
         intern('change', change), intern('choejeo', choejeo), has_choejeo, ch_kind or '',
         comp[0], comp[1], comp[2],
         grade[0], grade[1], grade[2],
         conv[0], conv[1], conv[2],
         chung[0][:12], chung[1][:12], chung[2][:12],
-        intern('method', method), intern('note', note), intern('date', date),
+        intern('method', _method_of(uni, dept, jhtype, jhname, method)), intern('note', note), intern('date', date),
         intern('gradeRatio', gr), intern('subjects', subj), intern('careerSubj', career),
         tags,
         intern('std', std26), stdK, intern('std', std25), intern('std', std24), intern('dupApply', dupApply), intern('docs', docs),
@@ -1131,6 +1174,12 @@ print(f"[기준교정] std {len(_std_fixed)}/{len(_STD_CORR)}건")
 if len(_comp_fixed) != len(_COMP_CORR):
     raise SystemExit(f"[중단] 경쟁률교정 미적용 {sorted(set(_COMP_CORR) - _comp_fixed)} — 엑셀 갱신 시 data_corrections.json 'comp'에서 제거할 것")
 print(f"[경쟁률교정] {len(_comp_fixed)}/{len(_COMP_CORR)}건")
+if len(_method_fixed) != len(_METHOD_CORR):
+    raise SystemExit(f"[중단] 전형방법교정 미적용 {sorted(set(_METHOD_CORR) - _method_fixed)} — 엑셀 갱신 시 data_corrections.json 'method'에서 제거할 것")
+print(f"[전형방법교정] {len(_method_fixed)}/{len(_METHOD_CORR)}건")
+if len(_dept_fixed) != len(_DEPT_CORR):
+    raise SystemExit(f"[중단] 학과명교정 미적용 {sorted(set(_DEPT_CORR) - _dept_fixed)} — 엑셀 갱신 시 data_corrections.json 'dept'에서 제거할 것")
+print(f"[학과명교정] {len(_dept_fixed)}/{len(_DEPT_CORR)}건")
 if len(_region_fixed) != len(_REGION_CORR):
     raise SystemExit(f"[중단] 지역교정 미적용: {sorted(set(_REGION_CORR) - _region_fixed)}")
 print(f"[지역교정] region {len(_region_fixed)}/{len(_REGION_CORR)}건")
