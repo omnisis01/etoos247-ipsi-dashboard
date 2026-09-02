@@ -17,9 +17,11 @@
      [환산교정] [추합교정] [트랙합산] [열밀림교정]
    → "미적용 N건 — SystemExit"가 뜨면 아래 '가드가 중단시켰을 때' 절차.
 4. python3 verify_data.py && python3 qa_comp_ratio.py && python3 qa_chungwon.py \
-     && python3 verify_insights.py && python3 verify_frontend.py \
-     && python3 qa_known_issues.py && node probe_fields.js
+     && python3 qa_c26_verified.py && python3 verify_insights.py \
+     && python3 verify_frontend.py && python3 qa_known_issues.py && node probe_fields.js
    → qa_chungwon: 추합 산술 래칫(추합 ≤ 지원자 − 모집인원) — 기준선 40건.
+   → qa_c26_verified: 대행사 최종 경쟁률과 대조해 확인한 12,090행이 그대로인지.
+     산술로 못 잡는 오류(정수 경쟁률·타 전형 값 혼입)를 여기서 막는다.
    → qa_known_issues: ①~⑪ 회귀·래칫. ⑪ 이 캐시버스터 stale 을 잡는다(아래 5번과 짝).
    → verify_data: 불변식(stdK 버킷 화이트리스트 포함).
    → qa_comp_ratio: 경쟁률 산술 래칫 — 신규 의심이 늘면 커밋 차단. 교정으로 기존 의심이
