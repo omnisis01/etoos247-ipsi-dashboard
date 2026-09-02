@@ -60,14 +60,19 @@
 | 타입 | 키 | 대상 | 비고 |
 |---|---|---|---|
 | enroll/drop/add/rename | (uni,dept,jht,jhn) | 2027 모집인원·행 | 112교 요강 전수 대조 유래 |
-| ipgyeol | (uni,dept,jht,jhn) | 2026 입결(g26) | 신설 행에 걸면 무효화 가드가 잡는다 |
+| ipgyeol | (uni,dept,jht,jhn)+year | 입결 등급(g26/g25/g24) | year 생략=26. new:null=삭제. **신설 행에 걸면 무효화 가드가 잡는다** |
 | dkind | (uni,dept,jht,jhn)+from | 전년대비 구분 | to='none'이면 prev도 자동 '-' 동기화(인쇄물이 prev를 직접 찍는다) |
 | date | (uni,jhn,old) | 대학별고사 일자 | 요일 검산 유래 |
 | region | (uni,dept,from_region,from_sigun) | 캠퍼스 | ⚠️ 4키 필수 — 2키 매칭은 멀쩡한 행을 덮는다 |
-| std | (uni,from) | 입결 기준 원문 | std26·std25 양쪽에 적용(한쪽만 하면 추세 차단 회귀) |
+| std | (uni,from) | 입결 기준 원문 | std26·std25·**std24** 전부에 적용(하나만 빠져도 추세가 잘린다) |
+| conv | (uni,dept,jht,jhn)+year | 환산점수(v26/v25/v24) | old는 **원문 문자열** 그대로. new:null=삭제 |
 | comp | (uni,dept,jht,jhn)+old | 2026 경쟁률 | 모집인원 산술로 방향 판정된 것만 |
 
 각 항목의 why에 근거를 반드시 남긴다. 근거 없는 교정은 넣지 않는다.
+
+⚠️ **한 대학의 입결이 여러 행에서 같은 모양으로 이상하면 블록 전체를 의심하라.**
+유원대는 'g26=9.0인 3행'짜리 오타로 보였는데 실제로는 63행 전부가 공식 발표와 무관했다 —
+대학 입학처의 '수시모집 입시결과' 원본(첨부 이미지인 경우가 많다)과 대조해야 드러난다. context-notes (101).
 
 ## stdK 버킷 (입결 기준)
 

@@ -773,9 +773,12 @@ _dkind_fixed = set()
 #    ① 두 자료가 일치하는데 대시보드만 다른 경우와 ② 대시보드가 비어 있는 경우만 반영한다.
 #    한쪽 자료만 대시보드와 다른 경우(19건)는 판정 근거가 부족해 손대지 않는다.
 # ⚠️ 반영 대상은 전부 std26='최종등록자70%컷' 행이다 — 기준이 다르면 값을 섞으면 안 된다.
+# ⚠️ year 생략 시 26(기존 항목 호환). 2025·2024 도 교정 대상이다 — 유원대는 원천 엑셀의
+#    3개년 입결이 통째로 공식 발표와 어긋나 세 해를 함께 재적재해야 했다(2026-09-02).
+#    new=null 은 '원천의 값이 가짜라 지운다'는 뜻이다(comp 채널과 같은 규약).
 _GRADE_CORR = {}
 for _c in _CORR.get('ipgyeol', []):
-    _GRADE_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'])] = (_c.get('old'), _c['new'])
+    _GRADE_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], int(_c.get('year', 26)))] = (_c.get('old'), _c['new'])
 _grade_fixed = set()
 
 # 전형명 오기 교정. 인원은 맞는데 이름이 틀린 경우가 있다 —
@@ -834,7 +837,9 @@ _chung_fixed = set()
 #    근거가 약한 건(대구가톨릭 표본 부족·동아대 적합 2%)은 무데이터 + 원문 노출로 남긴다.
 _CONV_CORR = {}
 for _c in _CORR.get('conv', []):
-    _CONV_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (str(_c['old']), float(_c['new']))
+    # new=null 은 삭제(원천 값이 가짜인 칸). old 는 원문 문자열 그대로 대조한다.
+    _CONV_CORR[(_c['uni'], _c['dept'], _c['jht'], _c['jhn'], _c['year'])] = (
+        str(_c['old']), None if _c['new'] is None else float(_c['new']))
 _conv_fixed = set()
 
 # 전형방법 교정 — 원천이 단계별 전형을 일괄처럼 적어 놓은 칸.
@@ -953,10 +958,14 @@ for r in raw:
             comp[_yi] = _cnew; _comp_fixed.add(_ck)
     grade = [vgrade(strict_num(r[22])), vgrade(strict_num(r[27])), vgrade(strict_num(r[31]))]
     _gk = (uni, dept, jhtype, jhname)
-    if _gk in _GRADE_CORR:
-        _old, _new = _GRADE_CORR[_gk]
-        if (grade[0] is None and _old is None) or (grade[0] is not None and _old is not None and abs(grade[0] - _old) < 1e-9):
-            grade[0] = _new; _grade_fixed.add(_gk)
+    for _yi, _yr in enumerate((26, 25, 24)):
+        _gky = (uni, dept, jhtype, jhname, _yr)
+        if _gky not in _GRADE_CORR:
+            continue
+        _old, _new = _GRADE_CORR[_gky]
+        if (grade[_yi] is None and _old is None) or \
+           (grade[_yi] is not None and _old is not None and abs(grade[_yi] - _old) < 1e-9):
+            grade[_yi] = _new; _grade_fixed.add(_gky)
     conv = [strict_num(r[23]), strict_num(r[28]), strict_num(r[32])]
     for _yi, (_yr, _ci) in enumerate((('26', 23), ('25', 28), ('24', 32))):
         _vk = (uni, dept, jhtype, jhname, _yr)
@@ -996,6 +1005,10 @@ for r in raw:
     #    원문이 같은 문자열이면 같은 발표 형식이라는 뜻이다 — 중부대 2025 자료로 확인했다.
     if (uni, std25) in _STD_CORR:
         std25 = _STD_CORR[(uni, std25)]
+    # std24 도 같이 교정한다. 빠뜨리면 3개년 추이가 '2024만 기준이 다르다'로 잘려
+    # 꺾은선이 2년치로 줄어든다(유원대 63행이 실제로 그랬다).
+    if (uni, std24) in _STD_CORR:
+        std24 = _STD_CORR[(uni, std24)]
 
     if is_changed_track(uni, s(r[4]), jhname, prev):
         delta_kind, delta_n = 'changed', 0
@@ -1030,7 +1043,7 @@ for r in raw:
         # ⚠️ 이 제거는 입결교정(_GRADE_CORR)보다 뒤에 온다. 신설 행에 입결교정을 걸면
         #    교정은 '적용됨'으로 집계되고 값은 여기서 지워져 조용히 무효가 된다.
         #    실제로 서강대 일반전형 II(2027 신설)에 그런 항목을 넣었다가 발견했다.
-        if _gk in _GRADE_CORR:
+        if any((uni, dept, jhtype, jhname, _y) in _GRADE_CORR for _y in (26, 25, 24)):
             _grade_wiped.append(_gk)
         _new_wiped.append((uni, dept, jhtype, jhname))
         comp = [None, None, None]; grade = [None, None, None]
@@ -1198,7 +1211,7 @@ _miss_grade = sorted(set(_GRADE_CORR) - _grade_fixed)
 if _miss_grade:
     raise SystemExit(f"[중단] 입결교정 미적용 {len(_miss_grade)}건 — 엑셀이 값을 바꿨거나 파서가 달라졌다. "
                      f"data_corrections.json 'ipgyeol' 의 old 를 원문과 맞추라: {_miss_grade[:5]}")
-print(f"[입결교정] 2026 70%컷 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
+print(f"[입결교정] 3개년 {len(_grade_fixed)}/{len(_GRADE_CORR)}건")
 print(f"[신설] 상속된 과거 실적 제거 {len(_new_wiped)}행")
 print(f"[트랙합산] 모집인원 라벨 분리 {len(_track_hits)}행 합산")
 print(f"[enroll교정] 값 {len(_enroll_fixed)}/{len(_ENROLL_CORRECTIONS)} · 행제거 {len(_drop_hit)}/{len(_ROW_DROP)} · 중복제거 {len(_dedupe_hit)}/{len(_ROW_DEDUPE)} · 행추가 {len(_ADDED_ROWS)} · 전형명 {len(_renamed)}/{sum(len(v) for v in _ROW_RENAME.values())}"
