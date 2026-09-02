@@ -27,6 +27,8 @@ const ROWS = D.rows.map((r, i) => ({
   // 증감 방향을 신뢰할 수 없다. 다만 경쟁률이 부분집계라 모순처럼 보일 수도 있어(창신대 사례)
   // 값 자체를 지우지는 않는다. 판단은 사용자 몫이다.
   chungDoubt: !!(D.chungDoubt && D.chungDoubt[i]),
+  // 그 전형의 환산 척도가 해마다 옮겨간 행. 값은 맞지만 3개년을 한 선으로 읽으면 안 된다.
+  vScale: !!(D.vScale && D.vScale[i]),
   std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
   std25: dc.std ? (dc.std[r[37]] || '') : '',
   // 2024 입결 기준 — std25 는 쓰면서 std24 만 빠져 있었다. 5,097행에서 2026 기준과 달라
@@ -716,11 +718,15 @@ const nzStd2 = t => String(t || '').replace(/\s/g, '');
 // 환산점수는 대학·연도마다 **만점 척도**가 다르다(100/200/1000점). 척도가 바뀐 해를 한 선으로
 // 이으면 없는 등락이 생긴다 — 실측 226행에서 3배 이상 벌어진다(경남대 174 / 945 / 254 등).
 // 한국외대 학교장추천 59개 학과는 입결 등급이 비어 환산점수가 유일한 지표라 오독이 그대로 판단이 된다.
+// ⚠️ 행 단위 3배 문턱만으로는 **전형 전체가 1.5~2배 옮겨간 해**를 놓친다 — 척도는 행이 아니라
+//    전형×연도의 성질이기 때문이다. 실측 12개 (대학×전형)에서 262행이 경고 없이 노출됐다
+//    (협성대 미래창의인재 2025 만 920 대 543·561 — 19행 전부, 배율 1.69로 문턱 아래).
+//    빌드 단계에서 전형별 연도 중앙값을 비교해 표시한 D.vScale 을 함께 본다.
 function scaleWarn(r) {
   const a = [r.v[0], r.v[1], r.v[2]].filter(x => x != null && !isNaN(x));
   if (a.length < 2) return '';
   const hi = Math.max(...a), lo = Math.min(...a);
-  if (lo <= 0 || hi / lo < 3) return '';
+  if (!r.vScale && (lo <= 0 || hi / lo < 3)) return '';
   return ` <span class="basis-warn" title="연도별 환산 만점이 달라 추세로 읽으면 안 된다 (${a.map(x => x.toFixed(1)).join(' / ')})">⚠ 연도별 척도 상이</span>`;
 }
 function basisWarn(r) {

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Build compact, dictionary-encoded data.js for the 수시 dashboard from the master xlsx."""
-import openpyxl, re, json, os, html
+import openpyxl, re, json, os, html, statistics
 
 # 원천 폴더가 '입결' → '입결 및 인사이트'로 개명됨(원천 xlsx 이동). 개명 시 이 경로도 갱신.
 SRC = os.path.join(os.path.dirname(__file__), '..', '입결 및 인사이트', 'TongTongTong_2027학년도 수시지원의 모든 것_Final오타 수정 필요.xlsx')
@@ -1289,6 +1289,33 @@ CATS = [
     ('integrated','통합모집','전 모집단위·단일계열 등 묶음 선발','#64748b',False,''),
 ]
 
+# ---------------------------------------------------------------- 환산 척도 변화 탐지(전형 단위)
+# 왜: app.js scaleWarn 은 **한 행의 3개년 최대/최소가 3배 이상**일 때만 경고한다. 그런데 척도는
+#     행이 아니라 **전형×연도**의 성질이라, 그 해 전체가 1.5~2배쯤 옮겨간 경우를 통째로 놓친다.
+#     실측 — 12개 (대학×전형)에서 연도별 중앙값이 1.45~2.81배 벌어지는데 경고가 안 뜨는 행이 262행이다
+#     (협성대 미래창의인재 2025 만 920 대 나머지 두 해 543·561 — 19행 전부, 배율 1.69라 3배 문턱 아래).
+#     추이선이 없는 등락을 그리고, 등급이 빈 행에서는 그 선이 유일한 판단 근거가 된다.
+# 판정: 같은 (대학, 전형명)에서 **각 해 4건 이상** 있는 연도들의 중앙값을 비교해 최대/최소 ≥ 1.4 이면
+#       그 전형의 모든 행에 표시한다. 값은 손대지 않는다 — 값은 맞고 '이어 읽지 말라'는 표시일 뿐이다.
+_IV = [SCHEMA.index('v26'), SCHEMA.index('v25'), SCHEMA.index('v24')]
+_IU, _IJN = SCHEMA.index('uni'), SCHEMA.index('jhname')
+_vscale = {}
+_by = {}
+for _r in rows:
+    _k = (_r[_IU], _r[_IJN])
+    for _yi, _ci in enumerate(_IV):
+        if _r[_ci]:
+            _by.setdefault(_k, {}).setdefault(_yi, []).append(_r[_ci])
+_shift = set()
+for _k, _byy in _by.items():
+    _meds = sorted(statistics.median(_xs) for _yi, _xs in _byy.items() if len(_xs) >= 4)
+    if len(_meds) >= 2 and _meds[0] > 0 and _meds[-1] / _meds[0] >= 1.4:
+        _shift.add(_k)
+for _i, _r in enumerate(rows):
+    if (_r[_IU], _r[_IJN]) in _shift and sum(1 for _ci in _IV if _r[_ci]) >= 2:
+        _vscale[_i] = 1
+print(f"[환산척도] 연도별 척도가 옮겨간 전형 {len(_shift)}개 · 표시 대상 {len(_vscale)}행")
+
 payload = {
     'meta': {
         'title': '2027학년도 수시지원 대시보드',
@@ -1303,6 +1330,7 @@ payload = {
     'rows': rows,
     'raw': _raw_cells,   # 희소 사이드맵 — 파서가 버린 셀의 원문
     'chungDoubt': _chung_doubt,   # 희소 사이드맵 — 추합이 산술 상한 초과(유불리 신호 제외용)
+    'vScale': _vscale,   # 희소 사이드맵 — 그 전형의 환산 척도가 해마다 옮겨감(추이선으로 읽지 말 것)
 }
 
 with open(os.path.join(OUT_DIR, 'data.js'), 'w', encoding='utf-8') as f:
