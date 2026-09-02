@@ -587,6 +587,9 @@ def intern(key, val):
 
 rows = []
 _raw_cells = {}   # {행인덱스: {키: 원문}} — 파서가 버린 셀의 원문. SCHEMA 밖 사이드맵.
+_chung_doubt = {}   # 행인덱스 → 1 (추합이 산술 상한을 넘음)
+_E26_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'enroll26.json')
+_ENROLL26 = json.load(open(_E26_PATH, encoding='utf-8'))['enroll26'] if os.path.exists(_E26_PATH) else {}
 # 알려진 원천(마스터 xlsx) 수능최저 오기 교정 — 외부 소스(2027 요강·토마스·입시위키)로 확인된 것만.
 # 마스터 파일을 직접 수정하지 않고 빌드 시 패치한다. (uni, dept, [jhname], old 원문) → new 원문.
 # ⚠️ 원천 엑셀의 열 밀림 — 최저 칸에 전형방법 값이, 전형방법 칸에 다른 값이 들어간 행.
@@ -1017,6 +1020,20 @@ for r in raw:
         if _got is None and _txt and _txt not in ('-', '–', '—', '없음', '미정', 'N/A'):
             _rw[_key] = _txt.replace('\n', ' · ')
     if _rw: _raw_cells[len(rows)] = _rw
+    # 추합 산술 모순 표시 — 충원합격자는 '지원자 − 모집인원'을 넘을 수 없다(qa_chungwon.py 와 같은 규약).
+    # 넘는 행은 원천이 무언가 다른 값을 담고 있다는 뜻이라 **유불리 신호로 쓰면 안 된다.**
+    # 다만 값 자체는 지우지 않는다 — 경쟁률이 부분집계(대학 자체접수 누락)라 모순처럼 보일 수도 있어서다
+    # (창신대에서 실제로 그랬다). 판단은 사용자에게 맡기고 자동 판정에서만 뺀다.
+    _ck26 = (uni, dept, jhtype, jhname)
+    _e26d = _E26_OVERRIDES.get(_ck26) or _ENROLL26.get('|'.join([uni, dept, jhtype, jhname, jagyeok]))
+    try:
+        _chv = float(str(chung[0]).strip())
+    except (TypeError, ValueError):
+        _chv = None
+    if _chv is not None and _e26d and comp[0]:
+        _apphi = _e26d * (comp[0] + 0.5 * 10 ** -(len(repr(float(comp[0])).split('.')[1]) if '.' in repr(float(comp[0])) else 0))
+        if _chv > max(0.0, _apphi - _e26d) + 1.0:
+            _chung_doubt[len(rows)] = 1
     rows.append([
         intern('region', _reg), intern('sigun', _sig), intern('uni', uni), gye[:2],
         intern('dept', dept), jhtype, intern('jhname', jhname), intern('jagyeok', jagyeok),
@@ -1208,6 +1225,7 @@ payload = {
     'cats': [{'key': k, 'label': l, 'desc': d, 'color': c, 'sub': sub, 'parent': par, 'count': cat_counter.get(k, 0)} for k, l, d, c, sub, par in CATS],
     'rows': rows,
     'raw': _raw_cells,   # 희소 사이드맵 — 파서가 버린 셀의 원문
+    'chungDoubt': _chung_doubt,   # 희소 사이드맵 — 추합이 산술 상한 초과(유불리 신호 제외용)
 }
 
 with open(os.path.join(OUT_DIR, 'data.js'), 'w', encoding='utf-8') as f:

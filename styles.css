@@ -205,6 +205,9 @@ input[type=range]{width:100%;accent-color:var(--primary);margin-top:4px}
 .trend-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .seg-sm{padding:2px}
 .seg-sm button{padding:4px 9px;font-size:11px}
+/* 값은 보여주되 자동 판정에서 뺀 항목 표시(추합 산술 모순 40건 등) */
+.warn-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10.5px;
+  font-weight:800;background:var(--warn-bg,#fff4e5);color:var(--warn-ink,#8a5200);white-space:nowrap}
 
 /* ===================== Highlights ===================== */
 /* 홈 변화 인사이트 배너 */

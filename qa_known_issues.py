@@ -277,8 +277,23 @@ else:
         print(f'  ✓ data.js 대학 {len(_uni)}교 전부 수록')
 
     # 신선도 — 접수가 다가오는데 수집본이 낡았으면 경고(실패는 아님)
-    _age = (datetime.date.today()
-            - datetime.date.fromtimestamp(os.path.getmtime(_ap))).days
+    # ⚠️ 파일 mtime 을 쓰면 안 된다. 변이 테스트나 포맷 정리가 파일을 다시 쓰면 mtime 이 갱신되고,
+    #    git clone 을 새로 하면 모든 파일의 mtime 이 clone 시각이 되어 '항상 0일'로 보고한다.
+    #    실제로 2026-09-01 에 apply_dates.js 가 '수집 후 1일'로 나왔지만 마지막 수집은 3일 전이었다.
+    #    수집 시점의 진실은 git 이 안다 — 마지막 커밋 날짜를 쓴다(git 이 없으면 mtime 으로 후퇴).
+    def _collected_at(path):
+        try:
+            import subprocess
+            out = subprocess.run(['git', 'log', '-1', '--format=%cI', '--', os.path.basename(path)],
+                                 cwd=os.path.dirname(os.path.abspath(path)),
+                                 capture_output=True, text=True, timeout=10).stdout.strip()
+            if out:
+                return datetime.date.fromisoformat(out[:10])
+        except Exception:
+            pass
+        return datetime.date.fromtimestamp(os.path.getmtime(path))
+
+    _age = (datetime.date.today() - _collected_at(_ap)).days
     _dday = (datetime.date(2026, 9, 7) - datetime.date.today()).days
     print(f'  수집 후 {_age}일 경과 · 접수 시작까지 {_dday}일')
     if _dday <= 30 and _age >= 7:
@@ -424,6 +439,37 @@ if _bad:
     fails.append(f'index.html 자산 배선·스탬프 이상 {len(_bad)}건')
 else:
     print('  ✓ 전부 참조되고 스탬프도 최신')
+
+# ---------------------------------------------------------------- ⑫ SCHEMA 밖 사이드맵 배선
+# raw·chungDoubt 는 rows 배열이 아니라 **행 인덱스를 키로 하는 별도 맵**이라
+# probe_fields.js 의 마커 주입 방식으로는 검사되지 않는다(DATA_FIELDS 에 넣을 수가 없다).
+# 그래서 여기서 따로 본다 — (a) app.js 가 실제로 읽는가 (b) 인덱스가 rows 범위 안인가.
+# ⚠️ 사이드맵은 행 인덱스로만 연결돼 있어, rows 를 나중에 필터·정렬하는 코드가 생기면
+#    원문이 조용히 다른 행에 붙는다. 그 사고는 화면에서만 드러난다.
+print()
+print('=== ⑫ SCHEMA 밖 사이드맵(raw·chungDoubt) 배선 ===')
+_app_src = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
+_side = {'raw': 'D.raw', 'chungDoubt': 'D.chungDoubt'}
+_sbad = []
+_nrows = len(D["rows"])
+for _k, _ref in _side.items():
+    _m = D.get(_k)
+    if not _m:
+        print(f'  · {_k}: data.js 에 없음 — 건너뜀')
+        continue
+    if _ref not in _app_src:
+        _sbad.append(f'{_k}: data.js 에 {len(_m)}항목 있는데 app.js 가 {_ref} 를 읽지 않는다(배선 끊김)')
+        continue
+    _oob = [i for i in _m if not (0 <= int(i) < _nrows)]
+    if _oob:
+        _sbad.append(f'{_k}: 행 범위 밖 인덱스 {len(_oob)}개 (rows={_nrows})')
+    else:
+        print(f'  ✓ {_k}: {len(_m)}항목, app.js 가 읽음, 인덱스 전부 범위 내')
+for _b in _sbad:
+    print('  ✗', _b)
+if _sbad:
+    fails.append(f'사이드맵 배선 이상 {len(_sbad)}건')
+
 
 # ---------------------------------------------------------------- 결론
 print()

@@ -22,6 +22,11 @@ const ROWS = D.rows.map((r, i) => ({
   // 파서가 단일 값으로 환원하지 못해 버린 셀의 원문(희소 — 152행). SCHEMA 밖 사이드맵이라
   // 인덱스로 붙인다. 예: '남:5.20 · 여:3.20' — 값은 비우되 근거는 사용자에게 보여준다.
   raw: (D.raw && D.raw[i]) || null,
+  // 추합이 산술 상한('지원자 − 모집인원')을 넘는 행(40건). 값은 그대로 보여주되
+  // **유불리 자동 판정에서는 뺀다** — 원천이 무언가 다른 값을 담고 있다는 뜻이라
+  // 증감 방향을 신뢰할 수 없다. 다만 경쟁률이 부분집계라 모순처럼 보일 수도 있어(창신대 사례)
+  // 값 자체를 지우지는 않는다. 판단은 사용자 몫이다.
+  chungDoubt: !!(D.chungDoubt && D.chungDoubt[i]),
   std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
   std25: dc.std ? (dc.std[r[37]] || '') : '',
   // 2024 입결 기준 — std25 는 쓰면서 std24 만 빠져 있었다. 5,097행에서 2026 기준과 달라
@@ -268,7 +273,12 @@ function save(k, v) { try { localStorage.setItem('ipsi_' + k, JSON.stringify(v))
       실측: 26,416행 → 고유키 26,269 · 해시 충돌 0. 같은 키가 여럿인 34종(지역의사 권역 분할)은
       순번을 붙여 구분한다(예: 'abc12.1'). */
 const hashKey = s => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return x.toString(36); };
-const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
+// ⚠️ 지원자격(jagyeok)까지 넣는다. 넣지 않으면 지역의사선발전형처럼 **권역별로 쪼개진 행**이
+//    전부 같은 키가 되어 등장 순서로만 구분된다(34종 181행). 그 그룹에 행이 하나만 추가·삭제돼도
+//    순번이 밀려 저장된 카드가 다른 권역을 가리킨다. 자격을 넣으면 충돌이 34종 → 3종으로 준다.
+const rowKey = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname, r.jagyeok || ''].join('|'));
+// 옛 키(자격 미포함) — 이미 저장된 카드·공유 링크를 계속 읽기 위해 남긴다. 새로 쓸 때는 쓰지 않는다.
+const rowKeyLegacy = r => hashKey([r.uni, r.dept, r.jhtype, r.jhname].join('|'));
 
 /* ----- 저장(localStorage)도 안정 키로 -----
    위 주석이 공유 링크에 대해 경고한 그 위험이 지원카드·비교함에도 그대로 있었다.
@@ -316,6 +326,16 @@ function buildCodeMaps() {
     const n = seen.get(base) || 0; seen.set(base, n + 1);
     const code = n ? `${base}.${n}` : base;      // 첫 행은 순번 생략(링크 짧게)
     _CODE_TO_I.set(code, r._i); _I_TO_CODE.set(r._i, code);
+  });
+  // 옛 키도 읽기 전용으로 등록한다 — 키 규칙을 바꾸면 이미 저장된 지원카드·공유 링크가
+  // 통째로 버려지기 때문이다(hydrateSaved 는 매칭 실패를 조용히 버린다).
+  // 새 키가 이미 차지한 코드는 덮지 않는다. 옛 키는 순번 의존이 남아 있으므로 폴백일 뿐이다.
+  const seenOld = new Map();
+  ROWS.forEach(r => {
+    const base = rowKeyLegacy(r);
+    const n = seenOld.get(base) || 0; seenOld.set(base, n + 1);
+    const code = n ? `${base}.${n}` : base;
+    if (!_CODE_TO_I.has(code)) _CODE_TO_I.set(code, r._i);
   });
 }
 const codeOf = i => { buildCodeMaps(); return _I_TO_CODE.get(i) || ''; };
@@ -412,6 +432,8 @@ function yoyComp(r) { // 경쟁률: 하락 = 유리
   return { y25: a, y26: b, d, dir: ratio <= 1 - band ? 'down' : ratio >= 1 + band ? 'up' : 'flat' };
 }
 function yoyChung(r) { // 추합(충원): 증가 = 실질 문턱↓ = 유리
+  // 산술 상한을 넘는 추합은 방향을 신뢰할 수 없다 — 자동 판정에서 뺀다(값은 표·모달에 그대로 나온다).
+  if (r.chungDoubt) return null;
   const a = numOr(r.chung[1]), b = numOr(r.chung[0]); if (a == null || b == null) return null;
   const d = b - a;
   let dir = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
@@ -1481,7 +1503,7 @@ function openModal(i) {
           ${trendRow(`입결(등급) ${stdTag(r)}${basisWarn(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
           ${trendRow(`입결(환산)${scaleWarn(r)}`, [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
-          ${trendRow(`충원(추합, ${chungUnit(r)})`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
+          ${trendRow(`충원(추합, ${chungUnit(r)})${r.chungDoubt ? ' <span class="warn-tag" title="충원합격자가 \'지원자 − 모집인원\'을 넘습니다. 원천 값을 그대로 보여주되 유불리 판정에서는 제외했습니다.">⚠ 확인필요</span>' : ''}`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
         </tbody></table>
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
