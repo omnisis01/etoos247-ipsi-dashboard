@@ -807,7 +807,11 @@ _date_fixed = set()
 # ⚠️ 값(g26)은 건드리지 않는다 — 값은 대학 공식값이 맞고 라벨만 틀렸다.
 _STD_CORR = {}
 for _c in _CORR.get('std', []):
-    _STD_CORR[(_c['uni'], _c['from'])] = _c['to']
+    # jhn 을 주면 그 전형에만, 없으면 그 대학 전체에 적용한다.
+    # ⚠️ 유래: 서울시립대는 원천이 전 행을 '최종등록자 70%컷'으로 적었는데 **지역균형선발전형만**
+    #    실제로는 50%컷이었다(어디가 50/70 분리 수록분과 16/16 일치, 70%컷과는 0건 일치.
+    #    시립대 공식 발표는 '평균'이라 그것과도 다르다). 대학 단위로 고치면 멀쩡한 다른 전형까지 망가진다.
+    _STD_CORR[(_c['uni'], _c['from'], _c.get('jhn'))] = _c['to']
 _std_fixed = set()
 
 # 2026 경쟁률(c26) 교정. 어디가 경쟁률과 대조해 어긋난 건 중, **2026 모집인원 산술로 방향이
@@ -996,19 +1000,22 @@ for r in raw:
                               # 5,097행에서 2026 기준과 달라 3개년 추이가 기준 다른 값을 이어 그렸다.
     dupApply = s(r[14])       # 복수지원 가능 여부 — 22.2%(5,860행)에 제약이 있다('불가'·'학종 불가'·'3회').
     docs = s(r[13])           # 필요 서류 — '학'(학생부)·'학,증'(증빙)·'학,추'(추천서)
-    if (uni, std26) in _STD_CORR:
-        std26 = _STD_CORR[(uni, std26)]; _std_fixed.add((uni, s(r[21])))
+    for _sk in ((uni, std26, jhname), (uni, std26, None)):   # 전형 지정이 우선
+        if _sk in _STD_CORR:
+            std26 = _STD_CORR[_sk]; _std_fixed.add((uni, s(r[21]), _sk[2])); break
     stdK = std_kind(std26)
     std25 = s(r[26])
     # ⚠️ 2025 기준 원문도 같이 교정한다. 안 하면 std26만 바뀌어 app.js가 '기준이 달라졌다'로
     #    오판하고 추세 표시를 차단한다(실제로 6교 704행이 이 회귀로 막혔다).
     #    원문이 같은 문자열이면 같은 발표 형식이라는 뜻이다 — 중부대 2025 자료로 확인했다.
-    if (uni, std25) in _STD_CORR:
-        std25 = _STD_CORR[(uni, std25)]
+    for _sk in ((uni, std25, jhname), (uni, std25, None)):
+        if _sk in _STD_CORR:
+            std25 = _STD_CORR[_sk]; break
     # std24 도 같이 교정한다. 빠뜨리면 3개년 추이가 '2024만 기준이 다르다'로 잘려
     # 꺾은선이 2년치로 줄어든다(유원대 63행이 실제로 그랬다).
-    if (uni, std24) in _STD_CORR:
-        std24 = _STD_CORR[(uni, std24)]
+    for _sk in ((uni, std24, jhname), (uni, std24, None)):
+        if _sk in _STD_CORR:
+            std24 = _STD_CORR[_sk]; break
 
     if is_changed_track(uni, s(r[4]), jhname, prev):
         delta_kind, delta_n = 'changed', 0
