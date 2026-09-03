@@ -441,15 +441,17 @@ else:
     print('  ✓ 전부 참조되고 스탬프도 최신')
 
 # ---------------------------------------------------------------- ⑫ SCHEMA 밖 사이드맵 배선
-# raw·chungDoubt 는 rows 배열이 아니라 **행 인덱스를 키로 하는 별도 맵**이라
+# raw·chungDoubt·vScale 은 rows 배열이 아니라 **행 인덱스를 키로 하는 별도 맵**이라
 # probe_fields.js 의 마커 주입 방식으로는 검사되지 않는다(DATA_FIELDS 에 넣을 수가 없다).
 # 그래서 여기서 따로 본다 — (a) app.js 가 실제로 읽는가 (b) 인덱스가 rows 범위 안인가.
 # ⚠️ 사이드맵은 행 인덱스로만 연결돼 있어, rows 를 나중에 필터·정렬하는 코드가 생기면
 #    원문이 조용히 다른 행에 붙는다. 그 사고는 화면에서만 드러난다.
 print()
-print('=== ⑫ SCHEMA 밖 사이드맵(raw·chungDoubt) 배선 ===')
+print('=== ⑫ SCHEMA 밖 사이드맵(raw·chungDoubt·vScale) 배선 ===')
 _app_src = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
-_side = {'raw': 'D.raw', 'chungDoubt': 'D.chungDoubt'}
+# ⚠️ 사이드맵을 새로 만들면 **여기에 반드시 등록한다.** 감시 점검(2026-09-02)에서
+#    vScale 이 등록 없이 돌아가고 있던 것을 발견했다 — 배선이 끊겨도 아무도 몰랐을 것이다.
+_side = {'raw': 'D.raw', 'chungDoubt': 'D.chungDoubt', 'vScale': 'D.vScale'}
 _sbad = []
 _nrows = len(D["rows"])
 for _k, _ref in _side.items():
@@ -457,7 +459,9 @@ for _k, _ref in _side.items():
     if not _m:
         print(f'  · {_k}: data.js 에 없음 — 건너뜀')
         continue
-    if _ref not in _app_src:
+    # ⚠️ 부분문자열 매칭이면 'D.vScale' 이 'D.vScaleXX' 안에서도 참이라 개명을 놓친다.
+    #    (2026-09-02 감시 점검의 변이 테스트에서 실제로 미탐.) 식별자 경계로 검사한다.
+    if not re.search(r'\bD\.' + re.escape(_k) + r'\b', _app_src):
         _sbad.append(f'{_k}: data.js 에 {len(_m)}항목 있는데 app.js 가 {_ref} 를 읽지 않는다(배선 끊김)')
         continue
     _oob = [i for i in _m if not (0 <= int(i) < _nrows)]
