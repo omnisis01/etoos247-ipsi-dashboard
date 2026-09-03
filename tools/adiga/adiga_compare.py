@@ -10,7 +10,7 @@ import json, os, re, sys, collections
 HERE = os.path.dirname(os.path.abspath(__file__))
 DASH = os.path.abspath(os.path.join(HERE, '..', '..'))
 sys.path.insert(0, DASH)
-from match_util import norm_dept, norm_jh, pick_one
+from match_util import norm_uni, norm_dept, norm_jh, pick_one
 
 JHT = {'학생부종합': '학생부종합', '학생부교과': '학생부교과'}
 
@@ -23,15 +23,35 @@ def num(x):
     except ValueError: return None
 
 
+# 어디가 표 제목은 세 형식이 섞인다 — 괄호형 167 · 콜론형 12 · 대괄호형.
+#   학생부종합(융합형) · 학생부종합:계열적합전형 · 학생부종합[기회균형전형I-장애인 등 대상자(정원외)]
+# 유형 접두어를 떼고 바깥 괄호를 벗기는 것이 전부다. **매칭을 느슨하게 푸는 게 아니라
+# 전형명을 정확히 뽑는 것**이다 — 콜론형을 안 벗겨서 고려대 196행이 통째로 미매칭이었다.
+# '학생부종합전형(…)' 처럼 유형 뒤에 '전형'이 또 붙는 표기도 있다(서울대). 선택적으로 흡수한다.
+_TYPE = r'(?:학생부종합|학생부교과|수능위주|수능|논술|실기/실적|실기|실적)(?:전형)?'
+
+
+def _jhname(cap):
+    s = cap.strip()
+    s = re.sub(r'^\s*' + _TYPE + r'\s*[:：]\s*', '', s)          # 콜론형
+    m = re.match(r'^\s*' + _TYPE + r'\s*[\(\[](.*)[\)\]]\s*$', s)  # 괄호·대괄호형
+    if m:
+        s = m.group(1)
+    s = re.sub(r'^\s*수시모집\s*', '', s)
+    return s.strip()
+
+
 def parse(raw):
     """(대학 → [{jh, dept, comp, g50, g70, v50, v70, cap}])"""
+    # ⚠️ 수집분의 키는 어디가 표기('가야대학교[본교]')다. 대시보드 표기와 잇기 전에
+    #    캠퍼스 꼬리표를 떼고 norm_uni 로 정규화한다 — 안 하면 조인이 통째로 0건이 된다.
     out = collections.defaultdict(list)
-    for uni, tabs in raw.items():
+    for uni_raw, tabs in raw.items():
+        uni = norm_uni(uni_raw.split('[')[0])
         for label, tables in tabs.items():
             if label not in JHT: continue
             for tb in tables:
-                m = re.search(r'\((?:수시모집\s*)?(.*?)\)\s*$', tb['jh'])
-                jhname = (m.group(1) if m else tb['jh']).strip()
+                jhname = _jhname(tb['jh'])
                 for r in tb['rows']:
                     if not r or r[0] not in ('수시',): continue
                     if len(r) < 12: continue
@@ -57,7 +77,7 @@ def main():
         for it in items:
             idx[(it['jht'], norm_dept(it['dept']))].append(it)
         for r in d['rows']:
-            if v(r, 'uni') != uni or v(r, 'g26') is None: continue
+            if norm_uni(v(r, 'uni')) != uni or v(r, 'g26') is None: continue
             stat['대상'] += 1
             cands = idx.get((v(r, 'jhtype'), norm_dept(v(r, 'dept'))))
             if not cands: stat['미매칭(모집단위)'] += 1; continue
