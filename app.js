@@ -69,8 +69,10 @@ function applyInfo(uni) {
   //    실측 — 시작 00:00 이 10개교(건양·경동·광주·광주여·동신·목원·세한·우석·우송·중부),
   //    중부대 마감 23:59 는 요강 113쪽 어디에도 시각 표기가 없다(서류제출만 '17시까지'로 적는다).
   //    **마감을 실제보다 늦게 안내하는 쪽이 위험**하므로 단정하지 않고 꼬리표를 붙인다.
-  const fromUnstated = /T00:00$/.test(a.from);
-  const toUnstated = /T23:59$/.test(a.to);
+  // a.tconf = 시각이 대학 공표값으로 확인된 대학(fetch_apply_dates.py 가 표시). 휴리스틱을 끈다 —
+  // 신한대·한라대는 요강에 23:59 가 그대로 적혀 있어 '미공표' 꼬리표가 오표시였다.
+  const fromUnstated = !a.tconf && /T00:00$/.test(a.from);
+  const toUnstated = !a.tconf && /T23:59$/.test(a.to);
   return { from: f.s, to: t.s, toDate: t.d, via: a.via, early, fromUnstated, toUnstated,
            unstated: fromUnstated || toUnstated,
            txt: `${f.s} ~ ${t.s}`, short: `~${t.s} 마감` };
