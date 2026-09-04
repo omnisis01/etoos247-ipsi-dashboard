@@ -122,7 +122,44 @@ MANUAL = {
 }
 
 
-def main():
+def compare(out):
+    """--check 전용. 파일을 쓰지 않고 현재 apply_dates.js 와 비교해 변동만 보고한다.
+    접수 주간 데이터 동결 중에는 **덮어쓰면 안 된다** — 감지와 반영을 분리한다.
+    ⚠️ 위험 방향을 반드시 가른다. 마감이 **당겨지면** 우리가 늦게 안내하는 상태라 학생이 놓친다(위험).
+       늦춰지면 우리가 이르게 안내하는 상태라 안전하다. 종료코드는 위험 변동이 있을 때만 1."""
+    cur_path = os.path.join(HERE, 'apply_dates.js')
+    if not os.path.exists(cur_path):
+        print('현재 apply_dates.js 가 없다 — 비교 불가'); return 1
+    cur = json.loads(re.search(r'=\s*(\{.*\})\s*;?\s*$',
+                               open(cur_path, encoding='utf-8').read(), re.S).group(1))
+    risky, safe, other = [], [], []
+    for u in sorted(set(cur) | set(out)):
+        a, b = cur.get(u), out.get(u)
+        if a is None: other.append((u, '신규', None, json.dumps(b, ensure_ascii=False))); continue
+        if b is None: other.append((u, '수집분 없음', json.dumps(a, ensure_ascii=False), None)); continue
+        for k in ('from', 'to', 'via'):
+            if a.get(k) == b.get(k): continue
+            if k == 'to':
+                (risky if b['to'] < a['to'] else safe).append((u, k, a[k], b[k]))
+            else:
+                other.append((u, k, a.get(k), b.get(k)))
+    print(f'현재 {len(cur)}교 · 수집 {len(out)}교')
+    def show(title, rows):
+        if not rows: return
+        print(f'\n{title} {len(rows)}건')
+        for u, k, a, b in rows:
+            print(f'  {u:<16} {k:<10} {a} → {b}')
+    show('🔴 위험(마감이 당겨짐 — 우리가 늦게 안내 중)', risky)
+    show('🟢 안전(마감이 늦춰짐 — 우리가 이르게 안내 중)', safe)
+    show('· 그 밖(시작·접수처)', other)
+    if not (risky or safe or other):
+        print('\nOK  변동 없음')
+        return 0
+    print(f'\n{"FAIL  위험 변동 " + str(len(risky)) + "건 — 즉시 반영할 것" if risky else "OK  위험 변동 없음"}')
+    return 1 if risky else 0
+
+
+def collect():
     susi = fetch()
     if len(susi) < 200:
         raise SystemExit(f'FAIL: 수시 항목이 {len(susi)}건뿐 — 수집 실패로 보고 기존 파일을 보존한다')
@@ -167,6 +204,14 @@ def main():
         if u in out:
             out[u] = dict(out[u], tconf=1)
 
+    return out, unmatched, dash_unis, manual_used, len(susi)
+
+
+def main():
+    out, unmatched, dash_unis, manual_used, n_susi = collect()
+    if '--check' in sys.argv:
+        raise SystemExit(compare(out))
+
     covered = len(out); total = len(dash_unis)
     miss_dash = sorted(set(dash_unis) - set(out))
     body = ('/* 대학별 수시 원서접수 기간 — 진학어플라이 공통 원서검색 집계(진학+유웨이).\n'
@@ -174,7 +219,7 @@ def main():
             'window.IPSI_APPLY = ')
     with open(os.path.join(HERE, 'apply_dates.js'), 'w', encoding='utf-8') as f:
         f.write(body + json.dumps(out, ensure_ascii=False, indent=1) + ';\n')
-    print(f'[원서접수] 수집 {len(susi)}건 → 대시보드 {covered}/{total}교 매핑'
+    print(f'[원서접수] 수집 {n_susi}건 → 대시보드 {covered}/{total}교 매핑'
           + (f' (자체 접수 보충 {len(manual_used)}교: ' + ', '.join(manual_used) + ')' if manual_used else ''))
     if unmatched:
         print(f'  진학측 미매핑 {len(unmatched)}건(대시보드에 없는 대학이면 정상): '
