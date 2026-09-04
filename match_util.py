@@ -72,8 +72,17 @@ def pick_one(cands, jhname, key=lambda c: c['jn'], cutoff=0.75):
         return exact[0], 'exact'
     if len(exact) > 1:
         return None, f'모호(정확일치 {len(exact)}건)'
+    # ⚠️ 규칙 1은 정규화에서만 지키면 소용없다 — **유사도 단계에서 다시 뭉개진다.**
+    #    '한림케어2' vs '한림케어1' 은 difflib 유사도 0.80 > cutoff 0.75 라 매칭돼 버렸고,
+    #    실제로 한림대 법학과 '한림케어 II' 가 어디가 '한림케어전형1' 에 붙었다(2026-09-04 발견).
+    #    숫자가 다르면 다른 전형이다 — fuzzy 후보에서 아예 뺀다.
     import difflib
-    names = [norm_jh(key(c)) for c in cands]
+    def _digits(s):
+        return re.findall(r'\d', s)
+    want_d = _digits(want)
+    names = [norm_jh(key(c)) for c in cands if _digits(norm_jh(key(c))) == want_d]
+    if not names:
+        return None, '후보없음(숫자 불일치로 전부 제외)'
     m = difflib.get_close_matches(want, names, n=2, cutoff=cutoff)
     if len(m) == 1:
         return next(c for c in cands if norm_jh(key(c)) == m[0]), 'fuzzy'
@@ -114,5 +123,16 @@ if __name__ == '__main__':
     ok = got is None
     bad += not ok
     print(f"  {'OK ' if ok else 'FAIL'} 모호할 때 매칭 거부: {why}")
+    # ⚠️ 규칙 1은 pick_one 까지 지켜야 한다 — 정규화만 고쳐도 fuzzy 에서 다시 뭉개진다.
+    #    '한림케어2' vs '한림케어1' 유사도 0.80 > cutoff 0.75 로 실제 오매칭이 났었다.
+    for desc, want, cs, expect in (
+            ('숫자 다른 전형에 fuzzy 로 붙지 않는다', '한림케어 II 전형',
+             [{'jn': '학교생활우수자전형'}, {'jn': '한림케어전형1'}], None),
+            ('숫자가 같으면 정상 매칭된다', '한림케어 I 전형',
+             [{'jn': '학교생활우수자전형'}, {'jn': '한림케어전형1'}], '한림케어전형1')):
+        got, why = pick_one(cs, want)
+        ok = (got is None) if expect is None else (got and got['jn'] == expect)
+        bad += not ok
+        print(f"  {'OK ' if ok else 'FAIL'} {desc}: {why}")
     print(('실패 %d건' % bad) if bad else '전 케이스 통과')
     raise SystemExit(1 if bad else 0)
