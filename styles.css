@@ -124,6 +124,7 @@ input{font-family:inherit}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px}
 /* 전형유형 칩과 전형 성격 칩은 축이 다르다(AND 로 걸린다) — 구분선으로 드러낸다. */
 .chip-sep{width:1px;align-self:stretch;background:var(--line-strong);margin:2px 4px}
+.chip-axis{align-self:center;font-size:10.5px;font-weight:700;color:var(--text-mute);margin-right:2px}
 .chip{padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;
   background:var(--surface-2);color:var(--text-soft);border:1px solid var(--line);transition:.12s}
 .chip:hover{border-color:var(--line-strong);color:var(--text)}

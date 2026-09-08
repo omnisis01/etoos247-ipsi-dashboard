@@ -190,7 +190,7 @@ ROWS.forEach(r => {
   // 전형 성격. jhtype(교과/종합/논술/실기/특기자)과 **다른 축**이다 — 지역인재전형도 교과 아니면 종합이다.
   // 셋이 배타라 합이 전체와 같다: 지역인재 2,440 · 기타(특별) 8,132 · 일반 15,845 = 26,417.
   r.jhSpecial = /지역인재/.test(r.jhname || '') ? 'jiyeok'
-    : SPECIAL_JH.test(r.jhname || '') ? 'etc' : '';
+    : SPECIAL_JH.test(r.jhname || '') ? 'etc' : 'normal';
   r.examKind = /논술/.test(r.jhtype + (r.jhname || '')) ? '논술'
     : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
     : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
@@ -759,7 +759,7 @@ function restoreView() {
   S.changes = new Set(String(v.changes || '').split(',').filter(t => ['new', 'up', 'down', 'changed', 'ease', 'tighten'].includes(t)));
   S.minLeast = ['yes', 'no'].includes(v.minimum) ? v.minimum : '';
   S.interview = ['yes', 'no'].includes(v.itv) ? v.itv : '';
-  S.jhSpecials = new Set((Array.isArray(v.spec) ? v.spec : []).filter(k => ['jiyeok', 'etc'].includes(k)));
+  S.jhSpecials = new Set((Array.isArray(v.spec) ? v.spec : []).filter(k => ['normal', 'jiyeok', 'etc'].includes(k)));
   S.leastN = ['1', '2', '3', '4', 'etc'].includes(String(v.least)) ? String(v.least) : '';
   S.leastSum = S.leastN && S.leastN !== 'etc' ? validNumber(v.sum, 1, 36, +S.leastN * 2) : null;
   S.stdCut = CUT_LABELS[v.cut] ? v.cut : '';
@@ -790,7 +790,7 @@ function activeFilterItems() {
   if (S.cat !== 'all') items.push(['cat', CAT_BY[S.cat].label]);
   if (S.search) items.push(['search', '검색 ' + S.search]);
   S.jhtypes.forEach(t => items.push(['type:' + t, t]));
-  S.jhSpecials.forEach(k => items.push(['spec:' + k, k === 'jiyeok' ? '지역인재' : '기타전형']));
+  S.jhSpecials.forEach(k => items.push(['spec:' + k, { normal: '일반전형', jiyeok: '지역인재', etc: '기타전형' }[k]]));
   if (S.region) items.push(['region', S.region]);
   if (S.minLeast) items.push(['minLeast', '수능최저 ' + (S.minLeast === 'yes' ? '있음' : '없음')]);
   if (S.interview) items.push(['interview', '면접 ' + (S.interview === 'yes' ? '있음' : '없음')]);
@@ -999,9 +999,12 @@ function renderFilters() {
   // 전형 성격 — 전형유형과 **다른 축**이라 전형유형 선택과 AND 로 걸린다(교과 ∩ 지역인재 = 1,879).
   // 같은 줄에 두되 구분선으로 축이 다름을 드러낸다.
   const sep = el('span', 'chip-sep'); sep.setAttribute('aria-hidden', 'true'); r1.appendChild(sep);
-  [['jiyeok', '지역인재'], ['etc', '기타전형']].forEach(([k, lab]) => {
+  const axis = el('span', 'chip-axis', '성격'); axis.title = '위 전형유형과 함께(AND) 걸립니다'; r1.appendChild(axis);
+  [['normal', '일반전형'], ['jiyeok', '지역인재'], ['etc', '기타전형']].forEach(([k, lab]) => {
     const c = el('button', 'chip' + (S.jhSpecials.has(k) ? ' on' : ''), lab);
-    c.title = k === 'jiyeok' ? '전형명에 지역인재가 붙은 전형' : '농어촌·기회균형·특성화고·사회통합 등 특별전형(지역인재 제외)';
+    c.title = k === 'normal' ? '지역인재·특별전형이 아닌 일반 모집 (15,845건)'
+      : k === 'jiyeok' ? '전형명에 지역인재가 붙은 전형 (2,440건)'
+      : '농어촌·기회균형·특성화고·사회통합·특수교육대상자 등 특별전형 (8,132건, 지역인재 제외)';
     c.setAttribute('aria-pressed', String(S.jhSpecials.has(k)));
     c.onclick = () => { S.jhSpecials.has(k) ? S.jhSpecials.delete(k) : S.jhSpecials.add(k); renderSoft(); renderFilters(); };
     r1.appendChild(c);
