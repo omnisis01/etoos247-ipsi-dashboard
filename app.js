@@ -266,6 +266,7 @@ const S = {
   page: 1, perPage: 100, hlFilter: 'all', hlJhtype: '', chartMetric: 'grade', trendMetric: 'both',
   compare: new Set(load('cmp', [])),
   fav: migrateFav(load('fav', null)),
+  favNote: String(load('favnote', '') || ''),          // 컨설턴트 의견(지원카드 하단 자유 기재)
   expanded: new Set(load('expanded', [])),
   advisor: Object.assign({ grade: null, leastN: '', leastSum: null, cat: 'all', region: '', school: '', width: 'normal' }, load('advisor', {})),
 };
@@ -1836,6 +1837,7 @@ function saveFav() {
   save('fav', { hope: S.fav.hope.map(toKey).filter(Boolean), reach: S.fav.reach.map(toKey).filter(Boolean) });
   applySchedule(); updateFavBtn();
 }
+function saveFavNote() { save('favnote', S.favNote); }
 function updateFavBtn() { $('#favCount').textContent = favCount(); }
 function addFav(i, bucket) {
   const cur = favBucket(i);
@@ -1950,12 +1952,19 @@ function openFav() {
       ${mk('hope', FAV_HOPE_MAX)}
       <div class="fav-group-label reach">🚀 상향·도전 (3장) <span class="muted">${S.fav.reach.length}/3</span></div>
       ${mk('reach', FAV_REACH_MAX)}
+      <div class="fav-group-label note">📝 컨설턴트 의견</div>
+      <div class="fav-hint muted">이 브라우저에만 저장되며 PDF에 함께 인쇄됩니다. 공유 링크에는 담기지 않습니다.</div>
+      <textarea id="favNote" class="fav-note" rows="4" maxlength="1000"
+        placeholder="예) 지원희망 3~4번은 고사일이 겹치니 하나를 상향으로 옮길 것. 최저 충족이 관건."
+        aria-label="컨설턴트 의견 입력">${esc(S.favNote)}</textarea>
     </div>`;
   const wasOpen = !$('#favDrawer').classList.contains('hidden');
   $('#favDrawer').classList.remove('hidden');
   if (!wasOpen) openDialog($('#favInner'), '내 지원카드');
   $('#favClose').setAttribute('aria-label', '지원카드 닫기');
   $('#favClose').onclick = closeFavDrawer;
+  const fn = $('#favNote');
+  if (fn) fn.oninput = () => { S.favNote = fn.value; saveFavNote(); };
   const fp = $('#favPrint'); if (fp) fp.onclick = printFav;
   const fs2 = $('#favShare'); if (fs2) fs2.onclick = () => copyShare('fav', fs2);
   const clr = $('#favClear'); if (clr) clr.onclick = () => { if (confirm('지원카드를 모두 비울까요?')) { S.fav = { hope: [], reach: [] }; saveFav(); renderTable(); openFav(); } };
@@ -2335,8 +2344,10 @@ function printFav() {
   const noticeHtml = notices.length
     ? `<div class="pr-clash">🗓️ 고사일 확인 — ${notices.map(n => `${n.mo}/${n.dd}(${n.dow}): ${n.items.map(e => fcName(e, n.items)).join('·')}`).join(' / ')} <span class="pr-mut">(시간대가 다르면 응시 가능할 수 있음 — 각 대학 고사 시간 확인)</span></div>`
     : '';
+  const note = S.favNote.trim();
+  const noteHtml = note ? `<h2 class="pr-h2">📝 컨설턴트 의견</h2><div class="pr-note">${esc(note)}</div>` : '';
   printDoc('내 지원카드', `지원희망 ${S.fav.hope.length}장 · 상향·도전 ${S.fav.reach.length}장`,
-    noticeHtml + section('hope', '🎯 지원희망') + section('reach', '🚀 상향·도전'));
+    noticeHtml + section('hope', '🎯 지원희망') + section('reach', '🚀 상향·도전') + noteHtml);
 }
 function printCompare() {
   const items = [...S.compare].map(i => ROWS[i]);
