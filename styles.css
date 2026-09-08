@@ -102,9 +102,28 @@ input{font-family:inherit}
 .cat-item.sub:last-of-type::before{bottom:50%}
 .cat-item.sub.active::before{background:var(--primary)}
 
-.filters{display:flex;flex-direction:column;gap:14px;padding:4px 6px}
+/* 필터 — 검색창 아래 본문으로 이동(2026-09-08). 사이드바 시절의 1열 세로 배치를 그대로 두면
+   가로 공간이 남아돌아 표가 한참 밀린다. 그래서 자동 다열 그리드로 깐다. */
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 18px;padding:12px 14px}
+.filter-box{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);margin-bottom:12px}
+.filter-box-head{cursor:pointer;list-style:none;padding:10px 14px;font-size:12.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text-soft)}
+.filter-box-head::-webkit-details-marker{display:none}
+.filter-box-head::after{content:"▾";font-size:11px;color:var(--text-mute)}
+.filter-box[open] .filter-box-head{border-bottom:1px solid var(--line)}
+.filter-box[open] .filter-box-head::after{content:"▴"}
+.filter-box-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;border-radius:var(--radius-sm)}
+.fb-on{font-weight:600;font-size:11.5px}
+.filter-box.has-on{border-color:var(--primary)}
+.filter-box.has-on .fb-on{color:var(--primary-ink)}
+.filter-box-foot{display:flex;gap:8px;padding:0 14px 12px}
+.filter-box-foot .reset-btn{width:auto;flex:1}
+.reset-btn.strong{background:var(--primary-soft);color:var(--primary-ink);border-color:var(--primary)}
+.reset-btn.strong:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
 .f-group .f-title{font-size:11.5px;font-weight:700;color:var(--text-soft);margin-bottom:7px;display:flex;justify-content:space-between}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px}
+/* 전형유형 칩과 전형 성격 칩은 축이 다르다(AND 로 걸린다) — 구분선으로 드러낸다. */
+.chip-sep{width:1px;align-self:stretch;background:var(--line-strong);margin:2px 4px}
 .chip{padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;
   background:var(--surface-2);color:var(--text-soft);border:1px solid var(--line);transition:.12s}
 .chip:hover{border-color:var(--line-strong);color:var(--text)}

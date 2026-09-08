@@ -59,7 +59,7 @@
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=c1aa4796">
+<link rel="stylesheet" href="styles.css?v=5248d6ed">
 </head>
 <body>
 <a href="#content" class="skip-link">본문으로 건너뛰기</a>
@@ -72,18 +72,12 @@
       <p class="brand-sub">2027 수시지원 대시보드<span>2026 vs 2025 비교 · 올해 유불리 예상</span></p>
     </div>
 
-    <div class="side-section">
-      <div class="side-label">필터</div>
-      <div id="filters" class="filters"></div>
-    </div>
-
     <nav class="side-section" aria-label="계열 카테고리">
       <div class="side-label" id="catListLabel">계열 카테고리</div>
       <div id="catList" class="cat-list"></div>
     </nav>
 
     <div class="side-foot">
-      <button id="resetBtn" class="reset-btn" title="전형유형·지역·수능최저·변화·검색어를 해제합니다 (계열 카테고리는 유지)">상세 필터 해제</button>
       <div class="source" id="sourceNote"></div>
     </div>
   </aside>
@@ -110,6 +104,16 @@
 
     <div id="content" tabindex="-1">
       <div id="a11yStatus" class="sr-only" role="status" aria-live="polite"></div>
+      <!-- 필터 — 좌측 사이드바에서 검색창 아래로 옮겼다(사용자 요청). 좌측은 계열 카테고리만 남는다.
+           details/summary 로 접어 둬 표가 밀리지 않게 한다. -->
+      <details id="filterBox" class="filter-box" open>
+        <summary class="filter-box-head"><span>🔎 상세 필터</span><span class="fb-on muted" id="filterOnCount"></span></summary>
+        <div id="filters" class="filters"></div>
+        <div class="filter-box-foot">
+          <button id="resetBtn" class="reset-btn" title="전형유형·지역·수능최저·면접·변화·검색어를 해제합니다 (계열 카테고리는 유지)">상세 필터 초기화</button>
+          <button id="resetAllBtn" class="reset-btn strong" title="계열 카테고리·입결 컷까지 포함해 전부 처음 상태로 되돌립니다">전체 초기화</button>
+        </div>
+      </details>
       <div id="catHeader" class="cat-header"></div>
       <div id="applyBar" class="apply-bar" role="status"></div>
       <div id="filterSummary" class="filter-summary" tabindex="-1" aria-label="현재 적용 조건"></div>
@@ -120,7 +124,6 @@
       </nav>
       <div id="analysisView" class="hidden">
       <section id="kpis" class="kpis"></section>
-      <section id="uniPanel" class="panel uni-panel" style="display:none"></section>
       <section id="highlights" class="panel hero">
         <div class="panel-head">
           <h2>🎯 올해 입시 유불리 예상 <span class="muted" id="hlSub"></span></h2>
@@ -154,6 +157,9 @@
 
       </div>
       <div id="resultsView">
+      <!-- 대학 단위 전형별 학과 요약. 검색을 한 대학으로 좁혔을 때 뜨는 **검색 보조 화면**이라
+           '변화 분석'이 아니라 '전형 찾기'에 있어야 한다(2026-09-08 사용자 제보로 되돌림). -->
+      <section id="uniPanel" class="panel uni-panel" style="display:none"></section>
       <div id="cutFilter" class="cut-filter"></div>
       <section id="tableSec" class="panel" tabindex="-1">
         <div class="panel-head">
@@ -206,10 +212,10 @@
 
 <div id="printArea" aria-hidden="true"></div>
 
-<script src="data.js?v=82cc57d4"></script>
+<script src="data.js?v=1a04d087"></script>
 <script src="insights.js?v=cf8b2a0c"></script>
 <script src="apply_dates.js?v=706e7f6e"></script>
 <script src="admissions-links.js?v=f14e04ac"></script>
-<script src="app.js?v=156c891d"></script>
+<script src="app.js?v=653f446d"></script>
 </body>
 </html>

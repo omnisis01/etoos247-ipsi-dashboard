@@ -568,6 +568,12 @@ def categorize(uni, gye, dept, jhname, jagyeok):
         elif ('모집단위' in d) or head.endswith('계열') or head.endswith('캠퍼스'):
             tags.add('integrated')
 
+    # 여대 — 계열이 아니라 **대학 성격** 축이라 위 계열 분기와 독립으로 더한다(배타가 아니다).
+    # 판정 근거: 2027 수시 164교 중 여대 7교(광주·덕성·동덕·서울·성신·숙명·이화)가 전부
+    # 학교명에 '여자대학교'를 쓴다. 이름 외 근거가 없으므로 규칙도 이름 하나로 단순하게 둔다.
+    if '여자대학교' in uni:
+        tags.add('womens')
+
     return tags
 
 # 유불리 판정(score/reasons)과 입결·경쟁률 추세(gtrend/ctrend)는 여기서 계산하지 않는다.
@@ -1292,6 +1298,7 @@ CATS = [
     ('teaching','사범','사범계열','#16a34a',False,''),
     ('primary_ed','교대','교육대·초등교육','#15803d',False,''),
     ('ist','IST','KAIST·DGIST·UNIST·GIST','#db2777',False,''),
+    ('womens','여대','여자대학교 전체 — 계열이 아니라 대학 성격 축이다','#c2185b',False,''),
     ('free_major','자유전공','자율·무전공','#ea580c',False,''),
     ('integrated','통합모집','전 모집단위·단일계열 등 묶음 선발','#64748b',False,''),
 ]

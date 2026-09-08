@@ -142,6 +142,9 @@ const isIntegrated = d => /캠퍼스$|^전\s*모집단위|통합모집|전공\s*
   });
 })();
 
+/* 특수전형 판정 — 전형명 기준. 전형 성격 필터(지역인재/기타전형)와 대학 패널 정렬이 함께 쓴다.
+   ⚠️ 행 가공(hydrate)에서 쓰므로 반드시 그보다 위에 선언돼야 한다(const 는 TDZ 가 있다). */
+const SPECIAL_JH = /지역인재|고른기회|기회균형|사회배려|사회통합|사회다양성|사회기여|농어촌|특성화고|장애|특수교육|보훈|서해\s?5도|만학|재직|저소득|기초생활|한부모|다문화|북한이탈|새터민|성인학습|평생학습/;
 // 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
 function parseLeast(t) {
   const z = (t || '').replace(/\s/g, '');
@@ -181,6 +184,13 @@ ROWS.forEach(r => {
   r.hasExam = hasExam;
   // 고사 종류. 논술은 전형 자체가 별도라 문구에서 섞지 않는다(사용자 피드백) —
   // 면접·실기 전형에만 종류를 명기하고, 그 외(인적성 등)는 '고사'로 둔다.
+  // 면접 유무. 판정 근거는 전형방법 원문뿐이다 — jhname 만으로 잡히는 행은 실측 0건이었다.
+  // ⚠️ 같은 전형 안에서도 학과에 따라 면접 유무가 갈린다(경상대 등 91개 전형). 그래서 행 단위로 본다.
+  r.hasItv = /면접/.test((r.method || '') + (r.jhname || ''));
+  // 전형 성격. jhtype(교과/종합/논술/실기/특기자)과 **다른 축**이다 — 지역인재전형도 교과 아니면 종합이다.
+  // 셋이 배타라 합이 전체와 같다: 지역인재 2,440 · 기타(특별) 8,132 · 일반 15,845 = 26,417.
+  r.jhSpecial = /지역인재/.test(r.jhname || '') ? 'jiyeok'
+    : SPECIAL_JH.test(r.jhname || '') ? 'etc' : '';
   r.examKind = /논술/.test(r.jhtype + (r.jhname || '')) ? '논술'
     : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
     : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
@@ -250,13 +260,12 @@ const UNI_RANK = ['서울대학교', '연세대학교', '고려대학교', '서�
 const uniRank = u => { const i = UNI_RANK.indexOf(u); return i < 0 ? 999 : i; };
 // 특수전형 판별(지역인재·고른기회·사회배려 등) — 전형명 정렬에서 맨 뒤로 보낸다.
 // ⚠️ '지역균형'은 특수전형이 아니다 — '지역'이 아니라 '지역인재'로만 잡는다.
-const SPECIAL_JH = /지역인재|고른기회|기회균형|사회배려|사회통합|사회다양성|사회기여|농어촌|특성화고|장애|특수교육|보훈|서해\s?5도|만학|재직|저소득|기초생활|한부모|다문화|북한이탈|새터민|성인학습|평생학습/;
 
 /* ---------- state ---------- */
 /* 지원희망은 법정 6장 + 후보 4칸(7~10번, '후보' 배지로 구분) — 넓게 담고 6장으로 추리는 용도. */
 const FAV_HOPE_MAX = 10, FAV_REACH_MAX = 3, SUSI_LIMIT = 6;
 const S = {
-  cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '', view: 'results',
+  cat: 'all', search: '', jhtypes: new Set(), jhSpecials: new Set(), region: '', minLeast: '', interview: '', view: 'results',
   changes: new Set(), sort: 'impact', sortDir: -1,
   examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
@@ -626,6 +635,9 @@ function applyFilters() {
     if (S.region && r.region !== S.region) return false;
     if (S.minLeast === 'yes' && !r.hasChoejeo) return false;
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
+    if (S.jhSpecials.size && !S.jhSpecials.has(r.jhSpecial)) return false;
+    if (S.interview === 'yes' && !r.hasItv) return false;
+    if (S.interview === 'no' && r.hasItv) return false;
     if (!passChange(r)) return false;
     if (S.examWhen && r.examWhen !== S.examWhen) return false;
     // 수능최저 검색 — N개 합: 내 합(S.leastSum)으로 충족 가능한 전형(요구 합 ≥ 내 합) / '그 외': N합X 아닌 특이 최저
@@ -721,7 +733,7 @@ function renderSoft(preserveCut = false) { applyFilters(); S.page = 1; renderCat
 const VIEW_KEYS = ['q', 'cat', 'region', 'types', 'changes', 'minimum', 'least', 'sum', 'cut', 'grade', 'exam', 'sort', 'dir', 'page', 'view'];
 function viewValues() {
   return { q: S.search, cat: S.cat, region: S.region, types: [...S.jhtypes].join(','), changes: [...S.changes].join(','),
-    minimum: S.minLeast, least: S.leastN, sum: S.leastSum, cut: S.stdCut, grade: S.cutGrade, exam: S.examWhen,
+    spec: [...S.jhSpecials], minimum: S.minLeast, itv: S.interview, least: S.leastN, sum: S.leastSum, cut: S.stdCut, grade: S.cutGrade, exam: S.examWhen,
     sort: S.sort, dir: S.sortDir, page: S.page, view: S.view };
 }
 function persistView() {
@@ -746,6 +758,8 @@ function restoreView() {
   S.jhtypes = new Set(String(v.types || '').split(',').filter(t => JHTYPES.includes(t)));
   S.changes = new Set(String(v.changes || '').split(',').filter(t => ['new', 'up', 'down', 'changed', 'ease', 'tighten'].includes(t)));
   S.minLeast = ['yes', 'no'].includes(v.minimum) ? v.minimum : '';
+  S.interview = ['yes', 'no'].includes(v.itv) ? v.itv : '';
+  S.jhSpecials = new Set((Array.isArray(v.spec) ? v.spec : []).filter(k => ['jiyeok', 'etc'].includes(k)));
   S.leastN = ['1', '2', '3', '4', 'etc'].includes(String(v.least)) ? String(v.least) : '';
   S.leastSum = S.leastN && S.leastN !== 'etc' ? validNumber(v.sum, 1, 36, +S.leastN * 2) : null;
   S.stdCut = CUT_LABELS[v.cut] ? v.cut : '';
@@ -776,8 +790,10 @@ function activeFilterItems() {
   if (S.cat !== 'all') items.push(['cat', CAT_BY[S.cat].label]);
   if (S.search) items.push(['search', '검색 ' + S.search]);
   S.jhtypes.forEach(t => items.push(['type:' + t, t]));
+  S.jhSpecials.forEach(k => items.push(['spec:' + k, k === 'jiyeok' ? '지역인재' : '기타전형']));
   if (S.region) items.push(['region', S.region]);
   if (S.minLeast) items.push(['minLeast', '수능최저 ' + (S.minLeast === 'yes' ? '있음' : '없음')]);
+  if (S.interview) items.push(['interview', '면접 ' + (S.interview === 'yes' ? '있음' : '없음')]);
   const changeLabels = { new: '신설', up: '증원', down: '감원', changed: '전형 변경', ease: '최저 완화', tighten: '최저 강화·신설' };
   S.changes.forEach(t => items.push(['change:' + t, changeLabels[t]]));
   if (S.leastN) items.push(['least', S.leastN === 'etc' ? '최저 특이 조건' : `최저 ${S.leastN}개 합 ${S.leastSum} 후보`]);
@@ -789,12 +805,14 @@ function clearActiveFilter(key) {
   if (key === 'cat') S.cat = 'all';
   else if (key === 'search') { S.search = ''; $('#search').value = ''; syncSearchClear(); }
   else if (key.startsWith('type:')) S.jhtypes.delete(key.slice(5));
+  else if (key.startsWith('spec:')) S.jhSpecials.delete(key.slice(5));
   else if (key.startsWith('change:')) S.changes.delete(key.slice(7));
   else if (key === 'least') { S.leastN = ''; S.leastSum = null; }
   else if (key === 'cut') { S.stdCut = ''; S.cutGrade = 9; }
   else if (key === 'exam') S.examWhen = '';
   else if (key === 'region') S.region = '';
   else if (key === 'minLeast') S.minLeast = '';
+  else if (key === 'interview') S.interview = '';
   renderCatList(); renderFilters(); renderAll();
   $('#filterSummary').focus({ preventScroll: true });
 }
@@ -831,15 +849,15 @@ function scaleWarn(r) {
   if (a.length < 2) return '';
   const hi = Math.max(...a), lo = Math.min(...a);
   if (!r.vScale && (lo <= 0 || hi / lo < 3)) return '';
-  return ` <span class="basis-warn" title="연도별 환산 만점이 달라 추세로 읽으면 안 된다 (${a.map(x => x.toFixed(1)).join(' / ')})">⚠ 연도별 척도 상이</span>`;
+  return ` <span class="basis-warn" title="이 대학은 해마다 환산점수 만점이 바뀌었어요 (${a.map(x => x.toFixed(1)).join(' / ')}). 만점이 다르면 점수를 나란히 놓아도 오른 건지 내린 건지 알 수 없습니다.">⚠ 만점이 해마다 달라 비교할 수 없어요</span>`;
 }
 function basisWarn(r) {
   const ys = [['2026', r.std26], ['2025', r.std25], ['2024', r.std24]]
     .filter(([y, t]) => t && nzStd2(t));
   const uniq = [...new Set(ys.map(([, t]) => nzStd2(t)))];
   if (uniq.length < 2) return '';
-  const detail = ys.map(([y, t]) => `${y} ${t}`).join(' / ');
-  return ` <span class="basis-warn" title="${esc(detail)}">⚠ 연도별 기준 상이</span>`;
+  const detail = ys.map(([y, t]) => `${y}년 ${t}`).join(' · ');
+  return ` <span class="basis-warn" title="대학이 해마다 다른 기준으로 발표했어요 (${esc(detail)}). 평균과 70%컷처럼 서로 다른 값이라 세 해를 이어서 추세로 읽으면 안 됩니다.">⚠ 발표 기준이 해마다 달라 비교할 수 없어요</span>`;
 }
 const CUT_SHORT = { avg: '평균', cut50: '50%', cut70: '70%', cut80: '75~85%', cut90: '90%', lowest: '최저', stage1: '1단계' };
 /** 입결 숫자 옆에 붙일 기준 배지. 숫자만 보여주면 서로 다른 지표를 같은 잣대로 읽는다. */
@@ -978,6 +996,16 @@ function renderFilters() {
     c.onclick = () => { S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t); renderSoft(); renderFilters(); };
     r1.appendChild(c);
   });
+  // 전형 성격 — 전형유형과 **다른 축**이라 전형유형 선택과 AND 로 걸린다(교과 ∩ 지역인재 = 1,879).
+  // 같은 줄에 두되 구분선으로 축이 다름을 드러낸다.
+  const sep = el('span', 'chip-sep'); sep.setAttribute('aria-hidden', 'true'); r1.appendChild(sep);
+  [['jiyeok', '지역인재'], ['etc', '기타전형']].forEach(([k, lab]) => {
+    const c = el('button', 'chip' + (S.jhSpecials.has(k) ? ' on' : ''), lab);
+    c.title = k === 'jiyeok' ? '전형명에 지역인재가 붙은 전형' : '농어촌·기회균형·특성화고·사회통합 등 특별전형(지역인재 제외)';
+    c.setAttribute('aria-pressed', String(S.jhSpecials.has(k)));
+    c.onclick = () => { S.jhSpecials.has(k) ? S.jhSpecials.delete(k) : S.jhSpecials.add(k); renderSoft(); renderFilters(); };
+    r1.appendChild(c);
+  });
   g1.appendChild(r1); box.appendChild(g1);
 
   // 변화 유형
@@ -1003,6 +1031,18 @@ function renderFilters() {
     r3.appendChild(c);
   });
   g3.appendChild(r3); box.appendChild(g3);
+
+  // 면접 — 수능최저 바로 아래(사용자 요청). 근거는 전형방법 원문의 '면접' 표기다.
+  const g3b = el('div', 'f-group');
+  g3b.innerHTML = '<div class="f-title">면접</div>';
+  const r3b = el('div', 'chip-row');
+  [['', '전체'], ['yes', '있음'], ['no', '없음']].forEach(([k, lab]) => {
+    const c = el('button', 'chip' + (S.interview === k ? ' on' : ''), lab);
+    c.setAttribute('aria-pressed', String(S.interview === k));
+    c.onclick = () => { S.interview = k; renderSoft(); renderFilters(); };
+    r3b.appendChild(c);
+  });
+  g3b.appendChild(r3b); box.appendChild(g3b);
 
   // 지역
   const g4 = el('div', 'f-group');
@@ -1046,6 +1086,11 @@ function renderFilters() {
     g5.querySelector('.lf-slider b').textContent = S.leastSum;
     const rv = g5.querySelector('.range-val'); if (rv) rv.textContent = FILTERED.length.toLocaleString() + '건 후보';
   };
+  // 접힘 상태에서도 몇 개 걸려 있는지 보이게 한다 — 안 그러면 접어 둔 필터를 잊는다.
+  const onCount = (S.jhtypes.size + S.jhSpecials.size + S.changes.size + (S.region ? 1 : 0)
+    + (S.minLeast ? 1 : 0) + (S.interview ? 1 : 0) + (S.leastN ? 1 : 0) + (S.examWhen ? 1 : 0));
+  const fo = $('#filterOnCount'); if (fo) fo.textContent = onCount ? `${onCount}개 적용 중` : '';
+  const fb = $('#filterBox'); if (fb) fb.classList.toggle('has-on', onCount > 0);
 }
 
 /* ----- category header ----- */
@@ -1494,7 +1539,9 @@ function renderTable() {
     if (S.region) on.push(`지역 ${esc(S.region)}`);
     if (S.jhtypes.size) on.push(`전형유형 ${[...S.jhtypes].map(esc).join('·')}`);
     if (S.changes.size) on.push(`변화 ${[...S.changes].length}종`);
+    if (S.jhSpecials.size) on.push('전형 성격');
     if (S.minLeast) on.push('수능최저 조건');
+    if (S.interview) on.push('면접 조건');
     if (S.stdCut) on.push('과거 입결 조건');
     $('#gridBody').innerHTML =
       `<tr><td colspan="${COLS.length}" class="empty-row">` +
@@ -1707,11 +1754,11 @@ function openModal(i, options = null) {
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
         <div class="detail-table-scroll" role="region" aria-label="3개년 입결과 경쟁률 추이표" tabindex="0"><table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
           ${trendRow(`입결(등급) ${stdTag(r)}${basisWarn(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
-          ${trendRow(`입결(환산)${scaleWarn(r)}`, [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
+          ${trendRow(`입결(대학 환산점수)${scaleWarn(r)}`, [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})${r.chungDoubt ? ' <span class="warn-tag" title="충원합격자가 \'지원자 − 모집인원\'을 넘습니다. 원천 값을 그대로 보여주되 유불리 판정에서는 제외했습니다.">⚠ 확인필요</span>' : ''}`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
         </tbody></table></div>
-        <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
+        <div class="muted" style="margin-top:6px">※ 입결 등급은 숫자가 <b>낮을수록</b> 성적이 높습니다. 환산점수는 대학마다 계산식이 달라 <b>다른 학교와 견주면 안 됩니다</b>.</div>
       </div>
       ${(() => {
         if (!r.raw) return '';
@@ -2529,16 +2576,25 @@ $('#search').oninput = e => { S.view = 'results'; S.search = e.target.value; syn
 $('#searchClear').onclick = () => { clearTimeout(searchT); S.search = ''; $('#search').value = ''; syncSearchClear(); renderAll(); $('#search').focus(); };
 $('#resetBtn').onclick = () => {
   clearTimeout(searchT); S.stdCut = ''; S.cutGrade = 9; S.examWhen = '';
-  S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
+  S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
   syncSearchClear(); renderFilters(); renderAll();
+};
+// 전체 초기화 — 계열 카테고리·입결 컷까지 되돌린다. goHome 과 같은 범위지만 사이드바를 닫거나
+// 맨 위로 올리지 않는다(필터 상자가 검색창 아래에 있어 그 자리에서 결과를 바로 확인한다).
+$('#resetAllBtn').onclick = () => {
+  clearTimeout(searchT); S.cat = 'all';
+  S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = '';
+  S.leastN = ''; S.leastSum = null; S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
+  S.search = ''; $('#search').value = ''; S.page = 1;
+  syncSearchClear(); renderCatList(); renderFilters(); renderAll(); track('reset_all');
 };
 /* 처음 화면으로 — 로고 클릭·검색 결과의 '처음 화면' 버튼이 함께 쓴다.
    상세 필터 해제(resetBtn)와 달리 **계열 카테고리와 입결 컷까지** 전부 되돌리고 맨 위로 올린다.
    검색 도중 길을 잃었을 때 한 번에 원점으로 오는 탈출구다. */
 function goHome() {
   clearTimeout(searchT); S.view = 'results';
-  S.cat = 'all'; S.jhtypes.clear(); S.changes.clear();
-  S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null;
+  S.cat = 'all'; S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear();
+  S.region = ''; S.minLeast = ''; S.interview = ''; S.leastN = ''; S.leastSum = null;
   S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
   S.search = ''; $('#search').value = ''; S.page = 1;
   syncSearchClear(); closeSidebar();
