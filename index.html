@@ -59,7 +59,7 @@
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=72410663">
+<link rel="stylesheet" href="styles.css?v=650d526a">
 </head>
 <body>
 <a href="#content" class="skip-link">본문으로 건너뛰기</a>
@@ -72,15 +72,15 @@
       <p class="brand-sub">2027 수시지원 대시보드<span>2026 vs 2025 비교 · 올해 유불리 예상</span></p>
     </div>
 
-    <nav class="side-section" aria-label="계열 카테고리">
-      <div class="side-label" id="catListLabel">계열 카테고리</div>
-      <div id="catList" class="cat-list"></div>
-    </nav>
-
     <div class="side-section">
       <div class="side-label">필터</div>
       <div id="filters" class="filters"></div>
     </div>
+
+    <nav class="side-section" aria-label="계열 카테고리">
+      <div class="side-label" id="catListLabel">계열 카테고리</div>
+      <div id="catList" class="cat-list"></div>
+    </nav>
 
     <div class="side-foot">
       <button id="resetBtn" class="reset-btn" title="전형유형·지역·수능최저·변화·검색어를 해제합니다 (계열 카테고리는 유지)">상세 필터 해제</button>
@@ -94,7 +94,8 @@
       <button id="menuToggle" class="menu-toggle" aria-label="사이드바 메뉴 열기" aria-expanded="false">☰</button>
       <div class="search-wrap">
         <span class="search-ico" aria-hidden="true">🔎</span>
-        <input id="search" type="search" aria-label="대학·학과 검색" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off">
+        <input id="search" type="search" aria-label="대학·학과 검색" placeholder="대학 · 학과 검색 (예: 의예, 서울대, 통계)" autocomplete="off" maxlength="180" list="universitySuggestions">
+        <datalist id="universitySuggestions"></datalist>
         <button id="searchClear" class="search-clear hidden" aria-label="검색어 지우고 전체로 돌아가기" title="검색어 지우기">✕</button>
       </div>
       <div class="top-actions">
@@ -103,14 +104,21 @@
         <button id="compareBtn" class="ghost-btn" aria-label="비교함 열기"><span aria-hidden="true">⇄</span> <span class="btn-label">비교함</span> <span id="compareCount" class="badge">0</span></button>
         <!-- 베타: ?beta=1 로 들어온 경우에만 보인다(app.js가 hidden 해제) -->
         <button id="advisorBtn" class="ghost-btn hidden" aria-label="성적 맞춤 추천 열기"><span aria-hidden="true">🧭</span> <span class="btn-label">맞춤 추천</span> <span class="badge beta-badge">BETA</span></button>
-        <button id="themeBtn" class="ghost-btn theme-btn" aria-label="다크/화이트 테마 전환"></button>
       </div>
+        <button id="themeBtn" class="ghost-btn theme-btn" aria-label="다크/화이트 테마 전환"></button>
     </header>
 
     <div id="content" tabindex="-1">
       <div id="a11yStatus" class="sr-only" role="status" aria-live="polite"></div>
       <div id="catHeader" class="cat-header"></div>
       <div id="applyBar" class="apply-bar" role="status"></div>
+      <div id="filterSummary" class="filter-summary" tabindex="-1" aria-label="현재 적용 조건"></div>
+      <div id="emptySearchHelp" class="empty-search-help hidden"><p id="emptySearchText"></p></div>
+      <nav class="view-nav" aria-label="대시보드 보기">
+        <button id="resultsViewBtn" aria-controls="resultsView" aria-pressed="true">전형 찾기</button>
+        <button id="analysisViewBtn" aria-controls="analysisView" aria-pressed="false">변화 분석</button>
+      </nav>
+      <div id="analysisView" class="hidden">
       <section id="kpis" class="kpis"></section>
       <section id="uniPanel" class="panel uni-panel" style="display:none"></section>
       <section id="highlights" class="panel hero">
@@ -128,7 +136,6 @@
           </div>
           <p class="vl-note">입결·경쟁률·추합 추이는 <b>2026 vs 2025</b> 실적, 모집인원·수능최저 변화는 <b>2027 vs 2026</b> 기준입니다. <b>논술전형은 경쟁률 변화를 점수에 반영하지 않습니다</b> — 2026 실측에서 논술은 경쟁률이 오르내려도 합격선이 따라 움직이지 않았습니다(교과·종합은 반영). 여러 신호를 합산해 유리·불리·중립으로 추정하며, 실제 입시 결과와 다를 수 있어 참고용입니다. (※ 입결은 등급 숫자가 작을수록 ‘높음/우수’)</p>
         </details>
-        <div id="cutFilter" class="cut-filter"></div>
         <div id="highlightCards" class="hl-cards"></div>
       </section>
 
@@ -145,12 +152,15 @@
         </div>
       </section>
 
-      <section id="tableSec" class="panel">
+      </div>
+      <div id="resultsView">
+      <div id="cutFilter" class="cut-filter"></div>
+      <section id="tableSec" class="panel" tabindex="-1">
         <div class="panel-head">
           <h2>📋 전형 목록 <span class="muted" id="tableCount"></span></h2>
           <div class="seg" id="sortSeg"></div>
         </div>
-        <p class="grid-hint">행을 누르면 <b>모집인원·수능최저·경쟁률</b>과 3개년 추이를 볼 수 있어요.</p>
+        <p class="grid-hint">행을 누르면 <b>모집인원·수능최저·경쟁률</b>과 3개년 추이를 볼 수 있어요. 유불리는 전형 환경 변화이며 개인의 합격 판정이 아닙니다.</p>
         <div class="table-scroll">
           <table id="grid">
             <thead id="gridHead"></thead>
@@ -160,6 +170,7 @@
         <div id="pager" class="pager"></div>
       </section>
 
+      </div>
       <footer class="foot-note" id="footNote"></footer>
     </div>
   </main>
@@ -196,8 +207,9 @@
 <div id="printArea" aria-hidden="true"></div>
 
 <script src="data.js?v=82cc57d4"></script>
-<script src="insights.js?v=9083fdd6"></script>
+<script src="insights.js?v=cf8b2a0c"></script>
 <script src="apply_dates.js?v=706e7f6e"></script>
-<script src="app.js?v=8e0dc63f"></script>
+<script src="admissions-links.js?v=f14e04ac"></script>
+<script src="app.js?v=fb627e45"></script>
 </body>
 </html>

@@ -174,7 +174,7 @@ globalThis.history = { replaceState: () => {}, pushState: () => {} };
 globalThis.URL = URL; globalThis.URLSearchParams = URLSearchParams;
 
 /* ---------------------------------------------------------------- 실행 */
-require('./data.js'); require('./insights.js');
+require('./data.js'); require('./insights.js'); require('./admissions-links.js');
 try { require('./apply_dates.js'); } catch (e) { /* 선택적 */ }
 
 // --- 마커 주입 (PROBE=<필드명>) ---------------------------------------------

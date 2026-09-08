@@ -256,7 +256,7 @@ const SPECIAL_JH = /지역인재|고른기회|기회균형|사회배려|사회�
 /* 지원희망은 법정 6장 + 후보 4칸(7~10번, '후보' 배지로 구분) — 넓게 담고 6장으로 추리는 용도. */
 const FAV_HOPE_MAX = 10, FAV_REACH_MAX = 3, SUSI_LIMIT = 6;
 const S = {
-  cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '',
+  cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '', view: 'results',
   changes: new Set(), sort: 'impact', sortDir: -1,
   examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
@@ -578,11 +578,33 @@ function passChange(row) {
   return false;
 }
 let FILTERED = [];
+const UNIVERSITY_NAMES = [...new Set(ROWS.map(r => r.uni))];
+const universityStem = t => t.toLowerCase().replace(/대학교$|대학$|대$/, '');
+const UNIVERSITY_SEARCH_KEYS = new Map();
+UNIVERSITY_NAMES.forEach(u => {
+  const stem = universityStem(u);
+  [u.toLowerCase(), stem + '대', stem + '대학교', ...(/여자$/.test(stem) ? [stem] : [])].forEach(key => {
+    if (!UNIVERSITY_SEARCH_KEYS.has(key)) UNIVERSITY_SEARCH_KEYS.set(key, []);
+    UNIVERSITY_SEARCH_KEYS.get(key).push(u);
+  });
+});
+function searchMatches(r, tokens) {
+  const medicalTerms = { '의예': 'med_med', '의예과': 'med_med', '치의예': 'med_dent', '치의예과': 'med_dent',
+    '한의예': 'med_oriental', '한의예과': 'med_oriental', '수의예': 'med_vet', '수의예과': 'med_vet' };
+  const hay = (r.uni + ' ' + r.dept + ' ' + r.jhname + ' ' + r.region + ' ' + r.jhtype + ' ' + r.sigun + ' ' + r.gye).toLowerCase();
+  return tokens.every(t => {
+    if (medicalTerms[t]) return r.cats.includes(medicalTerms[t]);
+    const exact = UNIVERSITY_SEARCH_KEYS.get(t);
+    return exact ? exact.includes(r.uni) : hay.includes(t);
+  });
+}
 function applyFilters() {
   const q = S.search.trim().toLowerCase();
   // 약칭 확장: 학생들은 '이화여자'가 아니라 '이화여대'로 친다. 정식 명칭의 부분문자열이
   // 되도록 토큰을 고쳐 쓴다('이화여대'→'이화여자'⊂이화여자대학교, '한국외대'→'한국외국어대').
   const expandToken = t => t
+    .replace(/^연대$/, '연세대').replace(/^고대$/, '고려대').replace(/^성대$/, '성균관대')
+    .replace(/^의대$/, '의예').replace(/^치대$/, '치의예').replace(/^수의대$/, '수의예').replace(/^한의대$/, '한의예')
     .replace(/^이대$/, '이화여자')          // 특수 약칭 — 규칙으로 안 나온다
     .replace(/^한기대$/, '한국기술교육대')
     .replace(/여대/g, '여자')
@@ -619,9 +641,7 @@ function applyFilters() {
       // 복합 검색: 공백으로 끊어 전부 포함(AND)해야 통과한다.
       //   '고려대 의예' → 대학명과 학과명이 원문에서 떨어져 있어 통짜 includes로는 0건이었다.
       //   토큰 1개면 기존 동작과 완전히 같고, 순서는 무관해진다('의예 고려대'도 동일).
-      const hay = (r.uni + ' ' + r.dept + ' ' + r.jhname + ' ' + r.region + ' ' + r.jhtype
-                   + ' ' + r.sigun + ' ' + r.gye).toLowerCase();
-      if (!SEARCH_TOKENS.every(t => hay.includes(t))) return false;
+      if (!searchMatches(r, SEARCH_TOKENS)) return false;
     }
     return true;
   });
@@ -691,11 +711,92 @@ function sortFiltered() {
 /* ============================================================
    RENDER
    ============================================================ */
-function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+function renderAll() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); renderView(); }
 // 필터가 바뀌면 결과 집합이 달라지므로 페이지를 유지하면 안 된다.
 // 실측: 5페이지를 보던 중 지역='제주'를 고르면 466건의 **마지막 페이지**가 첫 화면이 됐다
 // (기본 정렬이 유불리순이라 '불리'만 모인 꼬리가 보인다).
-function renderSoft() { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); }
+function renderSoft(preserveCut = false) { applyFilters(); S.page = 1; renderCatHeader(); renderKPIs(); renderUniPanel(); if (preserveCut) updateCutValues(); else renderCutFilter(); renderHighlights(); renderCharts(); renderTable(); renderView(); }
+
+const VIEW_KEYS = ['q', 'cat', 'region', 'types', 'changes', 'minimum', 'least', 'sum', 'cut', 'grade', 'exam', 'sort', 'dir', 'page', 'view'];
+function viewValues() {
+  return { q: S.search, cat: S.cat, region: S.region, types: [...S.jhtypes].join(','), changes: [...S.changes].join(','),
+    minimum: S.minLeast, least: S.leastN, sum: S.leastSum, cut: S.stdCut, grade: S.cutGrade, exam: S.examWhen,
+    sort: S.sort, dir: S.sortDir, page: S.page, view: S.view };
+}
+function persistView() {
+  const values = viewValues();
+  try { sessionStorage.setItem('ipsi_view_v1', JSON.stringify(values)); } catch (e) {}
+  const p = new URLSearchParams(location.search);
+  VIEW_KEYS.forEach(k => p.delete(k));
+  const defaults = { cat: 'all', grade: 9, sort: 'impact', dir: -1, page: 1, view: 'results' };
+  Object.entries(values).forEach(([k, v]) => { if (v !== '' && v != null && v !== defaults[k]) p.set(k, v); });
+  try { history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p.toString() : '')); } catch (e) {}
+}
+function restoreView() {
+  const p = new URLSearchParams(location.search);
+  if (['h', 'r', 'c', 'program'].some(k => p.has(k))) return;
+  let v = {};
+  if (VIEW_KEYS.some(k => p.has(k))) VIEW_KEYS.forEach(k => { if (p.has(k)) v[k] = p.get(k); });
+  else { try { v = JSON.parse(sessionStorage.getItem('ipsi_view_v1') || '{}') || {}; } catch (e) {} }
+  const validNumber = (x, min, max, fallback) => Number.isFinite(+x) && +x >= min && +x <= max ? +x : fallback;
+  S.search = typeof v.q === 'string' ? v.q.slice(0, 180) : '';
+  S.cat = v.cat === 'all' || CAT_BY[v.cat] ? v.cat : 'all';
+  S.region = REGIONS.includes(v.region) ? v.region : '';
+  S.jhtypes = new Set(String(v.types || '').split(',').filter(t => JHTYPES.includes(t)));
+  S.changes = new Set(String(v.changes || '').split(',').filter(t => ['new', 'up', 'down', 'changed', 'ease', 'tighten'].includes(t)));
+  S.minLeast = ['yes', 'no'].includes(v.minimum) ? v.minimum : '';
+  S.leastN = ['1', '2', '3', '4', 'etc'].includes(String(v.least)) ? String(v.least) : '';
+  S.leastSum = S.leastN && S.leastN !== 'etc' ? validNumber(v.sum, 1, 36, +S.leastN * 2) : null;
+  S.stdCut = CUT_LABELS[v.cut] ? v.cut : '';
+  S.cutGrade = validNumber(v.grade, 1, 9, 9);
+  S.examWhen = ['pre', 'post'].includes(v.exam) ? v.exam : '';
+  S.sort = ['impact', 'grade', 'comp', 'enroll', 'uni', 'jh', 'delta'].includes(v.sort) ? v.sort : 'impact';
+  S.sortDir = Number(v.dir) === 1 ? 1 : -1;
+  S.page = Math.floor(validNumber(v.page, 1, 1000, 1));
+  S.view = v.view === 'analysis' ? 'analysis' : 'results';
+  $('#search').value = S.search;
+  syncSearchClear();
+}
+function renderView() {
+  $('#resultsView').classList.toggle('hidden', S.view !== 'results');
+  $('#analysisView').classList.toggle('hidden', S.view !== 'analysis');
+  $('#resultsViewBtn').setAttribute('aria-pressed', String(S.view === 'results'));
+  $('#analysisViewBtn').setAttribute('aria-pressed', String(S.view === 'analysis'));
+}
+function scrollToResults() {
+  S.view = 'results'; renderView(); persistView();
+  const t = $('#tableSec');
+  const top = t.getBoundingClientRect().top + window.scrollY - $('#topbar').getBoundingClientRect().height - 16;
+  window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+  t.focus({ preventScroll: true });
+}
+function activeFilterItems() {
+  const items = [];
+  if (S.cat !== 'all') items.push(['cat', CAT_BY[S.cat].label]);
+  if (S.search) items.push(['search', '검색 ' + S.search]);
+  S.jhtypes.forEach(t => items.push(['type:' + t, t]));
+  if (S.region) items.push(['region', S.region]);
+  if (S.minLeast) items.push(['minLeast', '수능최저 ' + (S.minLeast === 'yes' ? '있음' : '없음')]);
+  const changeLabels = { new: '신설', up: '증원', down: '감원', changed: '전형 변경', ease: '최저 완화', tighten: '최저 강화·신설' };
+  S.changes.forEach(t => items.push(['change:' + t, changeLabels[t]]));
+  if (S.leastN) items.push(['least', S.leastN === 'etc' ? '최저 특이 조건' : `최저 ${S.leastN}개 합 ${S.leastSum} 후보`]);
+  if (S.stdCut) items.push(['cut', `${CUT_LABELS[S.stdCut]} · ${S.cutGrade < 9 ? S.cutGrade.toFixed(1) + ' 이내' : '전체 등급'}`]);
+  if (S.examWhen) items.push(['exam', S.examWhen === 'post' ? '수능 후 고사' : '수능 전 고사']);
+  return items;
+}
+function clearActiveFilter(key) {
+  if (key === 'cat') S.cat = 'all';
+  else if (key === 'search') { S.search = ''; $('#search').value = ''; syncSearchClear(); }
+  else if (key.startsWith('type:')) S.jhtypes.delete(key.slice(5));
+  else if (key.startsWith('change:')) S.changes.delete(key.slice(7));
+  else if (key === 'least') { S.leastN = ''; S.leastSum = null; }
+  else if (key === 'cut') { S.stdCut = ''; S.cutGrade = 9; }
+  else if (key === 'exam') S.examWhen = '';
+  else if (key === 'region') S.region = '';
+  else if (key === 'minLeast') S.minLeast = '';
+  renderCatList(); renderFilters(); renderAll();
+  $('#filterSummary').focus({ preventScroll: true });
+}
 
 // 입결 기준 버킷. 서로 다른 기준을 섞으면 '컷 이내' 필터가 왜곡되므로 분리해 둔다.
 // stage1(1단계합격자·지원자 평균)은 최종등록자보다 훨씬 넓은 풀이라 별도 취급한다.
@@ -757,15 +858,15 @@ function renderCutFilter() {
   // 현재 필터로 몇 건 통과했는지
   const matched = active ? FILTERED.length : 0;
   const hint = active
-    ? `<span class="cf-count">${matched.toLocaleString()}건 매치</span>`
-    : `<span class="cf-hint muted">기준을 선택하면 내 성적으로 컷 이내 전형만 봅니다</span>`;
+    ? `<span class="cf-count">${matched.toLocaleString()}건</span>`
+    : `<span class="cf-hint muted">2026년 과거 입결로 검색합니다. 개인의 합격 가능성 판단은 아닙니다.</span>`;
   // 모바일에서는 기본 접어둔다 — 기준 7종 + 슬라이더 + 고사시기까지 세로로 쌓이면
   // 화면의 절반을 먹어 상단 KPI·유불리 카드가 밀린다. 한 번 펼치면 그 선택을 유지한다.
-  const open = S.cutOpen === null ? !window.matchMedia('(max-width:620px)').matches : S.cutOpen;
+  const open = S.cutOpen === null ? Boolean(S.stdCut || S.examWhen) : S.cutOpen;
   box.classList.toggle('collapsed', !open);
   box.innerHTML = `
     <div class="cf-head">
-      <span class="cf-title">🎯 <b>입결 컷 등급</b>으로 좁혀보기</span>
+      <span class="cf-title">🎯 <b>과거 입결·고사 시기</b>로 좁혀보기</span>
       ${hint}
       <button class="cf-toggle" type="button" aria-expanded="${open}" aria-controls="cutFilter">${open ? '접기 ▲' : '펼치기 ▼'}</button>
     </div>
@@ -777,8 +878,10 @@ function renderCutFilter() {
       <div class="cf-slider ${active ? '' : 'is-disabled'}">
         <label for="cutGrade">등급 <b>${gLabel}</b></label>
         <input id="cutGrade" type="range" min="1.0" max="9.0" step="0.1" value="${g}" ${active ? '' : 'disabled'}>
+        <input id="cutGradeNumber" class="cut-number" type="number" min="1" max="9" step="0.1" value="${g.toFixed(1)}" aria-label="과거 입결 등급 상한 직접 입력" ${active ? '' : 'disabled'}>
       </div>
     </div>
+    <p class="cut-explanation" id="cutExplanation">${active ? `2026년 ${esc(CUT_LABELS[active])} · ${gLabel === '전체' ? '전체 등급' : '과거 입결 ' + gLabel}인 전형입니다.` : '평균·70% 컷 등 같은 발표 기준을 선택해 비교하세요.'}</p>
     <div class="cf-row exam-row">
       <span class="cf-title">🗓️ <b>대학별고사 시기</b></span>
       <div class="cf-radios" role="radiogroup" aria-label="대학별고사 시기">
@@ -789,21 +892,36 @@ function renderCutFilter() {
       <span class="cf-hint muted">수능(11/19) 후 고사는 가채점을 보고 응시 여부를 정할 수 있어 <b>수시 납치</b> 위험이 낮습니다</span>
     </div>`;
   box.querySelectorAll('input[name="examWhen"]').forEach(el => el.onchange = () => {
-    S.examWhen = el.value; renderSoft(); track('exam_filter', { when: S.examWhen });
+    S.examWhen = el.value; renderSoft(); box.querySelector(`input[name="examWhen"][value="${S.examWhen}"]`).focus(); track('exam_filter', { when: S.examWhen });
   });
   const ec = box.querySelector('[data-role="exam-clear"]');
   if (ec) ec.onclick = () => { S.examWhen = ''; renderSoft(); };
   const tg = box.querySelector('.cf-toggle');
-  if (tg) tg.onclick = () => { S.cutOpen = !open; renderCutFilter(); };
+  if (tg) tg.onclick = () => { S.cutOpen = !open; renderCutFilter(); box.querySelector('.cf-toggle').focus(); };
   box.querySelectorAll('input[name="stdCut"]').forEach(el => el.onchange = () => {
     S.stdCut = el.value;
-    if (S.cutGrade >= 9) S.cutGrade = 3.0;   // 기준 선택 시 합리적 기본값
-    renderSoft(); track('cut_filter', { std: S.stdCut, grade: S.cutGrade });
+    renderSoft(); box.querySelector(`input[name="stdCut"][value="${S.stdCut}"]`).focus(); track('cut_filter', { std: S.stdCut, grade: S.cutGrade });
   });
   const clear = box.querySelector('.cf-clear');
   if (clear) clear.onclick = () => { S.stdCut = ''; S.cutGrade = 9.0; renderSoft(); };
   const slider = box.querySelector('#cutGrade');
-  if (slider) slider.oninput = () => { S.cutGrade = parseFloat(slider.value); renderSoft(); };
+  if (slider) slider.oninput = () => { S.cutGrade = parseFloat(slider.value); renderSoft(true); };
+  const number = box.querySelector('#cutGradeNumber');
+  if (number) number.oninput = () => {
+    const value = Number(number.value);
+    const valid = number.value !== '' && Number.isFinite(value) && value >= 1 && value <= 9;
+    number.setAttribute('aria-invalid', String(!valid));
+    if (valid) { S.cutGrade = Math.round(value * 10) / 10; renderSoft(true); }
+  };
+}
+function updateCutValues() {
+  const box = $('#cutFilter');
+  const label = S.cutGrade >= 9 ? '전체' : S.cutGrade.toFixed(1) + ' 이내';
+  const count = box.querySelector('.cf-count'); if (count) count.textContent = FILTERED.length.toLocaleString() + '건';
+  const text = box.querySelector('.cf-slider label b'); if (text) text.textContent = label;
+  const slider = box.querySelector('#cutGrade'); if (slider && document.activeElement !== slider) slider.value = S.cutGrade;
+  const number = box.querySelector('#cutGradeNumber'); if (number && document.activeElement !== number) number.value = S.cutGrade.toFixed(1);
+  $('#cutExplanation').textContent = `2026년 ${CUT_LABELS[S.stdCut]} · ${label === '전체' ? '전체 등급' : '과거 입결 ' + label}인 전형입니다.`;
 }
 
 /* ----- category list ----- */
@@ -889,6 +1007,7 @@ function renderFilters() {
   const g4 = el('div', 'f-group');
   g4.innerHTML = '<div class="f-title">지역(광역)</div>';
   const sel = el('select', 'f-select');
+  sel.setAttribute('aria-label', '지역(광역)');
   sel.innerHTML = '<option value="">전국 전체</option>' + REGIONS.map(r => `<option ${S.region === r ? 'selected' : ''}>${esc(r)}</option>`).join('');
   sel.onchange = () => { S.region = sel.value; renderSoft(); renderFilters(); };
   g4.appendChild(sel); box.appendChild(g4);
@@ -896,11 +1015,12 @@ function renderFilters() {
   // 수능최저 검색 (N개 합 + 내 등급 합 슬라이더, '그 외' 특이 최저) — 기존 '입결 등급 상한'을 대체
   const g5 = el('div', 'f-group least-filter');
   const n = S.leastN, isSum = n && n !== 'etc', b = isSum ? LEAST_BOUNDS[+n] : null;
-  const hint = !n ? '합산 영역 수를 고르면 내 등급 합으로 충족 가능한 전형만 봅니다'
-    : n === 'etc' ? 'N개 합으로 표현되지 않는 특이 최저(예: 1등급 2개) 전형' : `내 상위 ${n}개 영역 등급 합으로 충족 가능한 전형`;
+  const hint = !n ? '영역 수와 등급 합으로 후보를 찾습니다.'
+    : n === 'etc' ? 'N개 합으로 표현되지 않는 특이 최저(예: 1등급 2개) 전형' : `${n}개 영역 등급 합이 맞는 후보입니다.`;
   g5.innerHTML = `
-    <div class="f-title">🎯 수능최저 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건${n === 'etc' ? '' : ' 충족'}</span>` : ''}</div>
+    <div class="f-title">🎯 수능최저 후보 검색 ${n ? `<span class="range-val">${FILTERED.length.toLocaleString()}건 후보</span>` : ''}</div>
     <div class="lf-hint muted">${hint}</div>
+    <p class="condition-note">과목·탐구·한국사 조건은 미확인입니다. 실제 최저 충족 여부는 모집요강과 대조하세요.</p>
     <div class="lf-radios" role="radiogroup" aria-label="합산 영역 수">
       ${[['1', '1개'], ['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합'], ['etc', '그 외']].map(([k, lab]) => `<label class="lf-radio${n === k ? ' on' : ''}"><input type="radio" name="leastN" value="${k}"${n === k ? ' checked' : ''}> ${lab}</label>`).join('')}
       <button class="lf-clear${n ? '' : ' hidden'}" type="button" aria-label="최저 검색 해제">해제</button>
@@ -908,7 +1028,7 @@ function renderFilters() {
     ${n === 'etc' ? '' : `<div class="lf-slider ${isSum ? '' : 'is-disabled'}">
       <label for="leastSum">${isSum && n === '1' ? '내 최고 등급' : `내 ${isSum ? n : 'N'}개 합`} <b>${isSum ? S.leastSum : '—'}</b></label>
       <input id="leastSum" type="range" min="${b ? b.min : 2}" max="${b ? b.max : 18}" step="1" value="${isSum ? S.leastSum : 0}" ${isSum ? '' : 'disabled'}>
-      ${isSum ? `<div class="lf-scale"><span>${b.min} 빡셈</span><span>느슨 ${b.max}</span></div>` : ''}
+      ${isSum ? `<div class="lf-scale"><span>등급 합 ${b.min}</span><span>등급 합 ${b.max}</span></div>` : ''}
     </div>`}`;
   box.appendChild(g5);
   g5.querySelectorAll('input[name="leastN"]').forEach(eln => eln.onchange = () => {
@@ -923,7 +1043,7 @@ function renderFilters() {
     S.leastSum = parseInt(ls.value);
     renderSoft();
     g5.querySelector('.lf-slider b').textContent = S.leastSum;
-    const rv = g5.querySelector('.range-val'); if (rv) rv.textContent = FILTERED.length.toLocaleString() + '건 충족';
+    const rv = g5.querySelector('.range-val'); if (rv) rv.textContent = FILTERED.length.toLocaleString() + '건 후보';
   };
 }
 
@@ -936,19 +1056,23 @@ function renderCatHeader() {
   $('#catHeader').innerHTML =
     `<div class="ch-icon" style="background:${c.color}">${CAT_ICON[c.key] || '🎓'}</div>
      <div class="ch-body"><h2>${q ? `🔎 ${esc(q)}` : esc(c.label)}</h2>
-       <p>${q ? `${esc(c.label)}에서 검색` : esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>
+       <p>${S.jhtypes.size ? esc([...S.jhtypes].join(' · ')) + ' 조건에서 검색' : q ? `${esc(c.label)}에서 검색` : esc(c.desc)} · 검색결과 <b>${FILTERED.length.toLocaleString()}</b>개</p></div>
      ${q || S.cat !== 'all' ? `<button class="ghost-btn ch-home" id="chHome" title="검색·필터를 모두 해제하고 처음 화면으로">🏠 처음 화면</button>` : ''}
-     ${q && FILTERED.length ? `<button class="ghost-btn ch-jump" id="chJump">결과 ${FILTERED.length.toLocaleString()}건 보기 <span aria-hidden="true">↓</span></button>` : ''}`;
+     <button class="ghost-btn ch-jump" id="chJump">전형 목록 보기 <span aria-hidden="true">↓</span></button>`;
   const hb = $('#chHome');
   if (hb) hb.onclick = goHome;
   const jb = $('#chJump');
   // ⚠️ smooth 스크롤이 무시되는 환경이 있다(자동화 브라우저·reduced-motion 설정 등).
   //    그대로 두면 버튼을 눌러도 아무 일이 없어 보이므로, 이동이 없으면 즉시 점프로 폴백한다.
-  if (jb) jb.onclick = () => {
-    const t = $('#tableSec'), before = window.scrollY;
-    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => { if (Math.abs(window.scrollY - before) < 4) t.scrollIntoView({ block: 'start' }); }, 350);
-  };
+  if (jb) jb.onclick = scrollToResults;
+  const items = activeFilterItems();
+  $('#filterSummary').innerHTML = items.length
+    ? `<span class="filter-summary-label">적용 조건 ${items.length}개</span>` + items.map(([key, text]) => `<button class="filter-token" data-clear-filter="${esc(key)}" aria-label="${esc(text)} 조건 해제">${esc(text)} <span aria-hidden="true">×</span></button>`).join('') + '<button class="filter-clear-all" id="clearAllFilters">모두 해제</button>'
+    : '<span class="filter-summary-label">전체 대학 · 모든 전형을 보고 있습니다.</span>';
+  $('#filterSummary').querySelectorAll('[data-clear-filter]').forEach(b => b.onclick = () => clearActiveFilter(b.dataset.clearFilter));
+  const all = $('#clearAllFilters'); if (all) all.onclick = goHome;
+  $('#emptySearchHelp').classList.toggle('hidden', FILTERED.length > 0);
+  const help = $('#emptySearchText'); if (help) help.textContent = `“${S.search || c.label}”에 맞는 전형이 없습니다. 적용 조건을 해제하거나 대학·학과명을 선택해 다시 검색하세요.`;
 }
 
 /* ----- 대학 단위 전형별 학과 요약 -----
@@ -1082,11 +1206,12 @@ function renderHighlights() {
   } else {
     [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.hlFilter));
   }
+  document.querySelectorAll('#hlFilter button, .hl-jhseg button').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('on'))));
   const nong = S.hlFilter === 'nong';
   const hd = $('#heroDesc');
   if (hd) hd.innerHTML = nong
-    ? '<b>농어촌학생전형</b>만 모아 봅니다 — 큐레이션 없이 <b>전 대학</b> 대상으로, 2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>AI분석결과</b>입니다. 카드를 누르면 상세 내용을 볼 수 있어요.'
-    : '2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>AI분석결과</b>입니다. <b>메디컬·상위권 본교(SKY·서성한·중경외시·건동홍)</b>까지만 선별합니다. 카드를 누르면 상세 내용을 볼 수 있어요.';
+    ? '<b>농어촌학생전형</b>만 모아 봅니다 — 큐레이션 없이 <b>전 대학</b> 대상으로, 2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 분석 결과</b>입니다. 카드를 누르면 상세 내용을 볼 수 있어요.'
+    : '2026 vs 2025 입결·경쟁률 추이와 2027 모집인원·수능최저 변화를 종합한 <b>자동 분석 결과</b>입니다. <b>메디컬·상위권 본교(SKY·서성한·중경외시·건동홍)</b>까지만 선별합니다. 카드를 누르면 상세 내용을 볼 수 있어요.';
   let pool = FILTERED.filter(r => {
     const v = V(r);
     if (!v.sig.length) return false;
@@ -1173,6 +1298,7 @@ function renderCharts() {
       .map(([k, l]) => `<button data-k="${k}" class="${S.chartMetric === k ? 'on' : ''}">${l}</button>`).join('');
     seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.chartMetric = b.dataset.k; [...seg.children].forEach(c => c.classList.toggle('on', c.dataset.k === S.chartMetric)); renderCharts(); };
   }
+  seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('on'))));
   // aggregate by university
   // 입결은 기준이 섞이면 대학 간 순위가 왜곡되므로 지배 기준 행만으로 평균한다.
   const domA = dominantStd(FILTERED);
@@ -1332,6 +1458,7 @@ function renderTable() {
     ph.insertBefore(rs, $('#sortSeg'));
     rs.onchange = () => { S.region = rs.value; renderSoft(); renderFilters(); };
   }
+  rs.setAttribute('aria-label', '전형 목록 지역 필터');
   rs.innerHTML = '<option value="">지역: 전국</option>' + REGIONS.map(x => `<option value="${esc(x)}" ${S.region === x ? 'selected' : ''}>${esc(x)}</option>`).join('');
   // sort segment quick
   const ss = $('#sortSeg');
@@ -1347,6 +1474,8 @@ function renderTable() {
   const total = FILTERED.length;
   const pages = Math.max(1, Math.ceil(total / S.perPage));
   if (S.page > pages) S.page = pages;
+  persistView();
+  [...ss.children].forEach(c => c.setAttribute('aria-pressed', String(isActive(c.dataset.sk, +c.dataset.sd))));
   const start = (S.page - 1) * S.perPage;
   const slice = FILTERED.slice(start, start + S.perPage);
   // ⚠️ '총 85개'만 보이면 화면의 60개가 전부인 줄 알고 '누락'으로 오해한다(사용자 제보 2026-08-28:
@@ -1365,7 +1494,7 @@ function renderTable() {
     if (S.jhtypes.size) on.push(`전형유형 ${[...S.jhtypes].map(esc).join('·')}`);
     if (S.changes.size) on.push(`변화 ${[...S.changes].length}종`);
     if (S.minLeast) on.push('수능최저 조건');
-    if (S.cut) on.push('입결 컷');
+    if (S.stdCut) on.push('과거 입결 조건');
     $('#gridBody').innerHTML =
       `<tr><td colspan="${COLS.length}" class="empty-row">` +
       `<b>조건에 맞는 전형이 없습니다.</b>` +
@@ -1389,14 +1518,14 @@ function renderTable() {
     const fb = favBucket(r._i);
     const jn = flat(r.jhname);   // 줄바꿈 섞인 전형명을 한 줄로 — 자세한 이유는 flat/cut 정의부 참조
     return `<tr data-i="${r._i}">
-      <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(cut(jn, 14))}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
+      <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
+      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(jn)}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
       <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
       <td class="col-comp"><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
       <td class="col-impact"><span class="impact-chip ${v.cls}">${v.label}</span></td>
-      <td class="col-add"><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
+      <td class="col-add"><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" aria-pressed="${!!fb}" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 지원카드 ${fb ? '변경' : '담기'}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" aria-pressed="${inCmp}" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 비교함 ${inCmp ? '제거' : '담기'}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
     </tr>`;
   }).join('');
   $('#gridBody').querySelectorAll('tr').forEach(tr => {
@@ -1411,7 +1540,7 @@ function renderPager(pages, total) {
   if (pages <= 1) { p.innerHTML = total ? `<span class="pg-info">총 ${total.toLocaleString()}개</span>` : ''; return; }
   const cur = S.page;
   let btns = [];
-  const mk = (n, lab, on, dis) => `<button ${dis ? 'disabled' : ''} class="${on ? 'on' : ''}" data-p="${n}">${lab || n}</button>`;
+  const mk = (n, lab, on, dis) => `<button ${dis ? 'disabled' : ''} class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''} aria-label="${lab === '‹' ? '이전 페이지' : lab === '›' ? '다음 페이지' : n + '페이지'}" data-p="${n}">${lab || n}</button>`;
   btns.push(mk(cur - 1, '‹', false, cur === 1));
   const win = [];
   let s = Math.max(1, cur - 2), e = Math.min(pages, cur + 2);
@@ -1423,7 +1552,7 @@ function renderPager(pages, total) {
   btns.push(mk(cur + 1, '›', false, cur === pages));
   btns.push(`<span class="pg-info">${cur} / ${pages}</span>`);
   p.innerHTML = btns.join('');
-  p.querySelectorAll('button[data-p]').forEach(b => b.onclick = () => { S.page = +b.dataset.p; renderTable(); window.scrollTo({ top: $('#tableSec').offsetTop - 70, behavior: 'smooth' }); });
+  p.querySelectorAll('button[data-p]').forEach(b => b.onclick = () => { S.page = +b.dataset.p; renderTable(); scrollToResults(); });
 }
 
 /* ----- dialog focus management (trap + return) ----- */
@@ -1452,9 +1581,66 @@ function closeDialog() {
   _focusReturn = null;
 }
 
+function dialogFocusKey(container) {
+  const active = document.activeElement;
+  if (!active || !container.contains(active)) return null;
+  if (active.id) return '#' + active.id;
+  for (const key of ['rm', 'up', 'dn', 'sw', 'fav-open', 'cmp-open']) {
+    const value = active.getAttribute('data-' + key);
+    if (value != null) return `[data-${key}="${value}"]`;
+  }
+  return null;
+}
+function restoreDialogFocus(container, key, fallback) {
+  if (!key) return;
+  const target = container.querySelector(key);
+  const next = target && !target.disabled ? target : container.querySelector(fallback);
+  next?.focus({ preventScroll: true });
+}
+
 /* ----- detail modal ----- */
-function openModal(i) {
+let _modalReturn = null;
+function programURL(i) {
+  const p = new URLSearchParams({ program: codeOf(i) });
+  return location.origin + location.pathname + '?' + p.toString();
+}
+async function copyProgramLink(i, btn) {
+  const url = programURL(i);
+  try {
+    await navigator.clipboard.writeText(url);
+    if (btn) {
+      const label = btn.textContent;
+      btn.textContent = '✓ 전형 링크 복사됨';
+      setTimeout(() => { if (btn.isConnected) btn.textContent = label; }, 1600);
+    }
+  } catch (e) { prompt('이 전형의 주소를 복사하세요.', url); }
+}
+function comparisonBasisNotice(items) {
+  const bases = new Set(items.filter(r => r.g[0] != null).map(r => flat(r.std26) || '기준 미상'));
+  const differs = bases.size > 1;
+  return `${differs ? '입결 기준이 서로 다릅니다. ' : ''}평균·70% 컷 등 각 전형의 기준을 확인하세요. 대학별 반영과목과 환산식이 달라 숫자만으로 직접 비교할 수 없습니다.`;
+}
+function comparisonRequirements(rowM) {
+  const value = s => esc(flat(s)) || '자료 없음 · 모집요강 확인';
+  return rowM('지원자격', r => value(r.jagyeok) + (r.nsuNo ? '<br><b>졸업예정자만 지원 가능</b>' : ''))
+    + rowM('전형방법', r => value(r.method))
+    + rowM('반영과목', r => value(r.subjects))
+    + rowM('학년별 반영 / 진로선택', r => value(r.gradeRatio) + '<br>' + value(r.careerSubj))
+    + rowM('필요서류', r => value(DOCS_LABEL(r.docs)))
+    + rowM('복수지원', r => value(r.dupApply))
+    + rowM('원서접수', r => {
+      const ap = applyInfo(r.uni);
+      return ap ? `${esc(ap.txt)}<br>${esc(ap.via)}${ap.unstated ? '<br>시각 미공표 · 입학처 확인' : ''}` : '일정 자료 없음 · 입학처 확인';
+    })
+    + rowM('대학별고사', r => r.date ? `${esc(r.date)}${r.examKind ? '<br>' + esc(r.examKind) : ''}` : '일정 자료 없음 · 모집요강 확인');
+}
+function openModal(i, options = null) {
   const r = ROWS[i];
+  if (!r) return;
+  const wasOpen = !$('#modal').classList.contains('hidden');
+  if (options !== null || !wasOpen) _modalReturn = options && typeof options.onClose === 'function' ? options : null;
+  const priorScroll = wasOpen ? $('#modalCard').scrollTop : 0;
+  const focusKey = wasOpen ? dialogFocusKey($('#modalCard')) : null;
   const d = deltaInfo(r), v = V(r);
   track('view_program', { uni: r.uni, dept: r.dept, verdict: v.label });
   // vals are chronological [2024,2025,2026]; sparkline expects newest-first → reverse
@@ -1481,11 +1667,14 @@ function openModal(i) {
   const bk = favBucket(i);
   $('#modalCard').innerHTML = `
     <div class="modal-head"><div class="mh-top"><div>
-      <div class="mh-uni">${esc(r.uni)} · ${esc(r.region)} ${esc(r.sigun)}</div>
+      <div class="mh-uni">${esc(r.uni)}${campusOf(r) ? ' · ' + esc(campusOf(r)) + ' 캠퍼스' : ''} · ${esc(r.region)} ${esc(r.sigun)}</div>
       <h3>${esc(deptDisp(r))}${isIntegrated(r.dept) ? ' <span class="qual-tag" title="개별 학과가 아닌 통합·계열 단위 모집입니다">통합모집</span>' : ''}</h3>
+      <div class="modal-admission">${esc(flat(r.jhname))} · ${esc(r.jhtype)}</div>
       <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${cats}</div>
     </div><button class="modal-close" id="modalClose">✕</button></div></div>
     <div class="modal-body">
+      <div class="program-tools">${_modalReturn ? `<button class="ghost-btn" id="modalReturn">← ${esc(_modalReturn.returnLabel || '이전 목록으로 돌아가기')}</button>` : ''}<button class="ghost-btn" id="modalLink">🔗 이 전형 링크 복사</button></div>
+      <div class="msec official-source"><h4>지원 전 공식 자료 확인</h4>${typeof window.officialLinksHTML === 'function' ? window.officialLinksHTML(r) : '<p class="muted">대학 입학처에서 2027학년도 수시 모집요강과 접수 공지를 확인하세요.</p>'}</div>
       <div class="msec"><div class="kv">
         <dt>전형</dt><dd>${esc(r.jhtype)} · ${esc(r.jhname)}</dd>
         <dt>모집인원</dt><dd><b>${fmtInt(r.enroll)}명</b> <span class="delta ${d.cls}">${d.txt}</span> <span class="muted">(2026 대비: ${r.dkind === 'changed' ? '전형 변경(개편·개명)' : esc(r.prev || '-')})</span></dd>
@@ -1504,23 +1693,23 @@ function openModal(i) {
       <div class="msec hero-sec"><h4>🎯 올해 입시 유불리 예상 <span class="muted">2026 vs 2025 + 2027 변화 종합 · AI 분석</span></h4>
         <div class="verdict-head"><span class="verdict-big ${v.cls}">${v.label}</span>
           <span class="muted">${v.cls === 'good' ? '합격선이 낮아질 신호가 우세합니다.' : v.cls === 'bad' ? '합격선이 높아질 신호가 우세합니다.' : v.cls === 'new' ? '신설로 입결이 미형성되어 변동성이 큽니다.' : '뚜렷한 방향성이 약합니다.'}</span></div>
-        <table class="trend-table yoy-table"><thead><tr><th>지표</th><th>2025</th><th>2026</th><th>전년비</th><th>해석</th></tr></thead><tbody>
+        <div class="detail-table-scroll" role="region" aria-label="전년 대비 지표 비교표" tabindex="0"><table class="trend-table yoy-table"><thead><tr><th>지표</th><th>2025</th><th>2026</th><th>전년비</th><th>해석</th></tr></thead><tbody>
           ${yoyCmp(`입결(등급) ${stdTag(r)}`, v.g, x => x.toFixed(2), dir => dir === 'easier')}
           ${yoyCmp('경쟁률', v.c, x => x.toFixed(1) + ':1', dir => dir === 'down')}
           ${yoyCmp(`추합(충원, ${chungUnit(r)})`, v.ch, x => fmtChung(r, x), dir => dir === 'up')}
-        </tbody></table>
+        </tbody></table></div>
         <div class="impact-box" style="margin-top:12px">${reasons}</div>
         <div class="verdict-note" style="margin-top:8px">※ 입결 하락세·경쟁률 하락·증원·수능최저 강화는 ‘유리’ 신호로, 그 반대는 ‘불리’ 신호로 추정합니다.${r.jhtype === '논술' ? ' <b>단, 논술은 경쟁률 변화를 점수에 넣지 않습니다</b> — 2026 실측에서 논술만 경쟁률과 합격선이 사실상 무관했습니다.' : ''}</div>
         <div class="verdict-note" style="margin-top:4px">※ 다만 실제 입시에서는 입결이 내려간 학과로 오히려 지원이 몰려 경쟁이 폭발하는 경우도 있으니 주의하세요.</div>
       </div>
       ${r.change ? `<div class="msec"><h4>📝 2026 대비 변경사항(2027)</h4><div class="change-box">${esc(r.change)}</div></div>` : ''}
       <div class="msec"><h4>📈 3개년 입결·경쟁률 추이</h4>
-        <table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
+        <div class="detail-table-scroll" role="region" aria-label="3개년 입결과 경쟁률 추이표" tabindex="0"><table class="trend-table"><thead><tr><th>구분</th><th>2024</th><th>2025</th><th>2026</th><th>추이</th></tr></thead><tbody>
           ${trendRow(`입결(등급) ${stdTag(r)}${basisWarn(r)}`, [r.g[2], r.g[1], r.g[0]], v => v.toFixed(2), 'var(--primary)')}
           ${trendRow(`입결(환산)${scaleWarn(r)}`, [r.v[2], r.v[1], r.v[0]], v => v.toFixed(1), 'var(--good)')}
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})${r.chungDoubt ? ' <span class="warn-tag" title="충원합격자가 \'지원자 − 모집인원\'을 넘습니다. 원천 값을 그대로 보여주되 유불리 판정에서는 제외했습니다.">⚠ 확인필요</span>' : ''}`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
-        </tbody></table>
+        </tbody></table></div>
         <div class="muted" style="margin-top:6px">※ 입결 등급은 낮을수록 우수. 환산점수는 대학별 산출식이 달라 학교 간 직접 비교 불가.</div>
       </div>
       ${(() => {
@@ -1545,16 +1734,32 @@ function openModal(i) {
         <button class="ghost-btn" id="modalAdd" style="width:100%;justify-content:center;margin-top:8px">${inCmp ? '✓ 비교함에서 보기' : '⇄ 비교함에 담기'}</button>
       </div>
     </div>`;
-  const wasOpen = !$('#modal').classList.contains('hidden');
   $('#modal').classList.remove('hidden');
+  $('#modalCard').scrollTop = priorScroll;
   $('#modalClose').setAttribute('aria-label', '상세 닫기');
   if (!wasOpen) openDialog($('#modalCard'), `${r.uni} ${r.dept} 상세 정보`);
   $('#modalClose').onclick = closeModal;
-  $('#modalAdd').onclick = () => { if (S.compare.has(i)) { openCompare(); } else { toggleCompare(i); openModal(i); } };
+  if ($('#modalReturn')) $('#modalReturn').onclick = closeModal;
+  $('#modalLink').onclick = () => copyProgramLink(i, $('#modalLink'));
+  $('#modalAdd').onclick = () => { if (S.compare.has(i)) { closeModal(false); openCompare(); } else { toggleCompare(i); openModal(i); } };
   $('#modalFavHope').onclick = () => { addFav(i, 'hope'); openModal(i); };
   $('#modalFavReach').onclick = () => { addFav(i, 'reach'); openModal(i); };
+  restoreDialogFocus($('#modalCard'), focusKey, '#modalClose');
 }
-function closeModal() { if ($('#modal').classList.contains('hidden')) return; $('#modal').classList.add('hidden'); closeDialog(); }
+function closeModal(resume = true) {
+  if ($('#modal').classList.contains('hidden')) return;
+  const previous = _modalReturn;
+  _modalReturn = null;
+  $('#modal').classList.add('hidden');
+  const params = new URLSearchParams(location.search);
+  if (params.has('program')) {
+    params.delete('program');
+    history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params.toString() : '') + (location.hash || ''));
+  }
+  closeDialog();
+  // The shared Escape handler closes other panels in the same event before restoring the source.
+  if (resume !== false && previous) setTimeout(previous.onClose, 0);
+}
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 
 /* ----- compare ----- */
@@ -1566,26 +1771,31 @@ function toggleCompare(i) {
 }
 function updateCompareBtn() { $('#compareCount').textContent = S.compare.size; }
 function openCompare() {
+  const focusKey = dialogFocusKey($('#compareInner'));
   const items = [...S.compare].map(i => ROWS[i]);
   const inner = $('#compareInner');
   if (!items.length) {
-    inner.innerHTML = `<div class="drawer-head"><h3>비교함</h3><button class="modal-close" id="cmpClose">✕</button></div><div class="empty-state"><div class="es-ico">📊</div>비교할 전형을 표(＋ 버튼)에서 담아보세요.<br>같은 카테고리 내 여러 대학을 나란히 비교할 수 있습니다.</div>`;
+    inner.innerHTML = `<div class="drawer-head"><h3>비교함</h3><button class="modal-close" id="cmpClose">✕</button></div><div class="empty-state"><div class="es-ico">📊</div>비교할 전형을 목록의 ⇄ 버튼이나 상세에서 담아보세요.<br>최대 6개 전형의 지원 조건을 나란히 볼 수 있습니다.</div>`;
   } else {
     const rowM = (lab, fn) => `<tr><td class="rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
     inner.innerHTML = `<div class="drawer-head"><h3>전형 비교 <span class="muted">${items.length}개</span></h3>
       <div style="display:flex;gap:8px"><button class="ghost-btn" id="cmpShare">🔗 링크 복사</button><button class="ghost-btn" id="cmpPrint">🖨️ PDF 저장</button><button class="ghost-btn" id="cmpClear">전체 비우기</button><button class="modal-close" id="cmpClose">✕</button></div></div>
-      <div style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
-        `<th>${esc(r.uni)}<div class="muted" title="${esc(flat(deptDisp(r)))}">${esc(cut(deptDisp(r), 16))}</div><div class="cmp-rm" data-rm="${r._i}">✕ 제거</div></th>`).join('')}</tr></thead><tbody>
+      <p class="comparison-note">${comparisonBasisNotice(items)}</p>
+      <div class="compare-table-scroll" role="region" aria-label="선택 전형의 지원 조건 비교표" tabindex="0" style="overflow-x:auto;padding:0 4px 30px"><table class="cmp-table"><thead><tr><th>구분</th>${items.map(r =>
+        `<th>${esc(r.uni)}${campusOf(r) ? `<div class="muted">${esc(campusOf(r))} 캠퍼스</div>` : ''}<div class="cmp-dept">${esc(flat(deptDisp(r)))}</div><div class="cmp-admission">${esc(flat(r.jhname))}</div><div class="cmp-card-actions"><button class="ghost-btn" data-cmp-open="${r._i}" aria-label="${esc(r.uni)} ${esc(flat(deptDisp(r)))} ${esc(flat(r.jhname))} 상세 보기">상세 보기</button><button class="cmp-rm" data-rm="${r._i}" aria-label="${esc(r.uni)} ${esc(flat(deptDisp(r)))} ${esc(flat(r.jhname))} 비교함에서 제거">✕ 제거</button></div></th>`).join('')}</tr></thead><tbody>
         ${rowM('🎯 올해 유불리', r => `<span class="impact-chip ${V(r).cls}">${V(r).label}</span>`)}
         ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
         ${rowM('전형', r => esc(r.jhtype) + '<br><span class="muted">' + esc(r.jhname) + '</span>')}
+        ${comparisonRequirements(rowM)}
         ${rowM('모집인원(전년대비)', r => `<b>${fmtInt(r.enroll)}</b> <span class="delta ${deltaInfo(r).cls}">${deltaInfo(r).txt}</span>`)}
         ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) + (r.chKindShow ? ` <span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'up' : 'down'}">${r.chKindShow}</span>` : '') : '<span class="muted">없음</span>')}
         ${rowM('입결 2025→2026', r => { const g = yoyGrade(r); return `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + stdTag(r) + (g && g.dir !== 'flat' ? ` <span class="ycell ${g.dir === 'easier' ? 'good' : 'bad'}">${g.dir === 'easier' ? '유리' : '불리'}</span>` : ''); })}
+        ${rowM('입결 기준 · 2026', r => esc(r.std26 || '기준 자료 없음') + basisWarn(r))}
         ${rowM('입결 추이', r => sparkline(r.g, { invert: true, color: 'var(--primary)', w: 70 }))}
         ${rowM('경쟁률 2025→2026', r => { const c = yoyComp(r); return (r.c[1] == null ? '–' : r.c[1].toFixed(1)) + ' → <b>' + (r.c[0] == null ? '–' : r.c[0].toFixed(1)) + ':1</b>' + (c && c.dir !== 'flat' ? ` <span class="ycell ${c.dir === 'down' ? 'good' : 'bad'}">${c.dir === 'down' ? '유리' : '불리'}</span>` : ''); })}
         ${rowM('경쟁률 추이', r => sparkline(r.c, { color: 'var(--new)', w: 70 }))}
         ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
+        ${rowM('공식 자료 확인', r => typeof window.officialLinksHTML === 'function' ? window.officialLinksHTML(r) : '대학 입학처에서 모집요강 확인')}
       </tbody></table></div>`;
   }
   const wasOpen = !$('#compareDrawer').classList.contains('hidden');
@@ -1597,6 +1807,19 @@ function openCompare() {
   const cs = $('#cmpShare'); if (cs) cs.onclick = () => copyShare('cmp', cs);
   const clr = $('#cmpClear'); if (clr) clr.onclick = () => { S.compare.clear(); saveCmp(); updateCompareBtn(); renderTable(); openCompare(); };
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.compare.delete(+b.dataset.rm); saveCmp(); updateCompareBtn(); renderTable(); openCompare(); });
+  inner.querySelectorAll('[data-cmp-open]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.cmpOpen, scroll = $('#compareDrawer').scrollTop, innerScroll = inner.scrollTop;
+    const horizontal = inner.querySelector('.compare-table-scroll').scrollLeft;
+    closeCompareDrawer();
+    openModal(i, { returnLabel: '비교함으로 돌아가기', onClose: () => {
+      openCompare();
+      $('#compareDrawer').scrollTop = scroll; inner.scrollTop = innerScroll;
+      const tableScroll = inner.querySelector('.compare-table-scroll');
+      if (tableScroll) tableScroll.scrollLeft = horizontal;
+      setTimeout(() => inner.querySelector(`[data-cmp-open="${i}"]`)?.focus({ preventScroll: true }), 40);
+    } });
+  });
+  restoreDialogFocus(inner, focusKey, '[data-cmp-open], #cmpClose');
 }
 function closeCompareDrawer() { if ($('#compareDrawer').classList.contains('hidden')) return; $('#compareDrawer').classList.add('hidden'); closeDialog(); }
 $('#compareDrawer').onclick = e => { if (e.target.id === 'compareDrawer') closeCompareDrawer(); };
@@ -1665,14 +1888,15 @@ function favSlotCard(i, bucket, pos, lastIdx) {
   const r = ROWS[i], v = V(r), d = deltaInfo(r);
   return `<div class="fav-slot" data-open="${i}">${badge}
     <div class="fav-body">
-      <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}</span>${(() => { const ap = applyInfo(r.uni); return ap ? ` <span class="fav-apply${ap.early ? ' early' : ''}" title="원서접수 ${ap.txt} · ${esc(ap.via)}">${ap.short}</span>` : ''; })()}</div>
-      <div class="fav-dept">${esc(deptDisp(r))}</div>
+      <div class="fav-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? ' · ' + esc(campusOf(r)) + ' 캠퍼스' : ''}</span>${(() => { const ap = applyInfo(r.uni); return ap ? ` <span class="fav-apply${ap.early ? ' early' : ''}" title="원서접수 ${ap.txt} · ${esc(ap.via)}">${ap.short}</span>` : ''; })()}</div>
+      <button class="fav-dept fav-detail-btn" data-fav-open="${i}" aria-label="${esc(r.uni)} ${esc(flat(deptDisp(r)))} ${esc(flat(r.jhname))} 상세 보기">${esc(deptDisp(r))} <span aria-hidden="true">↗</span></button>
+      <div class="fav-admission">${esc(flat(r.jhname))}</div>
       <div class="fav-meta"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span> 모집 ${fmtInt(r.enroll)} <span class="delta ${d.cls}">${d.txt}</span>
         · 입결 <b>${fmt(r.g[0])}</b>${stdTag(r)} · 경쟁 ${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1 <span class="impact-chip ${v.cls}">${v.label}</span></div>
       ${yoyHTML(r)}
     </div>
-    <div class="fav-ctrl"><button data-up="${bucket}:${pos}" ${pos === 0 ? 'disabled' : ''} title="위로">▲</button><button data-dn="${bucket}:${pos}" ${pos === lastIdx ? 'disabled' : ''} title="아래로">▼</button>
-      <button class="fav-sw" data-sw="${i}" title="${bucket === 'hope' ? '상향으로 이동' : '지원희망으로 이동'}">⇄</button><button class="fav-rm" data-rm="${i}" title="빼기">✕</button></div>
+    <div class="fav-ctrl"><button data-up="${bucket}:${pos}" ${pos === 0 ? 'disabled' : ''} aria-label="${esc(flat(r.jhname))} 우선순위 위로" title="위로">▲</button><button data-dn="${bucket}:${pos}" ${pos === lastIdx ? 'disabled' : ''} aria-label="${esc(flat(r.jhname))} 우선순위 아래로" title="아래로">▼</button>
+      <button class="fav-sw" data-sw="${i}" aria-label="${esc(flat(r.jhname))} ${bucket === 'hope' ? '상향으로 이동' : '지원희망으로 이동'}" title="${bucket === 'hope' ? '상향으로 이동' : '지원희망으로 이동'}">⇄</button><button class="fav-rm" data-rm="${i}" aria-label="${esc(r.uni)} ${esc(flat(deptDisp(r)))} ${esc(flat(r.jhname))} 지원카드에서 제거" title="빼기">✕</button></div>
   </div>`;
 }
 /* 지원카드 고사일 대조 — 같은 날 대학별고사가 있는 카드 조합을 '주의' 톤으로 알린다.
@@ -1708,11 +1932,11 @@ function favDateNotices() {
 /* 같은 날 항목 표기 — 같은 대학이 둘 이상이면 학과명을 붙여 구분한다. */
 function fcName(e, items) {
   const dup = items.filter(x => x.r.uni === e.r.uni).length > 1;
-  return `${esc(e.r.uni.replace('학교', ''))}${dup ? ` ${esc(deptDisp(e.r).slice(0, 12))}` : ''} ${esc(e.r.examKind || '고사')}`;
+  return `${esc(e.r.uni.replace('학교', ''))}${campusOf(e.r) ? `(${esc(campusOf(e.r))})` : ''}${dup ? ` ${esc(flat(deptDisp(e.r)))} · ${esc(flat(e.r.jhname))}` : ''} ${esc(e.r.examKind || '고사')}`;
 }
 
 function openFav() {
-  const inner = $('#favInner');
+  const inner = $('#favInner'), focusKey = dialogFocusKey($('#favInner'));
   const mk = (bucket, n) => { const arr = S.fav[bucket], out = []; for (let k = 0; k < n; k++) out.push(favSlotCard(arr[k] ?? null, bucket, k, arr.length - 1)); return out.join(''); };
   inner.innerHTML = `<div class="drawer-head"><div><h3>🗂️ 내 지원카드 <span class="muted">${favCount()}/${FAV_HOPE_MAX + FAV_REACH_MAX}</span></h3>
       <div class="muted" style="font-size:11.5px">담을 때 지원희망/상향을 선택하고, ▲▼ 순위변경 · ⇄ 칸 이동 · ✕ 빼기</div></div>
@@ -1739,14 +1963,24 @@ function openFav() {
   inner.querySelectorAll('[data-dn]').forEach(b => b.onclick = e => { e.stopPropagation(); const [bk, p] = b.dataset.dn.split(':'); moveFav(bk, +p, 1); });
   inner.querySelectorAll('[data-sw]').forEach(b => b.onclick = e => { e.stopPropagation(); switchBucket(+b.dataset.sw); });
   inner.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); removeFav(+b.dataset.rm); });
-  inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => { if (e.target.closest('button')) return; $('#favDrawer').classList.add('hidden'); openModal(+c.dataset.open); });
+  const showFavDetail = i => {
+    const scroll = $('#favDrawer').scrollTop, innerScroll = inner.scrollTop;
+    closeFavDrawer();
+    openModal(i, { returnLabel: '지원카드로 돌아가기', onClose: () => {
+      openFav(); $('#favDrawer').scrollTop = scroll; inner.scrollTop = innerScroll;
+      setTimeout(() => inner.querySelector(`[data-fav-open="${i}"]`)?.focus({ preventScroll: true }), 40);
+    } });
+  };
+  inner.querySelectorAll('[data-fav-open]').forEach(b => b.onclick = e => { e.stopPropagation(); showFavDetail(+b.dataset.favOpen); });
+  inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => { if (e.target.closest('button,a')) return; showFavDetail(+c.dataset.open); });
+  restoreDialogFocus(inner, focusKey, '[data-fav-open], #favClose');
 }
 function closeFavDrawer() { if ($('#favDrawer').classList.contains('hidden')) return; $('#favDrawer').classList.add('hidden'); closeDialog(); }
 $('#favDrawer').onclick = e => { if (e.target.id === 'favDrawer') closeFavDrawer(); };
 $('#favBtn').onclick = openFav;
 
 /* ============================================================
-   맞춤 추천 (BETA) — 내신·수능최저로 지원 가능권을 추려 준다.
+   맞춤 추천 (BETA) — 입력 내신과 공개 입결의 등급 차이를 비교한다.
    ⚠️ 설계 원칙 세 가지. 이 기능은 학생의 진로 결정에 영향을 주므로 과신을 유도하면 안 된다.
      ① 입결 '기준'이 5종 섞여 있다(cut70 12,000·avg 5,460·cut90·cut50·stage1).
         같은 2.5등급도 기준이 다르면 의미가 다르므로 **결과에 기준을 반드시 표기**한다.
@@ -1778,9 +2012,9 @@ const ADVISOR_WIDTHS = {
 function advisorBands(w) {
   const W = ADVISOR_WIDTHS[w] || ADVISOR_WIDTHS.normal, f = W.fit;
   return [
-    { key: 'safe',  label: '안정', desc: `입결보다 ${f}~${W.safe}등급 우수`,  min: f,            max: W.safe, cls: 'good' },
-    { key: 'fit',   label: '적정', desc: `입결과 ±${f}등급 이내`,             min: -f,           max: f,      cls: 'neu'  },
-    { key: 'reach', label: '도전', desc: `입결보다 ${f}~${W.reach}등급 부족`, min: -W.reach,     max: -f,     cls: 'bad'  },
+    { key: 'safe',  label: '내신상 여유', desc: `입결보다 ${f}~${W.safe}등급 우수`,  min: f,            max: W.safe, cls: 'good' },
+    { key: 'fit',   label: '내신상 근접', desc: `입결과 ±${f}등급 이내`,             min: -f,           max: f,      cls: 'neu'  },
+    { key: 'reach', label: '내신상 도전', desc: `입결보다 ${f}~${W.reach}등급 부족`, min: -W.reach,     max: -f,     cls: 'bad'  },
   ];
 }
 /** 내신 등급(myGrade)과 각 행의 입결을 비교해 밴드로 분류한다.
@@ -1839,62 +2073,98 @@ function advisorPick(opts) {
   }
   return { out, noGrade, filtered, blocked, notFinal, bands: BANDS };
 }
+const ADVISOR_PAGE_SIZE = 12;
+const advisorView = { gradeInput: null, sumInput: null, query: '', shown: {}, timer: null };
+function advisorRefresh(selector) {
+  const inner = $('#advisorInner'), scrollTop = inner.scrollTop;
+  const active = document.activeElement, start = active?.selectionStart, end = active?.selectionEnd;
+  renderAdvisor();
+  const target = selector ? inner.querySelector(selector) : null;
+  if (target) {
+    target.focus({ preventScroll: true });
+    if (typeof start === 'number' && target.setSelectionRange && target.type === 'text') target.setSelectionRange(start, end);
+  }
+  inner.scrollTop = scrollTop;
+}
 function renderAdvisor() {
   const inner = $('#advisorInner');
   const st = S.advisor;
+  if (advisorView.gradeInput == null) advisorView.gradeInput = String(st.grade ?? '');
+  if (advisorView.sumInput == null) advisorView.sumInput = String(st.leastSum ?? '');
+  const gradeText = advisorView.gradeInput.trim(), grade = Number(gradeText);
+  const gradeValid = gradeText !== '' && Number.isFinite(grade) && grade >= 1 && grade <= 9;
+  const gradeError = gradeText !== '' && !gradeValid ? '내신 등급은 1.00~9.00 사이의 숫자로 입력해 주세요.' : '';
+  const sumText = advisorView.sumInput.trim(), sum = Number(sumText), leastN = Number(st.leastN);
+  const sumValid = !st.leastN || (sumText !== '' && Number.isInteger(sum) && sum >= leastN && sum <= leastN * 9);
+  const sumError = st.leastN && sumText !== '' && !sumValid ? `${leastN}개 영역 합은 ${leastN}~${leastN * 9} 사이의 정수로 입력해 주세요.` : '';
   const chips = (name, items, cur) => items.map(([v, l]) =>
-    `<button class="chip${String(cur) === String(v) ? ' on' : ''}" data-adv="${name}" data-v="${esc(v)}">${esc(l)}</button>`).join('');
-  const res = st.grade ? advisorPick(st) : null;
+    `<button type="button" class="chip${String(cur) === String(v) ? ' on' : ''}" aria-pressed="${String(cur) === String(v)}" data-adv="${name}" data-v="${esc(v)}">${esc(l)}</button>`).join('');
+  const res = gradeValid && sumValid ? advisorPick({ ...st, grade, leastSum: sum }) : null;
+  const terms = advisorView.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const matches = o => terms.every(t => `${o.r.uni} ${deptDisp(o.r)} ${o.r.jhtype} ${o.r.jhname}`.toLocaleLowerCase().includes(t));
+  const matchCount = res ? res.bands.reduce((n, b) => n + res.out[b.key].filter(matches).length, 0) : 0;
 
   const card = (o) => {
     const r = o.r, v = V(r), std = CUT_LABELS[r.stdK26] || r.std26 || '기준 미표기';
-    return `<div class="adv-card" data-open="${r._i}">
-      <div class="adv-top"><b>${esc(r.uni)}</b> <span class="muted">${esc(r.region)}</span>
-        <span class="impact-chip ${v.cls}">${v.label}</span></div>
-      <div class="adv-dept">${esc(deptDisp(r))}</div>
-      <div class="muted">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</div>
-      <div class="adv-grade">입결 <b>${fmt(r.g[0])}</b> <span class="adv-std${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}">${esc(std)}</span>
-        <span class="adv-diff ${o.diff >= 0 ? 'good' : 'bad'}">${o.diff >= 0 ? '여유 ' : '부족 '}${Math.abs(o.diff).toFixed(2)}등급</span></div>
-      ${r.hasChoejeo ? `<div class="muted">최저 ${esc(r.choejeo)}</div>` : '<div class="muted">수능최저 없음</div>'}
-    </div>`;
+    return `<button type="button" class="adv-card" data-adv-open="${r._i}" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(r.jhname)} 상세 보기">
+      <span class="adv-top"><b>${esc(r.uni)}</b> <span class="muted">${esc(r.region)}</span>
+        <span class="impact-chip ${v.cls}">${v.label}</span></span>
+      <span class="adv-dept">${esc(deptDisp(r))}</span>
+      <span class="adv-meta muted">${esc(r.jhtype)} · ${esc(r.jhname)} · 모집 ${fmtInt(r.enroll)}명</span>
+      <span class="adv-grade">입결 <b>${fmt(r.g[0])}</b> <span class="adv-std">${esc(std)}</span>
+        <span class="adv-diff ${o.diff >= 0 ? 'good' : 'bad'}">${o.diff >= 0 ? '여유 ' : '부족 '}${Math.abs(o.diff).toFixed(2)}등급</span></span>
+      <span class="adv-meta muted">${r.hasChoejeo ? `수능최저 ${esc(r.choejeo)}` : '수능최저 없음'}</span>
+      <span class="adv-conditions">지원자격·대학별 내신 반영 미확인${r.hasChoejeo ? '<br>수능 필수영역·탐구 반영 미확인' : ''}</span>
+      <span class="adv-card-action">상세 조건 확인 →</span>
+    </button>`;
   };
 
   inner.innerHTML = `<div class="drawer-head">
       <div><h3>🧭 맞춤 추천 <span class="badge beta-badge">BETA</span></h3>
-      <div class="muted">내신과 수능최저로 지원 가능권을 추립니다. 참고용이며 합격을 보장하지 않습니다.</div></div>
-      <button class="modal-close" id="advClose">✕</button></div>
+      <div class="muted">입력 내신과 공개 입결의 등급 차이를 비교합니다. 합격 가능성이나 지원자격을 판정하지 않습니다.</div></div>
+      <button class="modal-close" id="advClose" aria-label="맞춤 추천 닫기">✕</button></div>
     <div class="adv-body">
       <div class="adv-form">
-        <div class="adv-row"><span class="adv-label">내신 등급</span>
-          <input type="number" id="advGrade" min="1" max="9" step="0.01" placeholder="예: 2.35"
-                 value="${st.grade ?? ''}" class="adv-input"> <span class="muted">1.00 ~ 9.00</span></div>
+        <div class="adv-row"><label class="adv-label" for="advGrade">내신 등급</label>
+          <input type="text" inputmode="decimal" id="advGrade" placeholder="예: 2.35" autocomplete="off"
+                 value="${esc(advisorView.gradeInput)}" class="adv-input" aria-invalid="${!!gradeError}" aria-describedby="advGradeHelp advGradeError"> <span id="advGradeHelp" class="muted">1.00 ~ 9.00</span></div>
+        <p id="advGradeError" class="adv-error" role="status">${gradeError}</p>
         <div class="adv-row"><span class="adv-label">구간 폭</span>
           <div class="chip-row">${chips('width', Object.entries(ADVISOR_WIDTHS).map(([k, v]) => [k, `${v.label} (±${v.fit})`]), st.width)}</div>
-          <span class="muted">적정 구간을 얼마나 좁게 볼지</span></div>
+          <span class="muted">내신상 근접 구간의 폭입니다.</span></div>
         <div class="adv-row"><span class="adv-label">학교 유형</span>
           <div class="chip-row">${chips('school', [['', '선택 안 함'], ['gen', '일반고·자율고'], ['voc', '특성화고·마이스터'], ['grad', '졸업생(N수)'], ['ged', '검정고시']], st.school)}</div></div>
         <div class="adv-row"><span class="adv-label">수능최저</span>
           <div class="chip-row">${chips('leastN', [['', '입력 안 함'], ['2', '2개 합'], ['3', '3개 합'], ['4', '4개 합']], st.leastN)}</div></div>
-        ${st.leastN ? `<div class="adv-row"><span class="adv-label">내 등급 합</span>
-          <input type="number" id="advSum" min="2" max="36" step="1" placeholder="예: 7" value="${st.leastSum ?? ''}" class="adv-input">
-          <span class="muted">${esc(st.leastN)}개 영역 합계 — 이 합으로 충족 가능한 전형만 보여줍니다</span></div>` : ''}
+        ${st.leastN ? `<div class="adv-row"><label class="adv-label" for="advSum">내 등급 합</label>
+          <input type="text" inputmode="numeric" id="advSum" placeholder="예: 7" autocomplete="off" value="${esc(advisorView.sumInput)}" class="adv-input" aria-invalid="${!!sumError}" aria-describedby="advSumHelp advSumError">
+          <span id="advSumHelp" class="muted">${esc(st.leastN)}개 영역의 합으로 좁힙니다. 필수영역·탐구 반영은 별도로 확인하세요.</span></div>
+          <p id="advSumError" class="adv-error" role="status">${sumError}</p>` : ''}
         <div class="adv-row"><span class="adv-label">계열</span>
           <div class="chip-row">${chips('cat', [['all', '전체'], ['medical', '메디컬'], ['engineering', '공학'], ['natural', '자연'], ['business', '상경'], ['nursing_health', '간호·보건'], ['teaching', '사범']], st.cat)}</div></div>
         <div class="adv-row"><span class="adv-label">지역</span>
           <div class="chip-row">${chips('region', ADVISOR_REGIONS, st.region)}</div></div>
       </div>
-      ${!st.grade ? `<div class="empty-state"><div class="es-ico">🧭</div>내신 등급을 입력하면 안정·적정·도전으로 나눠 보여드립니다.</div>`
+      ${!res ? `<div class="empty-state"><div class="es-ico">🧭</div>${gradeError || sumError ? '입력값을 수정하면 내신 비교 결과를 보여드립니다.' : gradeValid ? '선택한 수능 영역의 등급 합을 입력해 주세요.' : '내신 등급을 입력하면 공개 입결과의 차이를 구간별로 보여드립니다.'}</div>`
       : `<div class="adv-note">📌 입결 <b>기준이 대학마다 다릅니다</b>(70%컷·평균 등). 카드에 기준을 함께 표기했으니 같은 기준끼리 비교하세요.
+           <br>농어촌·지역인재·추천 자격과 서류·면접 평가는 반영하지 않았습니다. 각 카드의 상세 조건을 확인하세요.
            ${res.noGrade ? `입결 미공개·신설 <b>${fmtInt(res.noGrade)}건</b>은 판정에서 제외했습니다.` : ''}
            ${res.blocked ? `학교 유형으로 지원 불가한 <b>${fmtInt(res.blocked)}건</b>을 제외했습니다.` : ''}
            ${res.notFinal ? `입결이 <b>1단계 합격자 평균</b>으로만 공개된 <b>${fmtInt(res.notFinal)}건</b>은 최종 등록자 성적이 아니라 제외했습니다.` : ''}</div>
+         <div class="adv-search"><label for="advSearch">추천 결과에서 찾기</label>
+           <input type="text" id="advSearch" class="adv-input" value="${esc(advisorView.query)}" placeholder="대학·학과·전형명 검색" autocomplete="off">
+           ${advisorView.query ? '<button type="button" class="ghost-btn" id="advSearchClear">검색어 지우기</button>' : ''}
+           <span class="muted" role="status" aria-live="polite">${terms.length ? '검색 결과' : '내신 비교 결과'} ${fmtInt(matchCount)}개</span></div>
+         <p class="adv-sort muted">내신상 여유는 입결 등급 숫자가 작은 순, 근접·도전은 내 등급과 가까운 순입니다. 같은 기준끼리 비교하세요.</p>
          ${res.bands.map(b => {
-        const list = res.out[b.key];
+        const list = res.out[b.key].filter(matches), limit = advisorView.shown[b.key] || ADVISOR_PAGE_SIZE;
+        const displayed = Math.min(limit, list.length);
         return `<div class="adv-band" data-band="${b.key}"><h4><span class="impact-chip ${b.cls}">${b.label}</span>
             <span class="muted">${b.desc} · ${fmtInt(list.length)}개</span></h4>
-          ${list.length ? `<div class="adv-grid">${list.slice(0, 12).map(card).join('')}</div>
-            ${list.length > 12 ? `<div class="muted" style="padding:4px 2px">상위 12개만 표시 · 전체 ${fmtInt(list.length)}개</div>` : ''}`
-            : '<div class="muted" style="padding:6px 2px">해당 구간에 전형이 없습니다.</div>'}</div>`;
+          ${list.length ? `<div class="adv-grid">${list.slice(0, limit).map(card).join('')}</div>
+            <div class="adv-more"><span class="muted">${fmtInt(displayed)}개 표시 / 전체 ${fmtInt(list.length)}개</span>
+            ${displayed < list.length ? `<button type="button" class="ghost-btn" data-adv-more="${b.key}">${b.label} ${Math.min(ADVISOR_PAGE_SIZE, list.length - displayed)}개 더 보기</button>` : ''}</div>`
+            : `<div class="muted" style="padding:6px 2px">${terms.length ? '검색어와 일치하는 전형이 없습니다. 검색어를 바꾸거나 지워 보세요.' : '해당 구간에 전형이 없습니다. 구간 폭이나 계열·지역을 바꿔 보세요.'}</div>`}</div>`;
       }).join('')}`}
       ${res ? `<div class="adv-fb" id="advFb">
         <span class="fb-q">이 추천이 도움이 됐나요?</span>
@@ -1921,11 +2191,31 @@ function renderAdvisor() {
   $('#advClose').onclick = closeAdvisor;
   inner.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => {
     const k = b.dataset.adv, v = b.dataset.v;
+    clearTimeout(advisorView.timer);
     S.advisor[k] = v;
-    if (k === 'leastN' && !v) S.advisor.leastSum = null;
+    if (k === 'leastN' && !v) { S.advisor.leastSum = null; advisorView.sumInput = ''; }
+    advisorView.shown = {};
     track('advisor_filter', { field: k, value: v || '(해제)' });
-    save('advisor', S.advisor); renderAdvisor();
+    save('advisor', S.advisor); advisorRefresh(`[data-adv="${k}"][data-v="${v}"]`);
   });
+  inner.querySelectorAll('[data-adv-more]').forEach(b => b.onclick = () => {
+    const key = b.dataset.advMore, previous = advisorView.shown[key] || ADVISOR_PAGE_SIZE;
+    advisorView.shown[key] = previous + ADVISOR_PAGE_SIZE;
+    renderAdvisor();
+    const next = inner.querySelectorAll(`[data-band="${key}"] [data-adv-open]`)[previous];
+    next?.focus();
+  });
+  const search = $('#advSearch');
+  if (search) search.oninput = () => {
+    advisorView.query = search.value; advisorView.shown = {};
+    clearTimeout(advisorView.timer);
+    advisorView.timer = setTimeout(() => advisorRefresh('#advSearch'), 250);
+  };
+  const searchClear = $('#advSearchClear');
+  if (searchClear) searchClear.onclick = () => {
+    clearTimeout(advisorView.timer); advisorView.query = ''; advisorView.shown = {};
+    advisorRefresh('#advSearch');
+  };
   /* 인앱 피드백. 교사가 따로 연락하지 않아도 그 자리에서 남길 수 있게 한다.
      👎를 누르면 한 줄 이유를 받는다 — '왜 아쉬웠는지'가 개선의 실마리다. */
   inner.querySelectorAll('[data-fb]').forEach(b => b.onclick = () => {
@@ -1945,29 +2235,39 @@ function renderAdvisor() {
 
   const gi = $('#advGrade');
   if (gi) gi.oninput = () => {
-    const v = parseFloat(gi.value);
-    S.advisor.grade = (v >= 1 && v <= 9) ? v : null;
+    advisorView.gradeInput = gi.value; advisorView.shown = {};
+    const v = Number(gi.value);
+    S.advisor.grade = (gi.value.trim() && Number.isFinite(v) && v >= 1 && v <= 9) ? v : null;
     save('advisor', S.advisor);
-    clearTimeout(gi._t); gi._t = setTimeout(() => {
+    clearTimeout(advisorView.timer); advisorView.timer = setTimeout(() => {
       track('advisor_grade', { grade: S.advisor.grade ?? '', valid: S.advisor.grade ? 1 : 0 });
-      renderAdvisor(); $('#advGrade')?.focus();
+      advisorRefresh('#advGrade');
     }, 400);
   };
   const si = $('#advSum');
   if (si) si.oninput = () => {
-    const v = parseInt(si.value, 10);
-    S.advisor.leastSum = Number.isFinite(v) ? v : null;
+    advisorView.sumInput = si.value; advisorView.shown = {};
+    const v = Number(si.value), n = Number(S.advisor.leastN);
+    S.advisor.leastSum = (si.value.trim() && Number.isInteger(v) && v >= n && v <= n * 9) ? v : null;
     save('advisor', S.advisor);
-    clearTimeout(si._t); si._t = setTimeout(() => { renderAdvisor(); $('#advSum')?.focus(); }, 400);
+    clearTimeout(advisorView.timer); advisorView.timer = setTimeout(() => advisorRefresh('#advSum'), 400);
   };
-  inner.querySelectorAll('[data-open]').forEach(c => c.onclick = e => {
-    if (e.target.closest('button')) return;
-    // 추천 카드를 실제로 눌러 상세까지 갔는지 — 추천이 '보기만 하는 기능'인지 가른다
+  inner.querySelectorAll('[data-adv-open]').forEach(c => c.onclick = () => {
     track('advisor_card_open', { band: c.closest('.adv-band')?.dataset.band || '' });
-    closeAdvisor(); openModal(+c.dataset.open);
+    const id = +c.dataset.advOpen, scrollTop = inner.scrollTop;
+    closeAdvisor();
+    openModal(id, { returnLabel: '추천 결과로 돌아가기', onClose: () => {
+      renderAdvisor();
+      inner.scrollTop = scrollTop;
+      setTimeout(() => {
+        if ($('#advisorDrawer').classList.contains('hidden')) return;
+        inner.querySelector(`[data-adv-open="${id}"]`)?.focus({ preventScroll: true });
+        inner.scrollTop = scrollTop;
+      }, 50);
+    } });
   });
 }
-function closeAdvisor() { if ($('#advisorDrawer').classList.contains('hidden')) return; $('#advisorDrawer').classList.add('hidden'); closeDialog(); }
+function closeAdvisor() { clearTimeout(advisorView.timer); if ($('#advisorDrawer').classList.contains('hidden')) return; $('#advisorDrawer').classList.add('hidden'); closeDialog(); }
 
 /* ----- PDF 저장 (인쇄) — 지원카드·비교함을 A4 인쇄용 문서로 렌더 후 window.print() ----- */
 /* 원자료 비고(note)는 한 줄 메모라 학생에겐 불친절하다 — 자주 나오는 패턴을 풀어쓴 해설로 확장한다.
@@ -2017,8 +2317,8 @@ function printFav() {
     const dirTxt = x => x == null ? '' : x.basisMismatch ? '기준상이' : ({ easier: '유리', harder: '불리', flat: '유지', down: '유리', up: '불리' }[x.dir] || '');
     return `<tr>
       <td class="pr-rank">${label}</td>
-      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}</span><br>${esc(deptDisp(r))}${(() => { const ap = applyInfo(r.uni); return ap ? `<br><span class="pr-mut">접수 ${ap.txt}</span>` : ''; })()}</td>
-      <td>${esc(r.jhtype)}<br><span class="pr-mut">${esc(r.jhname)}</span></td>
+      <td><b>${esc(r.uni)}</b> <span class="pr-mut">${esc(r.region)}${campusOf(r) ? ' · ' + esc(campusOf(r)) + ' 캠퍼스' : ''}</span><br>${esc(deptDisp(r))}${(() => { const ap = applyInfo(r.uni); return ap ? `<br><span class="pr-mut">접수 ${ap.txt}</span>` : ''; })()}</td>
+      <td>${esc(r.jhtype)}<br><b>${esc(flat(r.jhname))}</b></td>
       <td class="pr-c">${fmtInt(r.enroll)}<br><span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span></td>
       <td class="pr-c">${r.hasChoejeo ? esc(r.choejeo) : '<span class="pr-mut">없음</span>'}</td>
       <td class="pr-c"><b>${fmt(r.g[0])}</b>${CUT_SHORT[r.stdK26] && r.g[0] != null ? ` <span class="pr-mut">(${CUT_SHORT[r.stdK26]})</span>` : ''}<br><span class="pr-mut">${r.g[1] == null ? '' : fmt(r.g[1]) + '→'} ${dirTxt(g)}</span></td>
@@ -2042,25 +2342,28 @@ function printCompare() {
   const items = [...S.compare].map(i => ROWS[i]);
   if (!items.length) { toast('비교함이 비어 있습니다. 표의 ⇄ 버튼에서 먼저 담아주세요.'); return; }
   const rowM = (lab, fn) => `<tr><td class="pr-rowlab">${lab}</td>${items.map(r => `<td>${fn(r)}</td>`).join('')}</tr>`;
-  const body = `<table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
-      `<th><b>${esc(r.uni)}</b><br><span class="pr-mut">${esc(flat(deptDisp(r)))}</span></th>`).join('')}</tr></thead><tbody>
+  const body = `<p class="pr-mut">${comparisonBasisNotice(items)}</p><table class="pr-cmp"><thead><tr><th>구분</th>${items.map(r =>
+      `<th><b>${esc(r.uni)}</b>${campusOf(r) ? `<br>${esc(campusOf(r))} 캠퍼스` : ''}<br>${esc(flat(deptDisp(r)))}<br><span class="pr-mut">${esc(flat(r.jhname))}</span></th>`).join('')}</tr></thead><tbody>
       ${rowM('올해 유불리', r => `<span class="pr-vd ${V(r).cls}">${V(r).label}</span>`)}
       ${rowM('계열/지역', r => esc(r.gye) + ' · ' + esc(r.region))}
       ${rowM('전형', r => esc(r.jhtype) + '<br><span class="pr-mut">' + esc(r.jhname) + '</span>')}
+      ${comparisonRequirements(rowM)}
       ${rowM('모집(전년대비)', r => `${fmtInt(r.enroll)} <span class="pr-mut">${r.dkind === 'changed' ? '전형변경' : esc(r.prev || '-')}</span>`)}
       ${rowM('수능최저', r => r.hasChoejeo ? esc(r.choejeo) : '없음')}
       ${rowM('입결 2025→2026', r => `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + (CUT_SHORT[r.stdK26] && r.g[0] != null ? ` <span class="pr-mut">(${CUT_SHORT[r.stdK26]})</span>` : ''))}
+      ${rowM('입결 기준 · 2026', r => esc(r.std26 || '기준 자료 없음'))}
       ${rowM('경쟁률 2025→2026', r => `${r.c[1] == null ? '–' : r.c[1].toFixed(1)} → <b>${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1</b>`)}
       ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
     </tbody></table>`;
   printDoc('전형 비교', `${items.length}개 전형 비교`, body);
 }
 
-/* ----- 변화 인사이트 (주요 대학 2028 vs 2027) ----- */
+/* ----- 변화 인사이트 (2027 vs 2026) ----- */
 const INS = window.IPSI_INSIGHTS || { meta: {}, order: [], unis: {} };
 let _insUni = (INS.order || []).find(u => INS.unis[u]) || (INS.order || [])[0] || null;
+let _insQuery = '';
 function openInsight(uni) {
-  if (uni && INS.unis[uni]) _insUni = uni;
+  if (uni && INS.unis[uni]) { _insUni = uni; _insQuery = ''; }
   if (!_insUni || !INS.unis[_insUni]) _insUni = (INS.order || []).find(u => INS.unis[u]);
   renderInsightRail(); renderInsightDetail(_insUni);
   const v = $('#insightView'); const wasOpen = !v.classList.contains('hidden');
@@ -2102,19 +2405,51 @@ const insUniCount = () => (INS.order || []).filter(u => INS.unis[u] && !isIssueK
 
 function renderInsightRail() {
   const rail = $('#insightRail');
+  if (!$('#insightSearch')) {
+    rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>
+      <div class="ins-search"><label for="insightSearch">대학·주제 찾기</label>
+        <div class="ins-search-row"><input id="insightSearch" type="search" placeholder="예: 경국대, 수능최저" autocomplete="off" aria-controls="insightResults" />
+          <button id="insightSearchClear" class="ghost-btn" aria-label="인사이트 검색어 지우기">지우기</button></div>
+        <div id="insightSearchStatus" class="muted" role="status" aria-live="polite"></div></div>
+      <div id="insightResults" class="ins-rail-results"></div>
+      <div id="insightSelectionStatus" class="sr-only" role="status" aria-live="polite"></div>`;
+    $('#insightSearch').oninput = e => { _insQuery = e.target.value; renderInsightResults(); };
+    $('#insightSearchClear').onclick = () => {
+      _insQuery = ''; $('#insightSearch').value = ''; renderInsightResults(); $('#insightSearch').focus();
+    };
+  }
+  $('#insightSearch').value = _insQuery;
+  renderInsightResults();
+}
+function renderInsightResults() {
+  const results = $('#insightResults');
   const item = u => {
     const d = INS.unis[u], active = u === _insUni;
-    return `<button class="ins-rail-item${active ? ' active' : ''}${d ? '' : ' soon'}" data-uni="${esc(u)}"${d ? '' : ' disabled'}>
+    return `<button class="ins-rail-item${active ? ' active' : ''}${d ? '' : ' soon'}" data-uni="${esc(u)}" aria-controls="insightMain"${active ? ' aria-current="true"' : ''}${d ? '' : ' disabled'}>
       <span class="irl-name">${esc(u)}</span>${d ? (d.tier ? `<span class="ins-tier">${esc(d.tier)}</span>` : '') : '<span class="ins-soon">준비중</span>'}</button>`;
   };
-  // 축 분리: 이슈·특집(주제별 총정리)을 상단에, 대학별을 하단에.
-  const order = INS.order || [];
+  const norm = s => s.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+  const query = norm(_insQuery);
+  const order = (INS.order || []).filter(u => !query || norm(`${u} ${u.replace(/대학교/g, '대')} ${INS.unis[u]?.tier || ''}`).includes(query));
   const issues = order.filter(isIssueKey);
   const unis = order.filter(u => !issues.includes(u));
-  rail.innerHTML = `<div class="ins-rail-head"><h3>📰 변화 인사이트</h3><div class="muted">${esc(INS.meta.compare || '')}</div></div>`
-    + (issues.length ? `<div class="ins-rail-group">🔎 이슈·특집 <span class="muted">주제별 총정리</span></div>` + issues.map(item).join('') : '')
-    + `<div class="ins-rail-group">🏫 대학별 <span class="muted">${insUniCount()}개 대학</span></div>` + unis.map(item).join('');
-  rail.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => { _insUni = b.dataset.uni; renderInsightRail(); renderInsightDetail(_insUni); track('open_insight', { uni: _insUni }); $('#insightMain').scrollTop = 0; });
+  $('#insightSearchClear').disabled = !_insQuery;
+  $('#insightSearchStatus').textContent = `대학 ${unis.length}개 · 주제 ${issues.length}개`;
+  results.innerHTML = (issues.length ? `<div class="ins-rail-group">🔎 이슈·특집</div>` + issues.map(item).join('') : '')
+    + (unis.length ? `<div class="ins-rail-group">🏫 대학별</div>` + unis.map(item).join('') : '')
+    + (!order.length ? '<p class="ins-search-empty">검색 결과가 없습니다. 대학명 일부를 입력하거나 검색어를 지워주세요.</p>' : '');
+  results.querySelectorAll('.ins-rail-item:not([disabled])').forEach(b => b.onclick = () => {
+    _insUni = b.dataset.uni;
+    // Keep the activated button mounted so keyboard focus and list position survive a university change.
+    results.querySelectorAll('.ins-rail-item').forEach(button => {
+      const active = button.dataset.uni === _insUni;
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
+    });
+    renderInsightDetail(_insUni);
+    $('#insightSelectionStatus').textContent = `${_insUni} 인사이트를 표시했습니다.`;
+    track('open_insight', { uni: _insUni });
+  });
 }
 // 서술체 문장을 두괄식(결론) + 개조식(글머리표)으로 분해
 function bulletize(text) {
@@ -2165,6 +2500,7 @@ function renderInsightDetail(uni) {
     </div>
     <div class="ins-scroll">
       ${tags ? `<div class="ins-tags">${tags}</div>` : ''}
+      ${!isIssueKey(uni) && window.officialLinksHTML ? window.officialLinksHTML({ uni }) : ''}
       ${oneLineHtml}
       ${sections}
       ${verdict ? `<div class="ins-section"><h4>🎯 학생·학부모 관점 해석</h4><div class="ins-verdict">${verdict}</div></div>` : ''}
@@ -2178,9 +2514,10 @@ $('#insightBtn').onclick = () => openInsight();
 /* ----- topbar / theme / search / mobile ----- */
 let searchT;
 const syncSearchClear = () => $('#searchClear').classList.toggle('hidden', !S.search.trim());
-$('#search').oninput = e => { S.search = e.target.value; syncSearchClear(); clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
-$('#searchClear').onclick = () => { S.search = ''; $('#search').value = ''; syncSearchClear(); renderAll(); $('#search').focus(); };
+$('#search').oninput = e => { S.view = 'results'; S.search = e.target.value; syncSearchClear(); clearTimeout(searchT); searchT = setTimeout(() => renderAll(), 180); };
+$('#searchClear').onclick = () => { clearTimeout(searchT); S.search = ''; $('#search').value = ''; syncSearchClear(); renderAll(); $('#search').focus(); };
 $('#resetBtn').onclick = () => {
+  clearTimeout(searchT); S.stdCut = ''; S.cutGrade = 9; S.examWhen = '';
   S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
   syncSearchClear(); renderFilters(); renderAll();
 };
@@ -2188,6 +2525,7 @@ $('#resetBtn').onclick = () => {
    상세 필터 해제(resetBtn)와 달리 **계열 카테고리와 입결 컷까지** 전부 되돌리고 맨 위로 올린다.
    검색 도중 길을 잃었을 때 한 번에 원점으로 오는 탈출구다. */
 function goHome() {
+  clearTimeout(searchT); S.view = 'results';
   S.cat = 'all'; S.jhtypes.clear(); S.changes.clear();
   S.region = ''; S.minLeast = ''; S.leastN = ''; S.leastSum = null;
   S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
@@ -2199,6 +2537,10 @@ function goHome() {
   track('go_home');
 }
 $('#homeBtn').onclick = goHome;
+$('#universitySuggestions').innerHTML = UNIVERSITY_NAMES.map(u => `<option value="${esc(u)}"></option>`).join('');
+['results', 'analysis'].forEach(view => {
+  $('#' + view + 'ViewBtn').onclick = () => { S.view = view; renderView(); persistView(); };
+});
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;   // 아이콘·로고는 CSS가 data-theme로 전환
   save('theme', t);
@@ -2281,8 +2623,13 @@ applySchedule();
 $('#footNote').innerHTML = `<b>이투스247학원</b> &nbsp; '올해 유불리 예상'과 '최저 변화'는 공개 데이터 기반 자동 분석 결과로 실제 입시 결과와 다를 수 있으니, 반드시 각 대학 모집요강을 확인하세요.`;
 applyTheme(load('theme', 'light'));   // 기본 테마 = 라이트
 // 공유 링크로 들어온 경우: 지원카드·비교함을 복원하고 해당 서랍을 열어 바로 보여준다.
+const _program = new URLSearchParams(location.search).get('program');
+restoreView();
+const _restoredPage = S.page;
 const _shared = applyShareURL();
 updateCompareBtn(); updateFavBtn();
 renderCatList(); renderFilters(); renderAll(); renderInsightBanner();
+if (_restoredPage > 1) { S.page = _restoredPage; renderTable(); }
+if (_program) { const i = indexOfCode(_program); if (i != null) setTimeout(() => openModal(i), 60); else toast('해당 전형을 찾을 수 없습니다. 대학·학과명으로 검색해주세요.'); }
 if (_shared) setTimeout(() => { if (_shared.fav) openFav(); else if (_shared.cmp) openCompare(); }, 60);
 })();
