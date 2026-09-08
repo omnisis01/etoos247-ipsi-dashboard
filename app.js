@@ -849,7 +849,7 @@ function scaleWarn(r) {
   if (a.length < 2) return '';
   const hi = Math.max(...a), lo = Math.min(...a);
   if (!r.vScale && (lo <= 0 || hi / lo < 3)) return '';
-  return ` <span class="basis-warn" title="이 대학은 해마다 환산점수 만점이 바뀌었어요 (${a.map(x => x.toFixed(1)).join(' / ')}). 만점이 다르면 점수를 나란히 놓아도 오른 건지 내린 건지 알 수 없습니다.">⚠ 만점이 해마다 달라 비교할 수 없어요</span>`;
+  return ` <span class="basis-warn" title="이 대학은 해마다 환산점수 만점 기준이 달랐어요 (${a.map(x => x.toFixed(1)).join(' / ')}). 기준이 다르면 점수를 나란히 놓아도 오른 건지 내린 건지 알 수 없습니다.">⚠ 만점 기준이 해마다 달라 비교할 수 없어요</span>`;
 }
 function basisWarn(r) {
   const ys = [['2026', r.std26], ['2025', r.std25], ['2024', r.std24]]
