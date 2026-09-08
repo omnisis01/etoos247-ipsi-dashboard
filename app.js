@@ -187,10 +187,14 @@ ROWS.forEach(r => {
   // 면접 유무. 판정 근거는 전형방법 원문뿐이다 — jhname 만으로 잡히는 행은 실측 0건이었다.
   // ⚠️ 같은 전형 안에서도 학과에 따라 면접 유무가 갈린다(경상대 등 91개 전형). 그래서 행 단위로 본다.
   r.hasItv = /면접/.test((r.method || '') + (r.jhname || ''));
-  // 전형 성격. jhtype(교과/종합/논술/실기/특기자)과 **다른 축**이다 — 지역인재전형도 교과 아니면 종합이다.
-  // 셋이 배타라 합이 전체와 같다: 지역인재 2,440 · 기타(특별) 8,132 · 일반 15,845 = 26,417.
-  r.jhSpecial = /지역인재/.test(r.jhname || '') ? 'jiyeok'
-    : SPECIAL_JH.test(r.jhname || '') ? 'etc' : 'normal';
+  // 전형 버킷 — 필터·대학패널이 함께 쓰는 **단일 축**이다. 특별전형이면 jhtype 을 덮어쓴다.
+  // ⚠️ 처음엔 jhtype 과 별개 축(AND)으로 만들었는데 계속 오해를 샀다 — '교과·종합만 골랐는데
+  //    기회균등·특수교육대상자가 나온다'(사용자 제보 2회). 기타는 글자 그대로 기타여야 한다.
+  //    그래서 한 행은 정확히 한 버킷에만 속한다:
+  //    기타 8,132 · 교과 7,424 · 종합 6,207 · 지역인재 2,440 · 논술 1,292 · 실기 892 · 특기자 30 = 26,417.
+  //    즉 '학생부교과'는 이제 **일반 교과**만 뜻한다(특별전형 4,075행은 기타로 빠진다).
+  r.jhBucket = /지역인재/.test(r.jhname || '') ? '지역인재'
+    : SPECIAL_JH.test(r.jhname || '') ? '기타전형' : r.jhtype;
   r.examKind = /논술/.test(r.jhtype + (r.jhname || '')) ? '논술'
     : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
     : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
@@ -247,7 +251,7 @@ const CATS = D.cats;
 const CAT_BY = {}; CATS.forEach(c => CAT_BY[c.key] = c);
 // 표기 교정(사용자 요청): '비상경'만으로는 인문 계열임이 안 드러난다. 데이터 재빌드와 무관하게 유지되도록 여기서 덮는다.
 { const c = CATS.find(x => x.label === '비상경'); if (c) c.label = '인문(비상경)'; }
-const JHTYPES = ['학생부교과', '학생부종합', '논술', '실기/실적', '특기자'];
+const JHTYPES = ['학생부교과', '학생부종합', '논술', '실기/실적', '특기자', '지역인재', '기타전형'];
 const REGIONS = [...new Set(ROWS.map(r => r.region).filter(Boolean))].sort();
 // '올해 유불리 예상' 추천은 메디컬(전 대학) 또는 상위권 본교(SKY·서성한·중경외시·건동홍)로 한정
 const TOP_UNIS = new Set(['서울대학교', '연세대학교', '고려대학교', '서강대학교', '성균관대학교', '한양대학교',
@@ -265,7 +269,7 @@ const uniRank = u => { const i = UNI_RANK.indexOf(u); return i < 0 ? 999 : i; };
 /* 지원희망은 법정 6장 + 후보 4칸(7~10번, '후보' 배지로 구분) — 넓게 담고 6장으로 추리는 용도. */
 const FAV_HOPE_MAX = 10, FAV_REACH_MAX = 3, SUSI_LIMIT = 6;
 const S = {
-  cat: 'all', search: '', jhtypes: new Set(), jhSpecials: new Set(), region: '', minLeast: '', interview: '', view: 'results',
+  cat: 'all', search: '', jhtypes: new Set(), region: '', minLeast: '', interview: '', view: 'results',
   changes: new Set(), sort: 'impact', sortDir: -1,
   examWhen: '',                 // '' | 'post' | 'pre' — 대학별고사 시기(수시 납치 회피용)
   leastN: '', leastSum: null,   // 수능최저 검색: 합산 영역 수('2'|'3'|'4') + 내 등급 합. 충족 가능 매칭
@@ -631,11 +635,10 @@ function applyFilters() {
   const SEARCH_TOKENS = q ? q.split(/\s+/).filter(Boolean).map(expandToken) : [];
   FILTERED = ROWS.filter(r => {
     if (S.cat !== 'all' && !r.cats.includes(S.cat)) return false;
-    if (S.jhtypes.size && !S.jhtypes.has(r.jhtype)) return false;
+    if (S.jhtypes.size && !S.jhtypes.has(r.jhBucket)) return false;
     if (S.region && r.region !== S.region) return false;
     if (S.minLeast === 'yes' && !r.hasChoejeo) return false;
     if (S.minLeast === 'no' && r.hasChoejeo) return false;
-    if (S.jhSpecials.size && !S.jhSpecials.has(r.jhSpecial)) return false;
     if (S.interview === 'yes' && !r.hasItv) return false;
     if (S.interview === 'no' && r.hasItv) return false;
     if (!passChange(r)) return false;
@@ -733,7 +736,7 @@ function renderSoft(preserveCut = false) { applyFilters(); S.page = 1; renderCat
 const VIEW_KEYS = ['q', 'cat', 'region', 'types', 'changes', 'minimum', 'least', 'sum', 'cut', 'grade', 'exam', 'sort', 'dir', 'page', 'view'];
 function viewValues() {
   return { q: S.search, cat: S.cat, region: S.region, types: [...S.jhtypes].join(','), changes: [...S.changes].join(','),
-    spec: [...S.jhSpecials], minimum: S.minLeast, itv: S.interview, least: S.leastN, sum: S.leastSum, cut: S.stdCut, grade: S.cutGrade, exam: S.examWhen,
+    minimum: S.minLeast, itv: S.interview, least: S.leastN, sum: S.leastSum, cut: S.stdCut, grade: S.cutGrade, exam: S.examWhen,
     sort: S.sort, dir: S.sortDir, page: S.page, view: S.view };
 }
 function persistView() {
@@ -759,7 +762,6 @@ function restoreView() {
   S.changes = new Set(String(v.changes || '').split(',').filter(t => ['new', 'up', 'down', 'changed', 'ease', 'tighten'].includes(t)));
   S.minLeast = ['yes', 'no'].includes(v.minimum) ? v.minimum : '';
   S.interview = ['yes', 'no'].includes(v.itv) ? v.itv : '';
-  S.jhSpecials = new Set((Array.isArray(v.spec) ? v.spec : []).filter(k => ['normal', 'jiyeok', 'etc'].includes(k)));
   S.leastN = ['1', '2', '3', '4', 'etc'].includes(String(v.least)) ? String(v.least) : '';
   S.leastSum = S.leastN && S.leastN !== 'etc' ? validNumber(v.sum, 1, 36, +S.leastN * 2) : null;
   S.stdCut = CUT_LABELS[v.cut] ? v.cut : '';
@@ -790,7 +792,6 @@ function activeFilterItems() {
   if (S.cat !== 'all') items.push(['cat', CAT_BY[S.cat].label]);
   if (S.search) items.push(['search', '검색 ' + S.search]);
   S.jhtypes.forEach(t => items.push(['type:' + t, t]));
-  S.jhSpecials.forEach(k => items.push(['spec:' + k, { normal: '일반전형', jiyeok: '지역인재', etc: '기타전형' }[k]]));
   if (S.region) items.push(['region', S.region]);
   if (S.minLeast) items.push(['minLeast', '수능최저 ' + (S.minLeast === 'yes' ? '있음' : '없음')]);
   if (S.interview) items.push(['interview', '면접 ' + (S.interview === 'yes' ? '있음' : '없음')]);
@@ -805,7 +806,6 @@ function clearActiveFilter(key) {
   if (key === 'cat') S.cat = 'all';
   else if (key === 'search') { S.search = ''; $('#search').value = ''; syncSearchClear(); }
   else if (key.startsWith('type:')) S.jhtypes.delete(key.slice(5));
-  else if (key.startsWith('spec:')) S.jhSpecials.delete(key.slice(5));
   else if (key.startsWith('change:')) S.changes.delete(key.slice(7));
   else if (key === 'least') { S.leastN = ''; S.leastSum = null; }
   else if (key === 'cut') { S.stdCut = ''; S.cutGrade = 9; }
@@ -990,23 +990,15 @@ function renderFilters() {
   const g1 = el('div', 'f-group');
   g1.innerHTML = '<div class="f-title">전형유형</div>';
   const r1 = el('div', 'chip-row');
+  const JH_TIP = {
+    '지역인재': '전형명에 지역인재가 붙은 전형 (2,440건)',
+    '기타전형': '기회균형·농어촌·사회배려·특성화고·특수교육대상자 등 특별전형 전부 (8,132건, 지역인재 제외)',
+  };
   JHTYPES.forEach(t => {
     const c = el('button', 'chip' + (S.jhtypes.has(t) ? ' on' : ''), esc(t));
+    c.title = JH_TIP[t] || `${t} 일반 모집 — 지역인재·특별전형은 각각의 칩에 있습니다`;
     c.setAttribute('aria-pressed', String(S.jhtypes.has(t)));   // 색만으로는 켜짐을 알 수 없다
     c.onclick = () => { S.jhtypes.has(t) ? S.jhtypes.delete(t) : S.jhtypes.add(t); renderSoft(); renderFilters(); };
-    r1.appendChild(c);
-  });
-  // 전형 성격 — 전형유형과 **다른 축**이라 전형유형 선택과 AND 로 걸린다(교과 ∩ 지역인재 = 1,879).
-  // 같은 줄에 두되 구분선으로 축이 다름을 드러낸다.
-  const sep = el('span', 'chip-sep'); sep.setAttribute('aria-hidden', 'true'); r1.appendChild(sep);
-  const axis = el('span', 'chip-axis', '성격'); axis.title = '위 전형유형과 함께(AND) 걸립니다'; r1.appendChild(axis);
-  [['normal', '일반전형'], ['jiyeok', '지역인재'], ['etc', '기타전형']].forEach(([k, lab]) => {
-    const c = el('button', 'chip' + (S.jhSpecials.has(k) ? ' on' : ''), lab);
-    c.title = k === 'normal' ? '지역인재·특별전형이 아닌 일반 모집 (15,845건)'
-      : k === 'jiyeok' ? '전형명에 지역인재가 붙은 전형 (2,440건)'
-      : '농어촌·기회균형·특성화고·사회통합·특수교육대상자 등 특별전형 (8,132건, 지역인재 제외)';
-    c.setAttribute('aria-pressed', String(S.jhSpecials.has(k)));
-    c.onclick = () => { S.jhSpecials.has(k) ? S.jhSpecials.delete(k) : S.jhSpecials.add(k); renderSoft(); renderFilters(); };
     r1.appendChild(c);
   });
   g1.appendChild(r1); box.appendChild(g1);
@@ -1090,7 +1082,7 @@ function renderFilters() {
     const rv = g5.querySelector('.range-val'); if (rv) rv.textContent = FILTERED.length.toLocaleString() + '건 후보';
   };
   // 접힘 상태에서도 몇 개 걸려 있는지 보이게 한다 — 안 그러면 접어 둔 필터를 잊는다.
-  const onCount = (S.jhtypes.size + S.jhSpecials.size + S.changes.size + (S.region ? 1 : 0)
+  const onCount = (S.jhtypes.size + S.changes.size + (S.region ? 1 : 0)
     + (S.minLeast ? 1 : 0) + (S.interview ? 1 : 0) + (S.leastN ? 1 : 0) + (S.examWhen ? 1 : 0));
   const fo = $('#filterOnCount'); if (fo) fo.textContent = onCount ? `${onCount}개 적용 중` : '';
   const fb = $('#filterBox'); if (fb) fb.classList.toggle('has-on', onCount > 0);
@@ -1127,7 +1119,7 @@ function renderCatHeader() {
 /* ----- 대학 단위 전형별 학과 요약 -----
    검색·필터 결과가 한 대학으로 좁혀지면, 전형유형(교과/종합/논술/실기)별로
    전형→학과를 정렬해 한눈에 보여준다(사용자 요청). 여러 대학이 섞이면 숨긴다. */
-const JHTYPE_ORDER = ['학생부교과', '학생부종합', '논술', '실기/실적'];
+const JHTYPE_ORDER = ['학생부교과', '학생부종합', '논술', '실기/실적', '지역인재', '기타전형'];
 function renderUniPanel() {
   const box = $('#uniPanel');
   if (!box) return;
@@ -1148,7 +1140,7 @@ function uniPanelHTML(label, rows) {
   const uni = rows[0] ? rows[0].uni : label;
   const byType = {};
   rows.forEach(r => {
-    const t = JHTYPE_ORDER.includes(r.jhtype) ? r.jhtype : '기타';
+    const t = JHTYPE_ORDER.includes(r.jhBucket) ? r.jhBucket : '기타';
     ((byType[t] = byType[t] || {})[r.jhname] = byType[t][r.jhname] || []).push(r);
   });
   const typeKeys = [...JHTYPE_ORDER, '기타'].filter(t => byType[t]);
@@ -1277,10 +1269,10 @@ function renderHighlights() {
   if (S.search.trim()) {
     // 검색 중엔 관련도 교차 배치 대신 대학 서열순(건동홍숙까지, 이후 가나다).
     // 같은 대학 안에서는 교과(추천) → 학종 → 논술 → 실기 순.
-    const ji = t => { const i = JHTYPE_ORDER.indexOf(t); return i < 0 ? 9 : i; };
+    const ji = t => { const i = JHTYPE_ORDER.indexOf(t); return i < 0 ? 9 : i; };  // r.jhBucket 기준
     pool.sort((a, b) => uniRank(a.uni) - uniRank(b.uni)
       || (uniRank(a.uni) === 999 ? a.uni.localeCompare(b.uni, 'ko') : 0)
-      || ji(a.jhtype) - ji(b.jhtype)
+      || ji(a.jhBucket) - ji(b.jhBucket)
       || a.jhname.localeCompare(b.jhname, 'ko'));
     top = pool.slice(0, 12);
   } else if (S.hlFilter === 'all') {                // 유리·불리·신설 교차 배치(편향 방지)
@@ -1542,7 +1534,6 @@ function renderTable() {
     if (S.region) on.push(`지역 ${esc(S.region)}`);
     if (S.jhtypes.size) on.push(`전형유형 ${[...S.jhtypes].map(esc).join('·')}`);
     if (S.changes.size) on.push(`변화 ${[...S.changes].length}종`);
-    if (S.jhSpecials.size) on.push('전형 성격');
     if (S.minLeast) on.push('수능최저 조건');
     if (S.interview) on.push('면접 조건');
     if (S.stdCut) on.push('과거 입결 조건');
@@ -2579,14 +2570,14 @@ $('#search').oninput = e => { S.view = 'results'; S.search = e.target.value; syn
 $('#searchClear').onclick = () => { clearTimeout(searchT); S.search = ''; $('#search').value = ''; syncSearchClear(); renderAll(); $('#search').focus(); };
 $('#resetBtn').onclick = () => {
   clearTimeout(searchT); S.stdCut = ''; S.cutGrade = 9; S.examWhen = '';
-  S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
+  S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = ''; S.leastN = ''; S.leastSum = null; S.search = ''; $('#search').value = '';
   syncSearchClear(); renderFilters(); renderAll();
 };
 // 전체 초기화 — 계열 카테고리·입결 컷까지 되돌린다. goHome 과 같은 범위지만 사이드바를 닫거나
 // 맨 위로 올리지 않는다(필터 상자가 검색창 아래에 있어 그 자리에서 결과를 바로 확인한다).
 $('#resetAllBtn').onclick = () => {
   clearTimeout(searchT); S.cat = 'all';
-  S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = '';
+  S.jhtypes.clear(); S.changes.clear(); S.region = ''; S.minLeast = ''; S.interview = '';
   S.leastN = ''; S.leastSum = null; S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
   S.search = ''; $('#search').value = ''; S.page = 1;
   syncSearchClear(); renderCatList(); renderFilters(); renderAll(); track('reset_all');
@@ -2596,7 +2587,7 @@ $('#resetAllBtn').onclick = () => {
    검색 도중 길을 잃었을 때 한 번에 원점으로 오는 탈출구다. */
 function goHome() {
   clearTimeout(searchT); S.view = 'results';
-  S.cat = 'all'; S.jhtypes.clear(); S.jhSpecials.clear(); S.changes.clear();
+  S.cat = 'all'; S.jhtypes.clear(); S.changes.clear();
   S.region = ''; S.minLeast = ''; S.interview = ''; S.leastN = ''; S.leastSum = null;
   S.examWhen = ''; S.stdCut = ''; S.cutGrade = 9.0;
   S.search = ''; $('#search').value = ''; S.page = 1;
