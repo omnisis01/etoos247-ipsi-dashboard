@@ -12,6 +12,22 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 STAGED=$(git diff --cached --name-only --diff-filter=ACM)
 FAIL=0
 
+# ── 0. 훅 사본 자기 점검 ───────────────────────────────────────────────
+# .git/hooks/ 는 저장소에 실리지 않는다. 그래서 hooks/pre-commit 을 고쳐 커밋해도
+# **각자의 .git/hooks/ 는 옛 사본 그대로**이고, 새 게이트가 조용히 안 돈다.
+# 실제로 두 번 났다 — 게이트 추가분이 죽어 있었고(2026-09-02), 외부 작업자가
+# 훅을 고쳤는데 이쪽엔 반영되지 않았다(2026-09-08).
+# 문서로는 이미 두 번 실패했으므로 훅이 스스로 감지한다.
+if [ -f hooks/pre-commit ] && ! cmp -s hooks/pre-commit "$(git rev-parse --git-dir)/hooks/pre-commit"; then
+  echo "✋ 훅 사본이 저장소본과 다릅니다 — 지금 도는 건 옛 사본입니다."
+  echo "   다음 한 줄을 실행한 뒤 다시 커밋하세요."
+  echo ""
+  echo "     cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit"
+  echo ""
+  echo "   (의도적으로 다르게 두려면 git commit --no-verify)"
+  exit 1
+fi
+
 # git hook은 최소 환경(LANG 미설정)으로 돈다. bash 3.2는 비-UTF8 로케일에서
 # 한글 경로 glob('../입결*/*.xlsx')을 확장하지 못해 "파일 없음"으로 오판한다.
 # 실제로 이 때문에 인사이트 하네스가 조용히 건너뛰어져 잘못된 커밋이 통과했다.
