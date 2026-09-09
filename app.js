@@ -150,6 +150,11 @@ const SPECIAL_JH = /지역인재|고른기회|기회균[등형]|교육기회|사
    우송대 '자기추천전형'(다자녀·군인·다문화·만학·보훈·기초), 수원대 '고운사회전형'(군인·경찰·소방·다문화).
    이름이 평범한 특별전형이 실제로 존재하므로 자격 필드를 함께 본다. */
 const SPECIAL_JAGYEOK = /기초생활|차상위|한부모|국가보훈|보훈|농어촌|특성화고|만학도|서해5도|자립지원|북한이탈|다문화|저소득|장애|특수교육대상/;
+/* 지역 제한 판정 — **이름이 아니라 지원자격으로 본다.** 이름으로는 갈라낼 수 없다:
+   '지역균형전형'(412행)은 자격이 "국내고 졸업자, 추천 인원 제한 없음"이라 전국 대상 일반전형이고,
+   '지역전형'·'지역교과전형'·'지역의사선발전형'·'강원인재전형'은 권역 고교 출신으로 제한된다.
+   자격 문구에 권역이 적히므로 그걸 신호로 쓴다(43종 716행 전수 확인). */
+const REGION_JAGYEOK = /부울경|대구경북|충청|대전,?\s?세종|광주,?\s?전남|전남,?\s?전북|강원도|제주|경기|인천|호남|영남|충남|충북|경남|경북|전북|울산|부산|대구|광주|세종|권\s?\(|시,|군\)/;
 // 수능최저 원문 → {n:합산 영역수, sum:등급 합, type}. type: 'none'(최저없음) | 'sum'(N합X) | 'etc'(1등급 2개·M개Y 등 특이).
 function parseLeast(t) {
   const z = (t || '').replace(/\s/g, '');
@@ -198,8 +203,13 @@ ROWS.forEach(r => {
   //    그래서 한 행은 정확히 한 버킷에만 속한다:
   //    기타 8,132 · 교과 7,424 · 종합 6,207 · 지역인재 2,440 · 논술 1,292 · 실기 892 · 특기자 30 = 26,417.
   //    즉 '학생부교과'는 이제 **일반 교과**만 뜻한다(특별전형 4,075행은 기타로 빠진다).
+  // 우선순위 — ①이름의 '지역인재' ②자격제한 특별전형 ③자격의 권역 제한 ④전형유형.
+  // ②가 ③보다 앞선다: 지역+자격제한 하이브리드(지역기회균형·지역경제배려대상자 등)는
+  // 출신 지역보다 사회경제적 자격이 더 좁은 조건이므로 기타전형으로 본다.
+  const _jag = (r.jagyeok || '').replace(/\n/g, ' ');
   r.jhBucket = /지역인재/.test(r.jhname || '') ? '지역인재'
-    : (SPECIAL_JH.test(r.jhname || '') || SPECIAL_JAGYEOK.test(r.jagyeok || '')) ? '기타전형' : r.jhtype;
+    : (SPECIAL_JH.test(r.jhname || '') || SPECIAL_JAGYEOK.test(_jag)) ? '기타전형'
+    : REGION_JAGYEOK.test(_jag) ? '지역인재' : r.jhtype;
   r.examKind = /논술/.test(r.jhtype + (r.jhname || '')) ? '논술'
     : /면접/.test((r.method || '') + (r.jhname || '')) ? '면접'
     : /실기|실적/.test(r.jhtype + (r.jhname || '') + (r.method || '')) ? '실기'
@@ -1566,7 +1576,7 @@ function renderTable() {
     const jn = flat(r.jhname);   // 줄바꿈 섞인 전형명을 한 줄로 — 자세한 이유는 flat/cut 정의부 참조
     return `<tr data-i="${r._i}">
       <td class="col-uni"><div class="td-uni">${esc(r.uni)} <span class="muted">${esc(r.region)}${campusOf(r) ? '·' + esc(campusOf(r)) : ''}</span></div><button class="td-dept dept-btn" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 상세 보기">${esc(deptDisp(r))}${r.cats.includes('semiconductor_contract') ? ' <span class="semi-badge sm" title="정원 외 채용조건형 계약학과">🔗</span>' : ''}</button></td>
-      <td class="col-jh"><span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(jn)}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
+      <td class="col-jh">${r.jhBucket !== r.jhtype ? `<span class="jh-pill bucket" title="필터에서는 '${esc(r.jhBucket)}'으로 분류됩니다 — 교과·종합 칩에는 나오지 않습니다">${esc(r.jhBucket)}</span>` : ''}<span class="jh-pill">${esc(r.jhtype.replace('학생부', ''))}</span><div class="muted" style="margin-top:3px" title="${esc(jn)}">${esc(jn)}</div>${r.qual ? `<div class="qual-tag">${esc(r.qual)}</div>` : ''}${examBadge(r)}</td>
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
       <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>

@@ -311,6 +311,8 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
 .dept-btn:hover{color:var(--primary-ink)}
 .jh-pill{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:var(--surface-2);
   border:1px solid var(--line);color:var(--text-soft);white-space:nowrap}
+/* 필터 버킷이 전형유형과 다를 때(지역인재·기타전형) 함께 표기 — 분류를 두 개로 보여 준다. */
+.jh-pill.bucket{background:var(--new-soft);color:var(--new-ink);border-color:var(--new);margin-right:3px}
 /* 대학별고사 시기 배지 — 수시 납치 판단용.
    '수능 전'은 경고색(회피 불가), '수능 후'는 안전색(불참으로 회피 가능). */
 .exam-tag{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;
