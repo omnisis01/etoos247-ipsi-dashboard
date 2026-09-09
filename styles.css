@@ -225,6 +225,12 @@ input[type=range]{width:100%;accent-color:var(--primary);margin-top:4px}
 /* 값은 보여주되 자동 판정에서 뺀 항목 표시(추합 산술 모순 40건 등) */
 .warn-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10.5px;
   font-weight:800;background:var(--warn-bg,#fff4e5);color:var(--warn-ink,#8a5200);white-space:nowrap}
+/* 졸업생 교과 반영 범위 — 재학생과 다르면 강조한다(N수생 판단에 직접 영향). */
+.rs-diff{color:var(--bad-ink)}
+.rs-na{font-weight:800;color:var(--bad-ink)}
+.rs-note{font-size:11px;margin-top:2px}
+.rs-src{font-size:10.5px;color:var(--text-mute);margin-top:3px;line-height:1.5}
+.rs-src a{color:var(--primary-ink)}
 
 /* ===================== Highlights ===================== */
 /* 홈 변화 인사이트 배너 */

@@ -1746,6 +1746,7 @@ function openModal(i, options = null) {
         ${r.docs ? `<dt>필요서류</dt><dd>${esc(DOCS_LABEL(r.docs))}</dd>` : ''}
         <dt>수능최저</dt><dd>${r.hasChoejeo ? esc(r.choejeo) : '없음'} ${r.chKindShow ? `<span class="delta ${(r.chKindShow === '강화' || r.chKindShow === '신설') ? 'tighten' : (r.chKindShow === '변경') ? 'neu' : 'ease'}">최저 ${r.chKindShow}</span>` : ''}</dd>
         ${r.gradeRatio ? `<dt>학년별반영</dt><dd>${esc(r.gradeRatio)}</dd>` : ''}
+        ${recordScope(r)}
         ${r.subjects ? `<dt>반영과목</dt><dd>${esc(r.subjects)}</dd>` : ''}
         ${r.careerSubj ? `<dt>진로선택</dt><dd>${esc(r.careerSubj)}</dd>` : ''}
         ${(() => { const ap = applyInfo(r.uni); if (!ap) return ''; const un = ap.unstated ? ` <span class="warn-tag" title="이 대학은 요강에 접수 ${ap.toUnstated ? '마감' : '시작'} 시각을 적지 않았습니다. 표시된 시각은 접수처 시스템 값이라 실제와 다를 수 있으니 반드시 입학처 공지를 확인하세요.">시각 미공표</span>` : ''; return `<dt>원서접수</dt><dd><b>${ap.txt}</b>${ap.early ? ' <span class="delta tighten" title="공통 마감(9/11)보다 일찍 닫습니다">조기마감</span>' : ''}${un} <span class="muted">· ${esc(ap.via)}</span></dd>`; })()}
@@ -2338,6 +2339,26 @@ function renderAdvisor() {
 }
 function closeAdvisor() { clearTimeout(advisorView.timer); if ($('#advisorDrawer').classList.contains('hidden')) return; $('#advisorDrawer').classList.add('hidden'); closeDialog(); }
 
+/* 졸업생(N수) 학생부 교과 반영 학기 범위. 원천 엑셀에 없어 요강에서 손으로 수집한 값이라
+   **확인된 대학만** 보여 준다(record_scope.js). 없는 대학은 아무것도 그리지 않는다 —
+   빈칸이 오답보다 낫고, '미확인'을 굳이 띄우면 화면만 시끄러워진다.
+   ⚠️ 교과 성적 산출이 있는 전형에만 의미가 있다. 논술 100%·실기 위주에는 붙이지 않는다. */
+function recordScope(r) {
+  const S2 = (window.IPSI_RECORD_SCOPE || {}).universities || {};
+  const e = S2[r.uni];
+  if (!e) return '';
+  if (e.conf === 'na') {
+    return `<dt>졸업생 지원</dt><dd><span class="rs-na">불가</span> <span class="muted">${esc(e.note || '')}</span>
+      <div class="rs-src">요강 “${esc(e.quote)}” · <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">공식 확인 ↗</a></div></dd>`;
+  }
+  if (r.jhtype !== '학생부교과') return '';        // 교과 산출이 없는 전형엔 의미가 없다
+  const same = e.graduate === e.current;
+  return `<dt>졸업생 교과반영</dt><dd><b class="${same ? '' : 'rs-diff'}">${esc(e.graduate)}</b>
+      <span class="muted">(재학생 ${esc(e.current)})</span>
+      ${e.conf === 'inferred' ? '<span class="warn-tag" title="요강에 재학생·졸업생을 나누는 조항이 없어, 단일 규정이 졸업생에도 적용된다고 본 값입니다. 반드시 입학처에 확인하세요.">해석</span>' : ''}
+      ${e.note ? `<div class="muted rs-note">${esc(e.note)}</div>` : ''}
+      <div class="rs-src">요강 “${esc(e.quote)}” · <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">공식 확인 ↗</a></div></dd>`;
+}
 /* ----- PDF 저장 (인쇄) — 지원카드·비교함을 A4 인쇄용 문서로 렌더 후 window.print() ----- */
 /* 원자료 비고(note)는 한 줄 메모라 학생에겐 불친절하다 — 자주 나오는 패턴을 풀어쓴 해설로 확장한다.
    패턴에 없으면 원문 + 공통 안내를 붙인다. 원문은 항상 보존한다(자의적 대체 금지). */

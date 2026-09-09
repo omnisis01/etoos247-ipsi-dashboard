@@ -44,7 +44,7 @@ echo "$STAGED" | grep -qE '^(data\.js|build_data\.py)$' && NEED_DATA=1
 echo "$STAGED" | grep -qE '^match_util\.py$' && NEED_MATCH=1
 echo "$STAGED" | grep -qE '^(insights\.js|build_ins\.py|merge_ins\.py|fix_ins_numbers\.py|apply_rewrite\.py)$' && NEED_INS=1
 # 브라우저가 실제로 받아 가는 자산이 바뀌면 캐시버스터가 같이 갱신돼야 한다.
-echo "$STAGED" | grep -qE '^(styles\.css|data\.js|insights\.js|apply_dates\.js|admissions-links\.js|app\.js|index\.html)$' && NEED_STAMP=1
+echo "$STAGED" | grep -qE '^(styles\.css|data\.js|insights\.js|apply_dates\.js|admissions-links\.js|record_scope\.js|app\.js|index\.html)$' && NEED_STAMP=1
 
 [ -z "$NEED_DATA$NEED_INS$NEED_MATCH$NEED_STAMP" ] && exit 0
 echo "pre-commit: 데이터 하네스 실행"
