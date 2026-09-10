@@ -355,6 +355,87 @@ window.IPSI_RECORD_SCOPE = {
    "graduate": "3학년 1학기까지",
    "quote": "재학생/졸업생 모두 3학년 1학기까지 반영",
    "source": "https://goerica.hanyang.ac.kr/upload/BBS0061/20260907093813DY9RUL.PDF"
+  },
+  "고신대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "졸업생도 3학년 1학기까지 교과성적 반영",
+   "source": "https://www.kosin.ac.kr/dream/?pCode=MN7000055"
+  },
+  "을지대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 2학기까지",
+   "quote": "졸업예정자 → 3학년 1학기, 졸업자 → 3학년 2학기까지 반영",
+   "source": "https://admission.eulji.ac.kr/webshr/univ/download/ipsi/2027/2027sy_eu_susiguide.pdf"
+  },
+  "경북대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "졸업자 및 졸업예정자 : 3학년 1학기까지",
+   "source": "https://ipsi1.knu.ac.kr/upload_data/mojib/20260904091056_32.pdf"
+  },
+  "계명대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "3학년 1학기까지의 성적 및 출결을 반영함(단, 졸업생 출결은 3학년 2학기까지)",
+   "source": "https://www.gokmu.ac.kr/",
+   "note": "⚠️ 출결은 졸업생 3학년 2학기까지 반영합니다 — 교과와 다릅니다."
+  },
+  "순천향대학교": {
+   "conf": "inferred",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "반영학기: 3학년 1학기까지",
+   "source": "https://ipsi.sch.ac.kr/",
+   "note": "재학생·졸업생을 나누는 조항이 없습니다."
+  },
+  "대구한의대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "학년/학기 구분없이 3학년 1학기까지 성적을 반영함",
+   "source": "https://www.dhu.ac.kr/data/bbsData/202609011128406a9638584070d.pdf"
+  },
+  "건국대학교(글로컬)": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "수시모집에서 졸업예정자 및 졸업자 3학년 1학기까지의 성적을 반영함",
+   "source": "https://enter.kku.ac.kr/upload_data/mojib/20260602112619_68.pdf"
+  },
+  "가톨릭관동대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "3학년 1학기까지만 반영(졸업생 포함)",
+   "source": "https://ipsi.cku.ac.kr/"
+  },
+  "경상대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "3학년 1학기까지 모든 지원자 동일 반영(재수생 이상 포함)",
+   "source": "https://new.gnu.ac.kr/"
+  },
+  "동신대학교": {
+   "conf": "inferred",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "3학년 1학기까지 반영",
+   "source": "https://ipsi.dsu.ac.kr/_Data/PDFData/389600dcc5e57d0885287e1ae17c9bda.pdf",
+   "note": "재학생·졸업생을 나누는 조항이 없습니다."
+  },
+  "울산대학교": {
+   "conf": "stated",
+   "current": "3학년 1학기까지",
+   "graduate": "3학년 1학기까지",
+   "quote": "졸업예정자 3학년 1학기까지 / 졸업자 3학년 1학기까지",
+   "source": "https://iphak.ulsan.ac.kr/upload/board/2026/06/01/fca3a6f8-16d3-409a-93ec-23c829990b23.pdf",
+   "note": "⚠️ 출결은 3학년 2학기까지 반영합니다 — 교과와 다릅니다."
   }
  }
 };
