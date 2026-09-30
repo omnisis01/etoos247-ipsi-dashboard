@@ -5,14 +5,30 @@
 
 ---
 
+# 📍 작업 위치 — Google Drive (2026-09-30 이관)
+
+```
+내 드라이브/ipsi-dashboard-2027/
+  ├ dashboard/            ← 이 저장소 (작업폴더만 Drive, .git 은 로컬)
+  ├ 입결 및 인사이트/      ← 원천 엑셀. build_data.py 가 ../ 로 읽는다 — 형제 관계를 깨지 마라
+  └ 00_작업재개_안내.md    ← 다른 맥에서 이어 작업하는 절차
+```
+
+⚠️ **`.git` 은 Drive 밖(`~/.gitdirs/ipsi-dashboard-2027.git`)에 둔다.** `dashboard/.git` 은 그곳을 가리키는
+   **파일**이다. Drive 가 .git 폴더를 동기화하면 커밋 중 잠금·객체 파일이 충돌해 저장소가 깨진다.
+   그래서 훅 경로도 `.git/hooks/` 가 아니다 — 항상 `git rev-parse --git-path hooks` 로 찾는다.
+
+---
+
 # ‼️ 0단계 — 훅 사본 동기화 (작업 시작 전 무조건)
 
 **이 저장소를 clone·pull 한 직후, 그리고 `hooks/pre-commit` 이 바뀐 커밋을 받은 직후에는
 아래 한 줄을 먼저 실행한다.**
 
 ```bash
-cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+cp hooks/pre-commit "$(git rev-parse --git-path hooks)/pre-commit" && chmod +x "$(git rev-parse --git-path hooks)/pre-commit"
 ```
+(`.git` 분리 구조라 `.git/hooks/` 경로를 직접 쓰면 안 된다 — `.git` 이 파일이기 때문이다.)
 
 **왜 반드시 손으로 해야 하나** — `.git/hooks/` 는 **저장소에 실리지 않는다.** 그래서
 `hooks/pre-commit` 을 고쳐 커밋해도 다른 사람(그리고 다른 기기의 나) 의 `.git/hooks/` 는
@@ -28,7 +44,7 @@ cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
 
 확인만 하려면 — 아무 출력이 없으면 정상이다.
 ```bash
-cmp hooks/pre-commit .git/hooks/pre-commit
+cmp hooks/pre-commit "$(git rev-parse --git-path hooks)/pre-commit"
 ```
 
 ---
@@ -126,7 +142,7 @@ cmp hooks/pre-commit .git/hooks/pre-commit
 
 ```bash
 cd dashboard
-cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+cp hooks/pre-commit "$(git rev-parse --git-path hooks)/pre-commit" && chmod +x "$(git rev-parse --git-path hooks)/pre-commit"
 ```
 
 - `data.js`/`build_data.py` 스테이지 → `verify_data.py`
@@ -306,7 +322,7 @@ python3 qa_official_links.py --net    # 위 + 링크 생존(HTTP 200) 확인
 
 ### 3. 배포 전 확인 (순서 고정)
 ```bash
-diff -q hooks/pre-commit .git/hooks/pre-commit   # ⚠️ 다르면 훅이 옛 사본이다 → cp hooks/pre-commit .git/hooks/
+diff -q hooks/pre-commit "$(git rev-parse --git-path hooks)/pre-commit"   # ⚠️ 다르면 훅이 옛 사본이다 → 0단계 명령
 python3 build_data.py                 # 교정 미적용이면 SystemExit 로 멈춘다 — 무시하지 마라
 python3 verify_data.py --diff         # 의도한 행만 바뀌었는지 눈으로 본다 ★
 python3 qa_known_issues.py            # 알려진 사고 회귀

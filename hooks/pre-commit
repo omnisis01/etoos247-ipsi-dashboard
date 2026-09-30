@@ -1,6 +1,6 @@
 #!/bin/sh
 # 데이터·인사이트가 스테이지되면 해당 하네스를 돌려 실패 시 커밋을 막는다.
-# 설치: cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit
+# 설치: cp hooks/pre-commit "$(git rev-parse --git-path hooks)/pre-commit"  (.git 이 파일인 분리 구조에서도 맞다)
 #
 # 유래(실제로 조용히 새어나간 사고들):
 #  - 학과명에 '(외)' 잔존, 입결 등급 범위 이탈
@@ -22,7 +22,7 @@ if [ -f hooks/pre-commit ] && ! cmp -s hooks/pre-commit "$(git rev-parse --git-d
   echo "✋ 훅 사본이 저장소본과 다릅니다 — 지금 도는 건 옛 사본입니다."
   echo "   다음 한 줄을 실행한 뒤 다시 커밋하세요."
   echo ""
-  echo "     cp hooks/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit"
+  echo "     cp hooks/pre-commit \"\$(git rev-parse --git-path hooks)/pre-commit\""
   echo ""
   echo "   (의도적으로 다르게 두려면 git commit --no-verify)"
   exit 1
