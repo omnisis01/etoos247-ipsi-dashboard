@@ -12,7 +12,7 @@
 # 훅에 넣지 않았다 — 접수 주간 동결 중이고, 판정 규칙 없이 경보만 울리면 해롭다. 9/12 이후 검토.
 # 조건: ①같은 블록 ②A값이 B에·B값이 A에(상호) ③양쪽 경쟁률이 학과별로 일치.
 import json, io, os, collections
-H="/Users/omnibook/Downloads/ipsi_dashboard/2026 vs 2027/dashboard"
+H=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # tools/ 의 부모 = dashboard (절대경로 금지 — 이관 때 깨졌다)
 d=json.loads(io.open(os.path.join(H,'data.js'),encoding='utf-8').read()[len('window.IPSI = '):-1])
 S,D=d['schema'],d['dicts']
 A=json.load(io.open(os.path.join(H,'tools/adiga/adiga_raw.json'),encoding='utf-8'))

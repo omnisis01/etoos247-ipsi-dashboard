@@ -3,7 +3,8 @@ import json, re, collections
 import ratio_parse as P
 import ratio_match as M
 
-DASH = '/Users/omnibook/Downloads/ipsi_dashboard/2026 vs 2027/dashboard'
+import os
+DASH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # dashboard (절대경로 금지 — 이관 때 깨졌다)
 t = open(f'{DASH}/data.js', encoding='utf-8').read()
 d = json.loads(t[len('window.IPSI = '):-1])
 S, D = d['schema'], d['dicts']
