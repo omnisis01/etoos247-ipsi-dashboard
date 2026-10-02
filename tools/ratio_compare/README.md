@@ -73,3 +73,13 @@ python3 ratio_compare.py
   건국대·부산대·을지대·인하대·진주교대·조선대 판정의 결정적 근거였다.
 · **2026 모집인원 복원** — `enroll(2027) + prev 증감` 으로 2026 모집인원을 만들어 페이지와 대조.
   학과명이 어긋난 경우(경북대 IT 자율학부)에도 행의 정체를 확정해 준다.
+
+## 2027 최종 경쟁률 (2026-09-30~)
+```bash
+python3 fetch27.py                    # agency_links 의 26 주소로 2027 페이지 수집(이어받기 됨)
+JIN_WINDOW=90 python3 fetch27.py 대학명  # 진학 2026 추가모집이 많아 30개 창에 안 걸린 대학
+python3 match27.py -v                 # 매칭 → ratio27.json → build_data.py 가 D.c27 로 붙인다
+```
+원문은 Drive `2027_수시경쟁률_원문/`(git 밖) — `pages/`(자동), `pages_extra/`(수작업, 출처 `_sources.tsv`),
+`_rejected/`(잘못 받은 재외국민 페이지), `_mo_diff.json`(모집인원이 달라 버린 행).
+채택 조건과 오매칭 사례는 context-notes (117). **모집인원 일치 조건을 빼지 마라** — 넓힌 매칭 규칙의 안전장치다.
