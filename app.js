@@ -29,6 +29,9 @@ const ROWS = D.rows.map((r, i) => ({
   chungDoubt: !!(D.chungDoubt && D.chungDoubt[i]),
   // 그 전형의 환산 척도가 해마다 옮겨간 행. 값은 맞지만 3개년을 한 선으로 읽으면 안 된다.
   vScale: !!(D.vScale && D.vScale[i]),
+  // 2027 수시 최종 경쟁률 [경쟁률, 지원자수] — 원서접수 마감 후 대행사·대학 페이지 값. 모집인원이 요강과
+  // 같은 행에만 붙였다(tools/ratio_compare/match27.py). 유불리 판정에는 넣지 않는다(판정은 2026 vs 2025 모델).
+  c27: (D.c27 && D.c27[i]) || null,
   std26: dc.std ? (dc.std[r[35]] || '') : '', stdK26: r[36] || '',
   std25: dc.std ? (dc.std[r[37]] || '') : '',
   // 2024 입결 기준 — std25 는 쓰면서 std24 만 빠져 있었다. 5,097행에서 2026 기준과 달라
@@ -467,6 +470,11 @@ function yoyGrade(r) {
     return { y25: a, y26: b, d, dir: 'na', basisMismatch: true, b25: r.std25, b26: r.std26 };
   }
   return { y25: a, y26: b, d, dir: d >= 0.1 ? 'easier' : d <= -0.1 ? 'harder' : 'flat' };
+}
+// 목록 경쟁률 칸 아래 한 줄 — 2027 최종 경쟁률(있을 때만). 2026 값·추이선 옆에 두되 굵게 하지 않는다:
+// 이 칸의 정렬·유불리는 여전히 2026 기준이라 주인공처럼 보이면 안 된다.
+function c27Line(r) {
+  return r.c27 ? `<div class="c27-line" title="2027 수시 최종 경쟁률 · 지원 ${r.c27[1]}명">27 최종 ${r.c27[0].toFixed(1)}</div>` : '';
 }
 function yoyComp(r) { // 경쟁률: 하락 = 유리
   const a = r.c[1], b = r.c[0]; if (a == null || b == null) return null;
@@ -1584,7 +1592,7 @@ function renderTable() {
       <td class="enroll-cell col-enroll">${fmtInt(r.enroll)}<span class="delta ${d.cls}">${d.txt}</span></td>
       <td class="col-least">${least}</td>
       <td class="col-grade"><div class="cell-top"><span class="grade-val" title="${esc(r.std26 || '기준 미상')}">${fmt(r.g[0])}</span>${r.g[0] != null && CUT_SHORT[r.stdK26] ? `<span class="std-tag${STD_NOT_FINAL.has(r.stdK26) ? ' warn' : ''}" title="${esc(r.std26)}">${CUT_SHORT[r.stdK26]}</span>` : ''}${yoyBadge(r, 'grade')}</div>${gradeSpark}</td>
-      <td class="col-comp"><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}</td>
+      <td class="col-comp"><div class="cell-top"><span class="grade-val">${r.c[0] == null ? '–' : r.c[0].toFixed(1)}</span>${yoyBadge(r, 'comp')}</div>${compSpark}${c27Line(r)}</td>
       <td class="col-impact"><span class="impact-chip ${v.cls}">${v.label}</span></td>
       <td class="col-add"><div class="row-btns"><button class="row-fav ${fb ? 'in ' + fb : ''}" data-fav="${r._i}" aria-pressed="${!!fb}" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 지원카드 ${fb ? '변경' : '담기'}" title="지원카드에 담기 (지원희망/상향 선택)">${fb ? '★' : '☆'}</button><button class="row-add ${inCmp ? 'in' : ''}" data-add="${r._i}" aria-pressed="${inCmp}" aria-label="${esc(r.uni)} ${esc(deptDisp(r))} ${esc(jn)} 비교함 ${inCmp ? '제거' : '담기'}" title="비교함에 담기">${inCmp ? '✓' : '⇄'}</button></div></td>
     </tr>`;
@@ -1772,6 +1780,7 @@ function openModal(i, options = null) {
           ${trendRow('경쟁률', [r.c[2], r.c[1], r.c[0]], v => v.toFixed(2) + ':1', 'var(--new)')}
           ${trendRow(`충원(추합, ${chungUnit(r)})${r.chungDoubt ? ' <span class="warn-tag" title="충원합격자가 \'지원자 − 모집인원\'을 넘습니다. 원천 값을 그대로 보여주되 유불리 판정에서는 제외했습니다.">⚠ 확인필요</span>' : ''}`, [numOr(r.chung[2]), numOr(r.chung[1]), numOr(r.chung[0])], v => fmtChung(r, v), 'var(--neutral)')}
         </tbody></table></div>
+        ${r.c27 ? `<div class="c27-box">📣 <b>2027 최종 경쟁률 ${r.c27[0].toFixed(2)}:1</b> <span class="muted">(지원 ${fmtInt(r.c27[1])}명 / 모집 ${fmtInt(r.enroll)}명)</span><div class="muted">원서접수 마감 직후 집계라 수시 6회 위반자 정리 후 대학 공식 발표와 조금 다를 수 있습니다.</div></div>` : ''}
         <div class="muted" style="margin-top:6px">※ 입결 등급은 숫자가 <b>낮을수록</b> 성적이 높습니다. 환산점수는 대학마다 계산식이 달라 <b>다른 학교와 견주면 안 됩니다</b>.</div>
       </div>
       ${(() => {
@@ -1856,6 +1865,7 @@ function openCompare() {
         ${rowM('입결 추이', r => sparkline(r.g, { invert: true, color: 'var(--primary)', w: 70 }))}
         ${rowM('경쟁률 2025→2026', r => { const c = yoyComp(r); return (r.c[1] == null ? '–' : r.c[1].toFixed(1)) + ' → <b>' + (r.c[0] == null ? '–' : r.c[0].toFixed(1)) + ':1</b>' + (c && c.dir !== 'flat' ? ` <span class="ycell ${c.dir === 'down' ? 'good' : 'bad'}">${c.dir === 'down' ? '유리' : '불리'}</span>` : ''); })}
         ${rowM('경쟁률 추이', r => sparkline(r.c, { color: 'var(--new)', w: 70 }))}
+        ${rowM('2027 최종 경쟁률', r => r.c27 ? `<b>${r.c27[0].toFixed(1)}:1</b>` : '<span class="muted">–</span>')}
         ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
         ${rowM('공식 자료 확인', r => typeof window.officialLinksHTML === 'function' ? window.officialLinksHTML(r) : '대학 입학처에서 모집요강 확인')}
       </tbody></table></div>`;
@@ -2445,6 +2455,7 @@ function printCompare() {
       ${rowM('입결 2025→2026', r => `${fmt(r.g[1])} → <b>${fmt(r.g[0])}</b>` + (CUT_SHORT[r.stdK26] && r.g[0] != null ? ` <span class="pr-mut">(${CUT_SHORT[r.stdK26]})</span>` : ''))}
       ${rowM('입결 기준 · 2026', r => esc(r.std26 || '기준 자료 없음'))}
       ${rowM('경쟁률 2025→2026', r => `${r.c[1] == null ? '–' : r.c[1].toFixed(1)} → <b>${r.c[0] == null ? '–' : r.c[0].toFixed(1)}:1</b>`)}
+      ${rowM('2027 최종 경쟁률', r => r.c27 ? `<b>${r.c27[0].toFixed(1)}:1</b>` : '–')}
       ${rowM('충원 2025→2026', r => esc(r.chung[1] || '–') + ' → ' + esc(r.chung[0] || '–'))}
     </tbody></table>`;
   printDoc('전형 비교', `${items.length}개 전형 비교`, body);

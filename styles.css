@@ -1019,3 +1019,6 @@ svg text{fill:var(--text-soft);font-family:var(--font)}
   .ins-rail-results .ins-rail-group{display:none}
   .ins-rail-results .ins-search-empty{margin:0;padding:4px;min-width:0}
 }
+/* 2027 최종 경쟁률 — 목록 칸 아래 보조줄과 상세카드 안내 상자 */
+.c27-line{font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:2px}
+.c27-box{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--surface-2,rgba(127,127,127,.08));font-size:13px}

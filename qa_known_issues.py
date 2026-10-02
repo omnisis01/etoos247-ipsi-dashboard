@@ -451,7 +451,7 @@ print('=== ⑫ SCHEMA 밖 사이드맵(raw·chungDoubt·vScale) 배선 ===')
 _app_src = open(os.path.join(HERE, 'app.js'), encoding='utf-8').read()
 # ⚠️ 사이드맵을 새로 만들면 **여기에 반드시 등록한다.** 감시 점검(2026-09-02)에서
 #    vScale 이 등록 없이 돌아가고 있던 것을 발견했다 — 배선이 끊겨도 아무도 몰랐을 것이다.
-_side = {'raw': 'D.raw', 'chungDoubt': 'D.chungDoubt', 'vScale': 'D.vScale'}
+_side = {'raw': 'D.raw', 'chungDoubt': 'D.chungDoubt', 'vScale': 'D.vScale', 'c27': 'D.c27'}
 _sbad = []
 _nrows = len(D["rows"])
 for _k, _ref in _side.items():

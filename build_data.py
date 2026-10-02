@@ -1339,6 +1339,21 @@ for _i, _r in enumerate(rows):
         _vscale[_i] = 1
 print(f"[환산척도] 연도별 척도가 옮겨간 전형 {len(_shift)}개 · 표시 대상 {len(_vscale)}행")
 
+# 2027 수시 최종 경쟁률 — 원서접수 마감 후 대행사·대학 페이지에서 모은 값(tools/ratio_compare/match27.py).
+# 키는 match27.key() 와 같은 '대학|유형|전형명|학과|모집인원'. 모집인원이 페이지와 같은 행만 들어 있다.
+# 엑셀이 바뀌어 키가 어긋나면 그 행은 조용히 빈칸이 된다(오답보다 빈칸) — 채움 수를 로그로 본다.
+_c27 = {}
+_r27p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'ratio_compare', 'ratio27.json')
+if os.path.exists(_r27p):
+    _r27 = json.load(open(_r27p, encoding='utf-8'))
+    _IT, _ID, _IE = SCHEMA.index('jhtype'), SCHEMA.index('dept'), SCHEMA.index('enroll')
+    for _i, _r in enumerate(rows):
+        _k = '%s|%s|%s|%s|%s' % (order['uni'][_r[_IU]], _r[_IT], order['jhname'][_r[_IJN]],
+                                 order['dept'][_r[_ID]], _r[_IE])
+        if _k in _r27:
+            _c27[_i] = [_r27[_k]['c27'], _r27[_k]['ap']]
+    print(f"[2027경쟁률] {len(_c27)}/{len(rows)}행 ({len(_c27) / len(rows) * 100:.1f}%) · 원천 {len(_r27)}키")
+
 payload = {
     'meta': {
         'title': '2027학년도 수시지원 대시보드',
@@ -1354,6 +1369,7 @@ payload = {
     'raw': _raw_cells,   # 희소 사이드맵 — 파서가 버린 셀의 원문
     'chungDoubt': _chung_doubt,   # 희소 사이드맵 — 추합이 산술 상한 초과(유불리 신호 제외용)
     'vScale': _vscale,   # 희소 사이드맵 — 그 전형의 환산 척도가 해마다 옮겨감(추이선으로 읽지 말 것)
+    'c27': _c27,   # 희소 사이드맵 — 2027 수시 최종 경쟁률 [경쟁률, 지원자수]
 }
 
 with open(os.path.join(OUT_DIR, 'data.js'), 'w', encoding='utf-8') as f:
